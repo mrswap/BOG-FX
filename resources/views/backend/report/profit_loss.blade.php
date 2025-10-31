@@ -57,34 +57,6 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-
-                        <h3><i class="fa fa-random "></i> {{trans('file.Sale Return')}}</h3>
-                        <hr>
-                        <div class="mt-3">
-                            <p class="mt-2">{{trans('file.grand total')}} <span class="float-right"> {{number_format((float)$return[0]->grand_total, $general_setting->decimal, '.', '')}}</span></p>
-                            <p class="mt-2">{{trans('file.Return')}} <span class="float-right">{{$total_return}}</span></p>
-                            <p class="mt-2">{{trans('file.Tax')}} <span class="float-right">{{number_format((float)$return[0]->tax, $general_setting->decimal, '.', '')}}</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-
-                        <h3><i class="fa fa-random "></i> {{trans('file.Purchase Return')}}</h3>
-                        <hr>
-                        <div class="mt-3">
-                            <p class="mt-2">{{trans('file.grand total')}} <span class="float-right"> {{number_format((float)$purchase_return[0]->grand_total, $general_setting->decimal, '.', '')}}</span></p>
-                            <p class="mt-2">{{trans('file.Return')}} <span class="float-right">{{$total_purchase_return}}</span></p>
-                            <p class="mt-2">{{trans('file.Tax')}} <span class="float-right">{{number_format((float)$purchase_return[0]->tax, $general_setting->decimal, '.', '')}}</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
         <div class="row mt-2">
             <div class="col-md-4">
@@ -167,45 +139,6 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-
-                        <h3><i class="fa fa-dollar"></i> {{trans('file.Expense')}}</h3>
-                        <hr>
-                        <div class="mt-3">
-                            <p class="mt-2">{{trans('file.Amount')}} <span class="float-right"> {{number_format((float)$expense, $general_setting->decimal, '.', '')}}</span></p>
-                            <p class="mt-2">{{trans('file.Expense')}} <span class="float-right">{{$total_expense}}</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-
-                        <h3><i class="fa fa-dollar"></i> {{trans('file.Income')}}</h3>
-                        <hr>
-                        <div class="mt-3">
-                            <p class="mt-2">{{trans('file.Amount')}} <span class="float-right"> {{number_format((float)$income, $general_setting->decimal, '.', '')}}</span></p>
-                            <p class="mt-2">{{trans('file.Income')}} <span class="float-right">{{$total_income}}</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-
-                        <h3><i class="fa fa-dollar"></i> {{trans('file.Payroll')}}</h3>
-                        <hr>
-                        <div class="mt-3">
-                            <p class="mt-2">{{trans('file.Amount')}} <span class="float-right"> {{number_format((float)$payroll, $general_setting->decimal, '.', '')}}</span></p>
-                            <p class="mt-2">{{trans('file.Payroll')}} <span class="float-right">{{$total_payroll}}</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
         <div class="row mt-2">
             <div class="col-md-4 offset-md-4">
@@ -226,30 +159,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="row mt-2">
-            @foreach($warehouse_name as $key => $name)
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-
-                            <h3><i class="fa fa-money"></i> {{$name}}</h3>
-                            <h4 class="text-center mt-3">{{number_format((float)($warehouse_sale[$key][0]->grand_total - $warehouse_purchase[$key][0]->grand_total - $warehouse_return[$key][0]->grand_total + $warehouse_purchase_return[$key][0]->grand_total), $general_setting->decimal, '.', '')}}</h4>
-                            <p class="text-center">
-                                {{trans('file.Sale')}} {{number_format((float)($warehouse_sale[$key][0]->grand_total), $general_setting->decimal, '.', '')}} - {{trans('file.Purchase')}} {{number_format((float)($warehouse_purchase[$key][0]->grand_total), $general_setting->decimal, '.', '')}} - {{trans('file.Sale Return')}} {{number_format((float)($warehouse_return[$key][0]->grand_total), $general_setting->decimal, '.', '')}} + {{trans('file.Purchase Return')}} {{number_format((float)($warehouse_purchase_return[$key][0]->grand_total), $general_setting->decimal, '.', '')}}
-                            </p>
-                            <hr style="border-color: rgba(0, 0, 0, 0.2);">
-                            <h4 class="text-center">{{number_format((float)(($warehouse_sale[$key][0]->grand_total - $warehouse_sale[$key][0]->tax) - ($warehouse_purchase[$key][0]->grand_total - $warehouse_purchase[$key][0]->tax) - ($warehouse_return[$key][0]->grand_total - $warehouse_return[$key][0]->tax) + ($warehouse_purchase_return[$key][0]->grand_total - $warehouse_purchase_return[$key][0]->tax) ), $general_setting->decimal, '.', '')}}</h4>
-                            <p class="text-center">
-                                {{trans('file.Net Sale')}} {{number_format((float)($warehouse_sale[$key][0]->grand_total - $warehouse_sale[$key][0]->tax), $general_setting->decimal, '.', '')}} -  {{trans('file.Net Purchase')}} {{number_format((float)($warehouse_purchase[$key][0]->grand_total - $warehouse_purchase[$key][0]->tax), $general_setting->decimal, '.', '')}} - {{trans('file.Net Sale Return')}} {{number_format((float)($warehouse_return[$key][0]->grand_total - $warehouse_return[$key][0]->tax), $general_setting->decimal, '.', '')}} + {{trans('file.Net Purchase Return')}} {{number_format((float)($warehouse_purchase_return[$key][0]->grand_total - $warehouse_purchase_return[$key][0]->tax), $general_setting->decimal, '.', '')}}
-                            </p>
-                            <hr style="border-color: rgba(0, 0, 0, 0.2);">
-                            <h4 class="text-center">{{number_format((float)$warehouse_expense[$key], $general_setting->decimal, '.', '')}}</h4>
-                            <p class="text-center">{{trans('file.Expense')}}</p>
-                        </div>
-                    </div>
-                </div>
-            @endforeach
         </div>
     </div>
 </section>

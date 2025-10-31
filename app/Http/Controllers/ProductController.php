@@ -12,6 +12,9 @@ use App\Models\Tax;
 use App\Models\Warehouse;
 use App\Models\Supplier;
 use App\Models\Product;
+use App\Models\Currency;
+use App\Models\Product_Sale;
+
 use App\Models\ProductBatch;
 use App\Models\Product_Warehouse;
 use App\Models\Product_Supplier;
@@ -374,7 +377,7 @@ class ProductController extends Controller
             $data['cost'] = $data['unit_id'] = $data['purchase_unit_id'] = $data['sale_unit_id'] = 0;
 
         $data['product_details'] = str_replace('"', '@', $data['product_details']);
-        
+
         $data['is_active'] = true;
         $images = $request->image;
         $image_names = [];
@@ -626,6 +629,28 @@ class ProductController extends Controller
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
+
+    private function buildConvertedHtml($baseAmount, $currencyId, $detailedData)
+    {
+        $rateList = $detailedData ? json_decode($detailedData, true) : [];
+        if (!is_array($rateList) || empty($rateList)) return '';
+
+        $inlineStyle = 'margin-top:2px; color:#007bff !important; font-size:12px; line-height:1.2;';
+        $html = '<div class="converted-currencies text-muted small" style="' . $inlineStyle . '">';
+
+        foreach ($rateList as $curId => $rate) {
+            if (!is_numeric($rate)) continue;
+            $cur = Currency::find($curId);
+            if ($cur && $cur->id != $currencyId) {
+                $converted = $baseAmount * (float)$rate;
+                $html .= '<div title="Rate: ' . $rate . '">' .
+                    number_format($converted, 2) . ' ' . e($cur->code) .
+                    '</div>';
+            }
+        }
+        return $html . '</div>';
+    }
+
     public function saleHistoryData(Request $request)
     {
         $columns = array(
@@ -683,32 +708,52 @@ class ProductController extends Controller
                 $totalFiltered = $q->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
-        $data = array();
-        if (!empty($sales)) {
-            foreach ($sales as $key => $sale) {
-                $nestedData['id'] = $sale->id;
-                $nestedData['key'] = $key;
-                $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
-                $nestedData['reference_no'] = $sale->reference_no;
-                $nestedData['warehouse'] = $sale->warehouse_name;
-                $nestedData['customer'] = $sale->customer_name . ' [' . ($sale->customer_number) . ']';
-                $nestedData['qty'] = number_format($sale->qty, config('decimal'));
-                if ($sale->sale_unit_id) {
-                    $unit_data = DB::table('units')->select('unit_code')->find($sale->sale_unit_id);
+        $data = [];
+
+        foreach ($sales as $key => $sale) {
+
+            // --- Base currency setup ---
+            $currencyId = DB::table('sales')->where('id', $sale->id)->value('currency_id');
+            $baseCurrency = $currencyId ? Currency::find($currencyId) : null;
+            $currencyCode = $baseCurrency ? $baseCurrency->code : 'N/A';
+
+            // --- Get detailed JSON from Product_Sale ---
+            $detailedData = Product_Sale::where('sale_id', $sale->id)->value('detailed_currency_data');
+
+            // --- Prepare table data ---
+            $nestedData['id'] = $sale->id;
+            $nestedData['key'] = $key + 1;
+            $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
+            $nestedData['reference_no'] = $sale->reference_no;
+            $nestedData['warehouse'] = $sale->warehouse_name;
+            $nestedData['customer'] = $sale->customer_name . ' [' . $sale->customer_number . ']';
+            $nestedData['qty'] = number_format($sale->qty, config('decimal'));
+
+            if ($sale->sale_unit_id) {
+                $unit_data = DB::table('units')->select('unit_code')->find($sale->sale_unit_id);
+                if ($unit_data)
                     $nestedData['qty'] .= ' ' . $unit_data->unit_code;
-                }
-                $nestedData['unit_price'] = number_format(($sale->total / $sale->qty), config('decimal'));
-                $nestedData['sub_total'] = number_format($sale->total, config('decimal'));
-                $data[] = $nestedData;
             }
+
+            // --- Unit Price + Converted Currencies ---
+            $unitPrice = ($sale->qty > 0) ? ($sale->total / $sale->qty) : 0;
+            $nestedData['unit_price'] = number_format($unitPrice, config('decimal')) . ' ' . $currencyCode .
+                $this->buildConvertedHtml($unitPrice, $currencyId, $detailedData);
+
+            // --- Subtotal + Converted Currencies ---
+            $nestedData['sub_total'] = number_format($sale->total, config('decimal')) . ' ' . $currencyCode .
+                $this->buildConvertedHtml($sale->total, $currencyId, $detailedData);
+
+            $data[] = $nestedData;
         }
-        $json_data = array(
-            "draw"            => intval($request->input('draw')),
-            "recordsTotal"    => intval($totalData),
+
+
+        return response()->json([
+            "draw" => intval($request->input('draw')),
+            "recordsTotal" => intval($totalData),
             "recordsFiltered" => intval($totalFiltered),
-            "data"            => $data
-        );
-        echo json_encode($json_data);
+            "data" => $data
+        ]);
     }
 
     public function purchaseHistoryData(Request $request)
@@ -771,33 +816,49 @@ class ProductController extends Controller
         $data = array();
         if (!empty($purchases)) {
             foreach ($purchases as $key => $purchase) {
+
+                $currencyId = optional(DB::table('purchases')->select('currency_id')->find($purchase->id))->currency_id ?? null;
+                $baseCurrency = $currencyId ? Currency::find($currencyId) : null;
+                $currencyCode = $baseCurrency ? $baseCurrency->code : 'N/A';
+
+                $detailedData = DB::table('product_purchases')
+                    ->where('purchase_id', $purchase->id)
+                    ->value('detailed_currency_data');
+
                 $nestedData['id'] = $purchase->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($purchase->created_at));
                 $nestedData['reference_no'] = $purchase->reference_no;
                 $nestedData['warehouse'] = $purchase->warehouse_name;
-                if ($purchase->supplier_id)
-                    $nestedData['supplier'] = $purchase->supplier_name . ' [' . ($purchase->supplier_number) . ']';
-                else
-                    $nestedData['supplier'] = 'N/A';
+                $nestedData['supplier'] = $purchase->supplier_id
+                    ? $purchase->supplier_name . ' [' . ($purchase->supplier_number) . ']'
+                    : 'N/A';
+
                 $nestedData['qty'] = number_format($purchase->qty, config('decimal'));
                 if ($purchase->purchase_unit_id) {
                     $unit_data = DB::table('units')->select('unit_code')->find($purchase->purchase_unit_id);
                     $nestedData['qty'] .= ' ' . $unit_data->unit_code;
                 }
-                $nestedData['unit_cost'] = number_format(($purchase->total / $purchase->qty), config('decimal'));
-                $nestedData['sub_total'] = number_format($purchase->total, config('decimal'));
+
+                $unitCost = ($purchase->total / $purchase->qty);
+                $nestedData['unit_cost'] = number_format($unitCost, config('decimal')) . ' ' . $currencyCode .
+                    $this->buildConvertedHtml($unitCost, $currencyId, $detailedData);
+
+                $nestedData['sub_total'] = number_format($purchase->total, config('decimal')) . ' ' . $currencyCode .
+                    $this->buildConvertedHtml($purchase->total, $currencyId, $detailedData);
+
                 $data[] = $nestedData;
             }
         }
-        $json_data = array(
-            "draw"            => intval($request->input('draw')),
-            "recordsTotal"    => intval($totalData),
+
+        return response()->json([
+            "draw" => intval($request->input('draw')),
+            "recordsTotal" => intval($totalData),
             "recordsFiltered" => intval($totalFiltered),
-            "data"            => $data
-        );
-        echo json_encode($json_data);
+            "data" => $data
+        ]);
     }
+
 
     public function saleReturnHistoryData(Request $request)
     {
@@ -1102,7 +1163,7 @@ class ProductController extends Controller
             if (isset($data['short_description']))
                 $data['short_description'] = $data['short_description'];
             $data['product_details'] = str_replace('"', '@', $data['product_details']);
-           
+
             $previous_images = [];
             //dealing with previous images
             if ($request->prev_img) {

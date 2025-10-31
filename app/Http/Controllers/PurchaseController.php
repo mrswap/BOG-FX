@@ -235,10 +235,55 @@ class PurchaseController extends Controller
                 else
                     $nestedData['payment_status'] = '<div class="badge badge-success">' . trans('file.Paid') . '</div>';
 
-                $nestedData['grand_total'] = number_format($purchase->grand_total, config('decimal'));
+                //$nestedData['grand_total'] = number_format($purchase->grand_total, config('decimal'));
+
+
+
+
                 $returned_amount = DB::table('return_purchases')->where('purchase_id', $purchase->id)->sum('grand_total');
                 $nestedData['returned_amount'] = number_format($returned_amount, config('decimal'));
-                $nestedData['paid_amount'] = number_format($purchase->paid_amount, config('decimal'));
+
+
+                // --- Currency display setup ---
+                $baseCurrency = Currency::find($purchase->currency_id);
+                $currencyCode = $baseCurrency ? $baseCurrency->code : 'N/A';
+
+                // --- Get conversion info once ---
+                $detailedData = ProductPurchase::where('purchase_id', $purchase->id)->value('detailed_currency_data');
+                $rateList = $detailedData ? json_decode($detailedData, true) : [];
+
+                // Inline CSS (applied to both totals)
+                $inlineStyle = 'margin-top:2px; color:#007bff !important; font-size:12px; line-height:1.2; color:blue !important;';
+
+                // --- Function to build converted HTML ---
+                $buildConvertedHtml = function ($baseAmount, $currencyId, $rateList, $inlineStyle) {
+                    if (!is_array($rateList) || empty($rateList)) return '';
+                    $html = '<div class="converted-currencies text-muted small" style="' . $inlineStyle . '">';
+                    foreach ($rateList as $curId => $rate) {
+                        if (!is_numeric($rate)) continue;
+                        $cur = Currency::find($curId);
+                        if ($cur && $cur->id != $currencyId) {
+                            $converted = $baseAmount * (float)$rate;
+                            $html .= '<div title="Rate: ' . $rate . '">' .
+                                number_format($converted, 2) . ' ' . e($cur->code) .
+                                '</div>';
+                        }
+                    }
+                    return $html . '</div>';
+                };
+
+                // --- 1. GRAND TOTAL ---
+                $grandTotal = number_format($purchase->grand_total, config('decimal')) . ' ' . $currencyCode;
+                $nestedData['grand_total'] = $grandTotal . '<br>' .
+                    $buildConvertedHtml($purchase->grand_total, $purchase->currency_id, $rateList, $inlineStyle);
+
+                // --- 2. PAID AMOUNT ---
+                $paidAmount = number_format($purchase->paid_amount, config('decimal')) . ' ' . $currencyCode;
+                $nestedData['paid_amount'] = $paidAmount . '<br>' .
+                    $buildConvertedHtml($purchase->paid_amount, $purchase->currency_id, $rateList, $inlineStyle);
+
+
+                //$nestedData['paid_amount'] = number_format($purchase->paid_amount, config('decimal'));
                 $nestedData['due'] = number_format($purchase->grand_total - $returned_amount  - $purchase->paid_amount, config('decimal'));
                 //fetching custom fields data
                 foreach ($field_names as $field_name) {
