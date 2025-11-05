@@ -168,7 +168,7 @@
               </div>
             </div>
             @endif
-            <div class="col-md-7">
+            <div class="col-md-12">
               <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                   <h4>{{trans('file.Recent Transaction')}}</h4>
@@ -262,75 +262,6 @@
                       </div>
                   </div>
                 </div>
-              </div>
-            </div>
-            <div class="col-md-5">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                  <h4>{{trans('file.Best Seller').' '.date('F')}}</h4>
-                  <div class="right-column">
-                    <div class="badge badge-primary">{{trans('file.top')}} 5</div>
-                  </div>
-                </div>
-                <div class="table-responsive">
-                    <table id="monthly-best-selling-qty" class="table">
-                      <thead>
-                        <tr>
-                          <th>{{trans('file.Product Details')}}</th>
-                          <th>{{trans('file.qty')}}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-
-                      </tbody>
-                    </table>
-                  </div>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                  <h4>{{trans('file.Best Seller').' '.date('Y'). '('.trans('file.qty').')'}}</h4>
-                  <div class="right-column">
-                    <div class="badge badge-primary">{{trans('file.top')}} 5</div>
-                  </div>
-                </div>
-                <div class="table-responsive">
-                    <table id="yearly-best-selling-qty" class="table">
-                      <thead>
-                        <tr>
-                          <th>{{trans('file.Product Details')}}</th>
-                          <th>{{trans('file.qty')}}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-
-                      </tbody>
-                    </table>
-                  </div>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                  <h4>{{trans('file.Best Seller').' '.date('Y') . '('.trans('file.price').')'}}</h4>
-                  <div class="right-column">
-                    <div class="badge badge-primary">{{trans('file.top')}} 5</div>
-                  </div>
-                </div>
-                <div class="table-responsive">
-                    <table id="yearly-best-selling-price" class="table">
-                      <thead>
-                        <tr>
-                          <th>{{trans('file.Product Details')}}</th>
-                          <th>{{trans('file.grand total')}}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-
-                      </tbody>
-                    </table>
-                  </div>
               </div>
             </div>
           </div>

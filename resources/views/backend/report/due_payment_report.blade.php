@@ -12,10 +12,10 @@
   <div class="container-fluid">
     <div class="card">
       <div class="card-header mt-2">
-        <h3 class="text-center">Forex Gain Lose Report</h3>
+        <h3 class="text-center">Forex Gain/Lose Due Payment Report</h3>
       </div>
 
-      {!! Form::open(['route' => 'report.sale', 'method' => 'post']) !!}
+      {!! Form::open(['route' => 'report.due', 'method' => 'post']) !!}
       <div class="row mb-3 product-report-filter container-fluid">
 
         <div class="col-md-4 mt-3">
@@ -111,13 +111,14 @@
       processing: true,
       serverSide: true,
       ajax: {
-        url: "sale_report_data",
+        
+        url: "{{ route('report.sale_due_report_data') }}",
         type: "POST",
         data: function(d) {
           d._token = '{{ csrf_token() }}';
           d.start_date = $('input[name="start_date"]').val();
           d.end_date = $('input[name="end_date"]').val();
-          d.report_type = 'invoice'; // fixed mode now
+          d.report_type = 'due'; // fixed mode now
         }
       },
       columns: [

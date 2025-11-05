@@ -38,34 +38,33 @@ use Carbon\Carbon;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 
+use App\Models\Currency;
+
 class ReportController extends Controller
 {
     public function productQuantityAlert()
     {
         $role = Role::find(Auth::user()->role_id);
-        if($role->hasPermissionTo('product-qty-alert')){
-            $lims_product_data = Product::select('name','code', 'image', 'qty', 'alert_quantity')->where('is_active', true)->whereColumn('alert_quantity', '>', 'qty')->get();
+        if ($role->hasPermissionTo('product-qty-alert')) {
+            $lims_product_data = Product::select('name', 'code', 'image', 'qty', 'alert_quantity')->where('is_active', true)->whereColumn('alert_quantity', '>', 'qty')->get();
             return view('backend.report.qty_alert_report', compact('lims_product_data'));
-        }
-        else
+        } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
     public function dailySaleObjective(Request $request)
     {
         $role = Role::find(Auth::user()->role_id);
-        if($role->hasPermissionTo('dso-report')) {
-            if($request->input('starting_date')) {
+        if ($role->hasPermissionTo('dso-report')) {
+            if ($request->input('starting_date')) {
                 $starting_date = $request->input('starting_date');
                 $ending_date = $request->input('ending_date');
-            }
-            else {
-                $starting_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 month', strtotime(date('Y-m-d') )))));
+            } else {
+                $starting_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 month', strtotime(date('Y-m-d'))))));
                 $ending_date = date("Y-m-d");
             }
             return view('backend.report.daily_sale_objective', compact('starting_date', 'ending_date'));
-        }
-        else
+        } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
@@ -78,49 +77,45 @@ class ReportController extends Controller
             1 => 'created_at',
         );
         $totalData = DB::table('dso_alerts')
-                    ->whereDate('created_at', '>=' , $starting_date)
-                    ->whereDate('created_at', '<=' , $ending_date)
-                    ->count();
+            ->whereDate('created_at', '>=', $starting_date)
+            ->whereDate('created_at', '<=', $ending_date)
+            ->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
         $order = $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $lims_dso_alert_data = DB::table('dso_alerts')
-                                  ->whereDate('created_at', '>=' , $starting_date)
-                                  ->whereDate('created_at', '<=' , $ending_date)
-                                  ->offset($start)
-                                  ->limit($limit)
-                                  ->orderBy($order, $dir)
-                                  ->get();
-        }
-        else
-        {
+                ->whereDate('created_at', '>=', $starting_date)
+                ->whereDate('created_at', '<=', $ending_date)
+                ->offset($start)
+                ->limit($limit)
+                ->orderBy($order, $dir)
+                ->get();
+        } else {
             $search = $request->input('search.value');
             $lims_dso_alert_data = DB::table('dso_alerts')
-                                  ->whereDate('dso_alerts.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))))
-                                  ->offset($start)
-                                  ->limit($limit)
-                                  ->orderBy($order, $dir)
-                                  ->get();
+                ->whereDate('dso_alerts.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))))
+                ->offset($start)
+                ->limit($limit)
+                ->orderBy($order, $dir)
+                ->get();
         }
         $data = array();
-        if(!empty($lims_dso_alert_data))
-        {
-            foreach ($lims_dso_alert_data as $key => $dso_alert_data)
-            {
+        if (!empty($lims_dso_alert_data)) {
+            foreach ($lims_dso_alert_data as $key => $dso_alert_data) {
                 $nestedData['id'] = $dso_alert_data->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime("-1 day", strtotime($dso_alert_data->created_at)));
                 foreach (json_decode($dso_alert_data->product_info) as $index => $product_info) {
-                    if($index)
+                    if ($index)
                         $nestedData['product_info'] .= ', ';
-                    $nestedData['product_info'] = $product_info->name.' ['.$product_info->code.']';
+                    $nestedData['product_info'] = $product_info->name . ' [' . $product_info->code . ']';
                 }
                 $nestedData['number_of_products'] = $dso_alert_data->number_of_products;
                 $data[] = $nestedData;
@@ -137,87 +132,84 @@ class ReportController extends Controller
 
     public function productExpiry()
     {
-        $general_settings_data = GeneralSetting::select('expiry_type','expiry_value')->first();
+        $general_settings_data = GeneralSetting::select('expiry_type', 'expiry_value')->first();
 
-        $date = date('Y-m-d', strtotime('+'.$general_settings_data["expiry_value"].' '.$general_settings_data["expiry_type"]));
+        $date = date('Y-m-d', strtotime('+' . $general_settings_data["expiry_value"] . ' ' . $general_settings_data["expiry_type"]));
         $lims_product_data = DB::table('products')
-                            ->join('product_batches', 'products.id', '=', 'product_batches.product_id')
-                            ->whereDate('product_batches.expired_date', '<=', $date)
-                            ->where([
-                                ['products.is_active', true],
-                                ['product_batches.qty', '>', 0]
-                            ])
-                            ->select('products.name', 'products.code', 'products.image', 'product_batches.batch_no', 'product_batches.batch_no', 'product_batches.expired_date', 'product_batches.qty')
-                            ->get();
+            ->join('product_batches', 'products.id', '=', 'product_batches.product_id')
+            ->whereDate('product_batches.expired_date', '<=', $date)
+            ->where([
+                ['products.is_active', true],
+                ['product_batches.qty', '>', 0]
+            ])
+            ->select('products.name', 'products.code', 'products.image', 'product_batches.batch_no', 'product_batches.batch_no', 'product_batches.expired_date', 'product_batches.qty')
+            ->get();
         return view('backend.report.product_expiry_report', compact('lims_product_data'));
     }
 
     public function warehouseStock(Request $request)
     {
         $role = Role::find(Auth::user()->role_id);
-        if($role->hasPermissionTo('warehouse-stock-report')) {
-            if(isset($request->warehouse_id))
+        if ($role->hasPermissionTo('warehouse-stock-report')) {
+            if (isset($request->warehouse_id))
                 $warehouse_id = $request->warehouse_id;
             else
                 $warehouse_id = 0;
-            if(!$warehouse_id) {
+            if (!$warehouse_id) {
                 $total_item = DB::table('product_warehouse')
-                            ->join('products', 'product_warehouse.product_id', '=', 'products.id')
-                            ->where([
-                                ['products.is_active', true],
-                                ['product_warehouse.qty', '>' , 0]
-                            ])->count();
+                    ->join('products', 'product_warehouse.product_id', '=', 'products.id')
+                    ->where([
+                        ['products.is_active', true],
+                        ['product_warehouse.qty', '>', 0]
+                    ])->count();
 
                 $total_qty = Product::where('is_active', true)->sum('qty');
                 $total_price = DB::table('products')->where('is_active', true)->sum(DB::raw('price * qty'));
                 $total_cost = DB::table('products')->where('is_active', true)->sum(DB::raw('cost * qty'));
-            }
-            else {
+            } else {
                 $total_item = DB::table('product_warehouse')
-                            ->join('products', 'product_warehouse.product_id', '=', 'products.id')
-                            ->where([
-                                ['products.is_active', true],
-                                ['product_warehouse.qty', '>' , 0],
-                                ['product_warehouse.warehouse_id', $warehouse_id]
-                            ])->count();
+                    ->join('products', 'product_warehouse.product_id', '=', 'products.id')
+                    ->where([
+                        ['products.is_active', true],
+                        ['product_warehouse.qty', '>', 0],
+                        ['product_warehouse.warehouse_id', $warehouse_id]
+                    ])->count();
                 $total_qty = DB::table('product_warehouse')
-                                ->join('products', 'product_warehouse.product_id', '=', 'products.id')
-                                ->where([
-                                    ['products.is_active', true],
-                                    ['product_warehouse.warehouse_id', $warehouse_id]
-                                ])->sum('product_warehouse.qty');
+                    ->join('products', 'product_warehouse.product_id', '=', 'products.id')
+                    ->where([
+                        ['products.is_active', true],
+                        ['product_warehouse.warehouse_id', $warehouse_id]
+                    ])->sum('product_warehouse.qty');
                 $total_price = DB::table('product_warehouse')
-                                ->join('products', 'product_warehouse.product_id', '=', 'products.id')
-                                ->where([
-                                    ['products.is_active', true],
-                                    ['product_warehouse.warehouse_id', $warehouse_id]
-                                ])->sum(DB::raw('products.price * product_warehouse.qty'));
+                    ->join('products', 'product_warehouse.product_id', '=', 'products.id')
+                    ->where([
+                        ['products.is_active', true],
+                        ['product_warehouse.warehouse_id', $warehouse_id]
+                    ])->sum(DB::raw('products.price * product_warehouse.qty'));
                 $total_cost = DB::table('product_warehouse')
-                                ->join('products', 'product_warehouse.product_id', '=', 'products.id')
-                                ->where([
-                                    ['products.is_active', true],
-                                    ['product_warehouse.warehouse_id', $warehouse_id]
-                                ])->sum(DB::raw('products.cost * product_warehouse.qty'));
+                    ->join('products', 'product_warehouse.product_id', '=', 'products.id')
+                    ->where([
+                        ['products.is_active', true],
+                        ['product_warehouse.warehouse_id', $warehouse_id]
+                    ])->sum(DB::raw('products.cost * product_warehouse.qty'));
             }
             $lims_warehouse_list = Warehouse::where('is_active', true)->get();
             return view('backend.report.warehouse_stock', compact('total_item', 'total_qty', 'total_price', 'total_cost', 'lims_warehouse_list', 'warehouse_id'));
-        }
-        else
+        } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
     public function dailySale($year, $month)
     {
         $role = Role::find(Auth::user()->role_id);
-        if($role->hasPermissionTo('daily-sale')){
+        if ($role->hasPermissionTo('daily-sale')) {
             $start = 1;
             $number_of_day = date('t', mktime(0, 0, 0, $month, 1, $year));
-            while($start <= $number_of_day)
-            {
-                if($start < 10)
-                    $date = $year.'-'.$month.'-0'.$start;
+            while ($start <= $number_of_day) {
+                if ($start < 10)
+                    $date = $year . '-' . $month . '-0' . $start;
                 else
-                    $date = $year.'-'.$month.'-'.$start;
+                    $date = $year . '-' . $month . '-' . $start;
                 $query1 = array(
                     'SUM(total_discount) AS total_discount',
                     'SUM(order_discount) AS order_discount',
@@ -235,32 +227,30 @@ class ReportController extends Controller
                 $grand_total[$start] = $sale_data[0]->grand_total;
                 $start++;
             }
-            $start_day = date('w', strtotime($year.'-'.$month.'-01')) + 1;
-            $prev_year = date('Y', strtotime('-1 month', strtotime($year.'-'.$month.'-01')));
-            $prev_month = date('m', strtotime('-1 month', strtotime($year.'-'.$month.'-01')));
-            $next_year = date('Y', strtotime('+1 month', strtotime($year.'-'.$month.'-01')));
-            $next_month = date('m', strtotime('+1 month', strtotime($year.'-'.$month.'-01')));
+            $start_day = date('w', strtotime($year . '-' . $month . '-01')) + 1;
+            $prev_year = date('Y', strtotime('-1 month', strtotime($year . '-' . $month . '-01')));
+            $prev_month = date('m', strtotime('-1 month', strtotime($year . '-' . $month . '-01')));
+            $next_year = date('Y', strtotime('+1 month', strtotime($year . '-' . $month . '-01')));
+            $next_month = date('m', strtotime('+1 month', strtotime($year . '-' . $month . '-01')));
             $lims_warehouse_list = Warehouse::where('is_active', true)->get();
             $warehouse_id = 0;
-            return view('backend.report.daily_sale', compact('total_discount','order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'start_day', 'year', 'month', 'number_of_day', 'prev_year', 'prev_month', 'next_year', 'next_month', 'lims_warehouse_list', 'warehouse_id'));
-        }
-        else
+            return view('backend.report.daily_sale', compact('total_discount', 'order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'start_day', 'year', 'month', 'number_of_day', 'prev_year', 'prev_month', 'next_year', 'next_month', 'lims_warehouse_list', 'warehouse_id'));
+        } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
-    public function dailySaleByWarehouse(Request $request,$year,$month)
+    public function dailySaleByWarehouse(Request $request, $year, $month)
     {
         $data = $request->all();
-        if($data['warehouse_id'] == 0)
+        if ($data['warehouse_id'] == 0)
             return redirect()->back();
         $start = 1;
         $number_of_day = date('t', mktime(0, 0, 0, $month, 1, $year));
-        while($start <= $number_of_day)
-        {
-            if($start < 10)
-                $date = $year.'-'.$month.'-0'.$start;
+        while ($start <= $number_of_day) {
+            if ($start < 10)
+                $date = $year . '-' . $month . '-0' . $start;
             else
-                $date = $year.'-'.$month.'-'.$start;
+                $date = $year . '-' . $month . '-' . $start;
             $query1 = array(
                 'SUM(total_discount) AS total_discount',
                 'SUM(order_discount) AS order_discount',
@@ -278,29 +268,27 @@ class ReportController extends Controller
             $grand_total[$start] = $sale_data[0]->grand_total;
             $start++;
         }
-        $start_day = date('w', strtotime($year.'-'.$month.'-01')) + 1;
-        $prev_year = date('Y', strtotime('-1 month', strtotime($year.'-'.$month.'-01')));
-        $prev_month = date('m', strtotime('-1 month', strtotime($year.'-'.$month.'-01')));
-        $next_year = date('Y', strtotime('+1 month', strtotime($year.'-'.$month.'-01')));
-        $next_month = date('m', strtotime('+1 month', strtotime($year.'-'.$month.'-01')));
+        $start_day = date('w', strtotime($year . '-' . $month . '-01')) + 1;
+        $prev_year = date('Y', strtotime('-1 month', strtotime($year . '-' . $month . '-01')));
+        $prev_month = date('m', strtotime('-1 month', strtotime($year . '-' . $month . '-01')));
+        $next_year = date('Y', strtotime('+1 month', strtotime($year . '-' . $month . '-01')));
+        $next_month = date('m', strtotime('+1 month', strtotime($year . '-' . $month . '-01')));
         $lims_warehouse_list = Warehouse::where('is_active', true)->get();
         $warehouse_id = $data['warehouse_id'];
-        return view('backend.report.daily_sale', compact('total_discount','order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'start_day', 'year', 'month', 'number_of_day', 'prev_year', 'prev_month', 'next_year', 'next_month', 'lims_warehouse_list', 'warehouse_id'));
-
+        return view('backend.report.daily_sale', compact('total_discount', 'order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'start_day', 'year', 'month', 'number_of_day', 'prev_year', 'prev_month', 'next_year', 'next_month', 'lims_warehouse_list', 'warehouse_id'));
     }
 
     public function dailyPurchase($year, $month)
     {
         $role = Role::find(Auth::user()->role_id);
-        if($role->hasPermissionTo('daily-purchase')){
+        if ($role->hasPermissionTo('daily-purchase')) {
             $start = 1;
             $number_of_day = date('t', mktime(0, 0, 0, $month, 1, $year));
-            while($start <= $number_of_day)
-            {
-                if($start < 10)
-                    $date = $year.'-'.$month.'-0'.$start;
+            while ($start <= $number_of_day) {
+                if ($start < 10)
+                    $date = $year . '-' . $month . '-0' . $start;
                 else
-                    $date = $year.'-'.$month.'-'.$start;
+                    $date = $year . '-' . $month . '-' . $start;
                 $query1 = array(
                     'SUM(total_discount) AS total_discount',
                     'SUM(order_discount) AS order_discount',
@@ -318,32 +306,30 @@ class ReportController extends Controller
                 $grand_total[$start] = $purchase_data[0]->grand_total;
                 $start++;
             }
-            $start_day = date('w', strtotime($year.'-'.$month.'-01')) + 1;
-            $prev_year = date('Y', strtotime('-1 month', strtotime($year.'-'.$month.'-01')));
-            $prev_month = date('m', strtotime('-1 month', strtotime($year.'-'.$month.'-01')));
-            $next_year = date('Y', strtotime('+1 month', strtotime($year.'-'.$month.'-01')));
-            $next_month = date('m', strtotime('+1 month', strtotime($year.'-'.$month.'-01')));
+            $start_day = date('w', strtotime($year . '-' . $month . '-01')) + 1;
+            $prev_year = date('Y', strtotime('-1 month', strtotime($year . '-' . $month . '-01')));
+            $prev_month = date('m', strtotime('-1 month', strtotime($year . '-' . $month . '-01')));
+            $next_year = date('Y', strtotime('+1 month', strtotime($year . '-' . $month . '-01')));
+            $next_month = date('m', strtotime('+1 month', strtotime($year . '-' . $month . '-01')));
             $lims_warehouse_list = Warehouse::where('is_active', true)->get();
             $warehouse_id = 0;
-            return view('backend.report.daily_purchase', compact('total_discount','order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'start_day', 'year', 'month', 'number_of_day', 'prev_year', 'prev_month', 'next_year', 'next_month', 'lims_warehouse_list', 'warehouse_id'));
-        }
-        else
+            return view('backend.report.daily_purchase', compact('total_discount', 'order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'start_day', 'year', 'month', 'number_of_day', 'prev_year', 'prev_month', 'next_year', 'next_month', 'lims_warehouse_list', 'warehouse_id'));
+        } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
     public function dailyPurchaseByWarehouse(Request $request, $year, $month)
     {
         $data = $request->all();
-        if($data['warehouse_id'] == 0)
+        if ($data['warehouse_id'] == 0)
             return redirect()->back();
         $start = 1;
         $number_of_day = date('t', mktime(0, 0, 0, $month, 1, $year));
-        while($start <= $number_of_day)
-        {
-            if($start < 10)
-                $date = $year.'-'.$month.'-0'.$start;
+        while ($start <= $number_of_day) {
+            if ($start < 10)
+                $date = $year . '-' . $month . '-0' . $start;
             else
-                $date = $year.'-'.$month.'-'.$start;
+                $date = $year . '-' . $month . '-' . $start;
             $query1 = array(
                 'SUM(total_discount) AS total_discount',
                 'SUM(order_discount) AS order_discount',
@@ -361,90 +347,87 @@ class ReportController extends Controller
             $grand_total[$start] = $purchase_data[0]->grand_total;
             $start++;
         }
-        $start_day = date('w', strtotime($year.'-'.$month.'-01')) + 1;
-        $prev_year = date('Y', strtotime('-1 month', strtotime($year.'-'.$month.'-01')));
-        $prev_month = date('m', strtotime('-1 month', strtotime($year.'-'.$month.'-01')));
-        $next_year = date('Y', strtotime('+1 month', strtotime($year.'-'.$month.'-01')));
-        $next_month = date('m', strtotime('+1 month', strtotime($year.'-'.$month.'-01')));
+        $start_day = date('w', strtotime($year . '-' . $month . '-01')) + 1;
+        $prev_year = date('Y', strtotime('-1 month', strtotime($year . '-' . $month . '-01')));
+        $prev_month = date('m', strtotime('-1 month', strtotime($year . '-' . $month . '-01')));
+        $next_year = date('Y', strtotime('+1 month', strtotime($year . '-' . $month . '-01')));
+        $next_month = date('m', strtotime('+1 month', strtotime($year . '-' . $month . '-01')));
         $lims_warehouse_list = Warehouse::where('is_active', true)->get();
         $warehouse_id = $data['warehouse_id'];
 
-        return view('backend.report.daily_purchase', compact('total_discount','order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'start_day', 'year', 'month', 'number_of_day', 'prev_year', 'prev_month', 'next_year', 'next_month', 'lims_warehouse_list', 'warehouse_id'));
+        return view('backend.report.daily_purchase', compact('total_discount', 'order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'start_day', 'year', 'month', 'number_of_day', 'prev_year', 'prev_month', 'next_year', 'next_month', 'lims_warehouse_list', 'warehouse_id'));
     }
 
     public function monthlySale($year)
     {
         $role = Role::find(Auth::user()->role_id);
-        if($role->hasPermissionTo('monthly-sale')){
-            $start = strtotime($year .'-01-01');
-            $end = strtotime($year .'-12-31');
-            while($start <= $end)
-            {
+        if ($role->hasPermissionTo('monthly-sale')) {
+            $start = strtotime($year . '-01-01');
+            $end = strtotime($year . '-12-31');
+            while ($start <= $end) {
                 $number_of_day = date('t', mktime(0, 0, 0, date('m', $start), 1, $year));
-                $start_date = $year . '-'. date('m', $start).'-'.'01';
-                $end_date = $year . '-'. date('m', $start).'-'.$number_of_day;
+                $start_date = $year . '-' . date('m', $start) . '-' . '01';
+                $end_date = $year . '-' . date('m', $start) . '-' . $number_of_day;
 
-                $temp_total_discount = Sale::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total_discount');
+                $temp_total_discount = Sale::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total_discount');
                 $total_discount[] = number_format((float)$temp_total_discount, config('decimal'), '.', '');
 
-                $temp_order_discount = Sale::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('order_discount');
+                $temp_order_discount = Sale::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('order_discount');
                 $order_discount[] = number_format((float)$temp_order_discount, config('decimal'), '.', '');
 
-                $temp_total_tax = Sale::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total_tax');
+                $temp_total_tax = Sale::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total_tax');
                 $total_tax[] = number_format((float)$temp_total_tax, config('decimal'), '.', '');
 
-                $temp_order_tax = Sale::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('order_tax');
+                $temp_order_tax = Sale::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('order_tax');
                 $order_tax[] = number_format((float)$temp_order_tax, config('decimal'), '.', '');
 
-                $temp_shipping_cost = Sale::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('shipping_cost');
+                $temp_shipping_cost = Sale::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('shipping_cost');
                 $shipping_cost[] = number_format((float)$temp_shipping_cost, config('decimal'), '.', '');
 
-                $temp_total = Sale::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('grand_total');
+                $temp_total = Sale::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('grand_total');
                 $total[] = number_format((float)$temp_total, config('decimal'), '.', '');
                 $start = strtotime("+1 month", $start);
             }
-            $lims_warehouse_list = Warehouse::where('is_active',true)->get();
+            $lims_warehouse_list = Warehouse::where('is_active', true)->get();
             $warehouse_id = 0;
             return view('backend.report.monthly_sale', compact('year', 'total_discount', 'order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'total', 'lims_warehouse_list', 'warehouse_id'));
-        }
-        else
+        } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
     public function monthlySaleByWarehouse(Request $request, $year)
     {
         $data = $request->all();
-        if($data['warehouse_id'] == 0)
+        if ($data['warehouse_id'] == 0)
             return redirect()->back();
 
-        $start = strtotime($year .'-01-01');
-        $end = strtotime($year .'-12-31');
-        while($start <= $end)
-        {
+        $start = strtotime($year . '-01-01');
+        $end = strtotime($year . '-12-31');
+        while ($start <= $end) {
             $number_of_day = date('t', mktime(0, 0, 0, date('m', $start), 1, $year));
-            $start_date = $year . '-'. date('m', $start).'-'.'01';
-            $end_date = $year . '-'. date('m', $start).'-'.$number_of_day;
+            $start_date = $year . '-' . date('m', $start) . '-' . '01';
+            $end_date = $year . '-' . date('m', $start) . '-' . $number_of_day;
 
-            $temp_total_discount = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total_discount');
+            $temp_total_discount = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total_discount');
             $total_discount[] = number_format((float)$temp_total_discount, config('decimal'), '.', '');
 
-            $temp_order_discount = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('order_discount');
+            $temp_order_discount = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('order_discount');
             $order_discount[] = number_format((float)$temp_order_discount, config('decimal'), '.', '');
 
-            $temp_total_tax = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total_tax');
+            $temp_total_tax = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total_tax');
             $total_tax[] = number_format((float)$temp_total_tax, config('decimal'), '.', '');
 
-            $temp_order_tax = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('order_tax');
+            $temp_order_tax = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('order_tax');
             $order_tax[] = number_format((float)$temp_order_tax, config('decimal'), '.', '');
 
-            $temp_shipping_cost = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('shipping_cost');
+            $temp_shipping_cost = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('shipping_cost');
             $shipping_cost[] = number_format((float)$temp_shipping_cost, config('decimal'), '.', '');
 
-            $temp_total = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('grand_total');
+            $temp_total = Sale::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('grand_total');
             $total[] = number_format((float)$temp_total, config('decimal'), '.', '');
             $start = strtotime("+1 month", $start);
         }
-        $lims_warehouse_list = Warehouse::where('is_active',true)->get();
+        $lims_warehouse_list = Warehouse::where('is_active', true)->get();
         $warehouse_id = $data['warehouse_id'];
         return view('backend.report.monthly_sale', compact('year', 'total_discount', 'order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'total', 'lims_warehouse_list', 'warehouse_id'));
     }
@@ -452,14 +435,13 @@ class ReportController extends Controller
     public function monthlyPurchase($year)
     {
         $role = Role::find(Auth::user()->role_id);
-        if($role->hasPermissionTo('monthly-purchase')){
-            $start = strtotime($year .'-01-01');
-            $end = strtotime($year .'-12-31');
-            while($start <= $end)
-            {
+        if ($role->hasPermissionTo('monthly-purchase')) {
+            $start = strtotime($year . '-01-01');
+            $end = strtotime($year . '-12-31');
+            while ($start <= $end) {
                 $number_of_day = date('t', mktime(0, 0, 0, date('m', $start), 1, $year));
-                $start_date = $year . '-'. date('m', $start).'-'.'01';
-                $end_date = $year . '-'. date('m', $start).'-'.$number_of_day;
+                $start_date = $year . '-' . date('m', $start) . '-' . '01';
+                $end_date = $year . '-' . date('m', $start) . '-' . $number_of_day;
 
                 $query1 = array(
                     'SUM(total_discount) AS total_discount',
@@ -469,7 +451,7 @@ class ReportController extends Controller
                     'SUM(shipping_cost) AS shipping_cost',
                     'SUM(grand_total) AS grand_total'
                 );
-                $purchase_data = Purchase::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query1))->get();
+                $purchase_data = Purchase::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query1))->get();
 
                 $total_discount[] = number_format((float)$purchase_data[0]->total_discount, config('decimal'), '.', '');
                 $order_discount[] = number_format((float)$purchase_data[0]->order_discount, config('decimal'), '.', '');
@@ -482,24 +464,22 @@ class ReportController extends Controller
             $lims_warehouse_list = Warehouse::where('is_active', true)->get();
             $warehouse_id = 0;
             return view('backend.report.monthly_purchase', compact('year', 'total_discount', 'order_discount', 'total_tax', 'order_tax', 'shipping_cost', 'grand_total', 'lims_warehouse_list', 'warehouse_id'));
-        }
-        else
+        } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
     public function monthlyPurchaseByWarehouse(Request $request, $year)
     {
         $data = $request->all();
-        if($data['warehouse_id'] == 0)
+        if ($data['warehouse_id'] == 0)
             return redirect()->back();
 
-        $start = strtotime($year .'-01-01');
-        $end = strtotime($year .'-12-31');
-        while($start <= $end)
-        {
+        $start = strtotime($year . '-01-01');
+        $end = strtotime($year . '-12-31');
+        while ($start <= $end) {
             $number_of_day = date('t', mktime(0, 0, 0, date('m', $start), 1, $year));
-            $start_date = $year . '-'. date('m', $start).'-'.'01';
-            $end_date = $year . '-'. date('m', $start).'-'.$number_of_day;
+            $start_date = $year . '-' . date('m', $start) . '-' . '01';
+            $end_date = $year . '-' . date('m', $start) . '-' . $number_of_day;
 
             $query1 = array(
                 'SUM(total_discount) AS total_discount',
@@ -509,7 +489,7 @@ class ReportController extends Controller
                 'SUM(shipping_cost) AS shipping_cost',
                 'SUM(grand_total) AS grand_total'
             );
-            $purchase_data = Purchase::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query1))->get();
+            $purchase_data = Purchase::where('warehouse_id', $data['warehouse_id'])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query1))->get();
 
             $total_discount[] = number_format((float)$purchase_data[0]->total_discount, config('decimal'), '.', '');
             $order_discount[] = number_format((float)$purchase_data[0]->order_discount, config('decimal'), '.', '');
@@ -527,24 +507,23 @@ class ReportController extends Controller
     public function bestSeller()
     {
         $role = Role::find(Auth::user()->role_id);
-        if($role->hasPermissionTo('best-seller')){
-            $start = strtotime(date("Y-m", strtotime("-2 months")).'-01');
-            $end = strtotime(date("Y").'-'.date("m").'-31');
+        if ($role->hasPermissionTo('best-seller')) {
+            $start = strtotime(date("Y-m", strtotime("-2 months")) . '-01');
+            $end = strtotime(date("Y") . '-' . date("m") . '-31');
 
-            while($start <= $end)
-            {
+            while ($start <= $end) {
                 $number_of_day = date('t', mktime(0, 0, 0, date('m', $start), 1, date('Y', $start)));
-                $start_date = date("Y-m", $start).'-'.'01';
-                $end_date = date("Y-m", $start).'-'.$number_of_day;
+                $start_date = date("Y-m", $start) . '-' . '01';
+                $end_date = date("Y-m", $start) . '-' . $number_of_day;
 
-                $best_selling_qty = Product_Sale::select(DB::raw('product_id, sum(qty) as sold_qty'))->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->groupBy('product_id')->orderBy('sold_qty', 'desc')->take(1)->get();
-                if(!count($best_selling_qty)){
+                $best_selling_qty = Product_Sale::select(DB::raw('product_id, sum(qty) as sold_qty'))->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->groupBy('product_id')->orderBy('sold_qty', 'desc')->take(1)->get();
+                if (!count($best_selling_qty)) {
                     $product[] = '';
                     $sold_qty[] = 0;
                 }
                 foreach ($best_selling_qty as $best_seller) {
                     $product_data = Product::find($best_seller->product_id);
-                    $product[] = $product_data->name.': '.$product_data->code;
+                    $product[] = $product_data->name . ': ' . $product_data->code;
                     $sold_qty[] = $best_seller->sold_qty;
                 }
                 $start = strtotime("+1 month", $start);
@@ -554,36 +533,34 @@ class ReportController extends Controller
             $warehouse_id = 0;
             //return $product;
             return view('backend.report.best_seller', compact('product', 'sold_qty', 'start_month', 'lims_warehouse_list', 'warehouse_id'));
-        }
-        else
+        } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
     public function bestSellerByWarehouse(Request $request)
     {
         $data = $request->all();
-        if($data['warehouse_id'] == 0)
+        if ($data['warehouse_id'] == 0)
             return redirect()->back();
 
-        $start = strtotime(date("Y-m", strtotime("-2 months")).'-01');
-        $end = strtotime(date("Y").'-'.date("m").'-31');
+        $start = strtotime(date("Y-m", strtotime("-2 months")) . '-01');
+        $end = strtotime(date("Y") . '-' . date("m") . '-31');
 
-        while($start <= $end)
-        {
+        while ($start <= $end) {
             $number_of_day = date('t', mktime(0, 0, 0, date('m', $start), 1, date('Y', $start)));
-            $start_date = date("Y-m", $start).'-'.'01';
-            $end_date = date("Y-m", $start).'-'.$number_of_day;
+            $start_date = date("Y-m", $start) . '-' . '01';
+            $end_date = date("Y-m", $start) . '-' . $number_of_day;
 
             $best_selling_qty = DB::table('sales')
-                                ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->select(DB::raw('product_sales.product_id, sum(product_sales.qty) as sold_qty'))->where('sales.warehouse_id', $data['warehouse_id'])->whereDate('sales.created_at', '>=' , $start_date)->whereDate('sales.created_at', '<=' , $end_date)->groupBy('product_id')->orderBy('sold_qty', 'desc')->take(1)->get();
+                ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->select(DB::raw('product_sales.product_id, sum(product_sales.qty) as sold_qty'))->where('sales.warehouse_id', $data['warehouse_id'])->whereDate('sales.created_at', '>=', $start_date)->whereDate('sales.created_at', '<=', $end_date)->groupBy('product_id')->orderBy('sold_qty', 'desc')->take(1)->get();
 
-            if(!count($best_selling_qty)) {
+            if (!count($best_selling_qty)) {
                 $product[] = '';
                 $sold_qty[] = 0;
             }
             foreach ($best_selling_qty as $best_seller) {
                 $product_data = Product::find($best_seller->product_id);
-                $product[] = $product_data->name.': '.$product_data->code;
+                $product[] = $product_data->name . ': ' . $product_data->code;
                 $sold_qty[] = $best_seller->sold_qty;
             }
             $start = strtotime("+1 month", $start);
@@ -612,14 +589,14 @@ class ReportController extends Controller
         config()->set('database.connections.mysql.strict', false);
         DB::reconnect();
         $product_sale_data = Product_Sale::join('sales', 'product_sales.sale_id', '=', 'sales.id')
-                            ->select(DB::raw('product_sales.product_id, product_sales.product_batch_id, product_sales.sale_unit_id, sum(product_sales.qty) as sold_qty, sum(product_sales.return_qty) as return_qty, sum(product_sales.total) as sold_amount'))
-                            ->whereDate('sales.created_at', '>=' , $start_date)
-                            ->whereDate('sales.created_at', '<=' , $end_date)
-                            ->groupBy('product_sales.product_id', 'product_sales.product_batch_id')
-                            ->get();
+            ->select(DB::raw('product_sales.product_id, product_sales.product_batch_id, product_sales.sale_unit_id, sum(product_sales.qty) as sold_qty, sum(product_sales.return_qty) as return_qty, sum(product_sales.total) as sold_amount'))
+            ->whereDate('sales.created_at', '>=', $start_date)
+            ->whereDate('sales.created_at', '<=', $end_date)
+            ->groupBy('product_sales.product_id', 'product_sales.product_batch_id')
+            ->get();
 
         config()->set('database.connections.mysql.strict', true);
-            DB::reconnect();
+        DB::reconnect();
         $data = $this->calculateAverageCOGS($product_sale_data);
         $product_cost = $data[0];
         $product_tax = $data[1];
@@ -657,73 +634,73 @@ class ReportController extends Controller
             $product_cost += $purchased_amount;
             $product_tax += $purchased_tax;
         }*/
-        $purchase = Purchase::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query1))->get();
-        $total_purchase = Purchase::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->count();
-        $sale = Sale::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query1))->get();
-        $total_sale = Sale::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->count();
-        $return = Returns::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query2))->get();
-        $total_return = Returns::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->count();
-        $purchase_return = ReturnPurchase::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query2))->get();
-        $total_purchase_return = ReturnPurchase::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->count();
-        $expense = Expense::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('amount');
-        $income = Income::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('amount');
-        $total_expense = Expense::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->count();
-        $total_income = Income::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->count();
-        $payroll = Payroll::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('amount');
-        $total_payroll = Payroll::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->count();
+        $purchase = Purchase::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query1))->get();
+        $total_purchase = Purchase::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->count();
+        $sale = Sale::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query1))->get();
+        $total_sale = Sale::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->count();
+        $return = Returns::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query2))->get();
+        $total_return = Returns::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->count();
+        $purchase_return = ReturnPurchase::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query2))->get();
+        $total_purchase_return = ReturnPurchase::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->count();
+        $expense = Expense::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('amount');
+        $income = Income::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('amount');
+        $total_expense = Expense::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->count();
+        $total_income = Income::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->count();
+        $payroll = Payroll::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('amount');
+        $total_payroll = Payroll::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->count();
         $total_item = DB::table('product_warehouse')
-                    ->join('products', 'product_warehouse.product_id', '=', 'products.id')
-                    ->where([
-                        ['products.is_active', true],
-                        ['product_warehouse.qty', '>' , 0]
-                    ])->count();
-        $payment_recieved_number = DB::table('payments')->whereNotNull('sale_id')->whereDate('created_at', '>=' , $start_date)
-            ->whereDate('created_at', '<=' , $end_date)->count();
-        $payment_recieved = DB::table('payments')->whereNotNull('sale_id')->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('payments.amount');
+            ->join('products', 'product_warehouse.product_id', '=', 'products.id')
+            ->where([
+                ['products.is_active', true],
+                ['product_warehouse.qty', '>', 0]
+            ])->count();
+        $payment_recieved_number = DB::table('payments')->whereNotNull('sale_id')->whereDate('created_at', '>=', $start_date)
+            ->whereDate('created_at', '<=', $end_date)->count();
+        $payment_recieved = DB::table('payments')->whereNotNull('sale_id')->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('payments.amount');
         $credit_card_payment_sale = DB::table('payments')
-                            ->where('paying_method', 'Credit Card')
-                            ->whereNotNull('payments.sale_id')
-                            ->whereDate('payments.created_at', '>=' , $start_date)
-                            ->whereDate('payments.created_at', '<=' , $end_date)->sum('payments.amount');
+            ->where('paying_method', 'Credit Card')
+            ->whereNotNull('payments.sale_id')
+            ->whereDate('payments.created_at', '>=', $start_date)
+            ->whereDate('payments.created_at', '<=', $end_date)->sum('payments.amount');
         $cheque_payment_sale = DB::table('payments')
-                            ->where('paying_method', 'Cheque')
-                            ->whereNotNull('payments.sale_id')
-                            ->whereDate('payments.created_at', '>=' , $start_date)
-                            ->whereDate('payments.created_at', '<=' , $end_date)->sum('payments.amount');
+            ->where('paying_method', 'Cheque')
+            ->whereNotNull('payments.sale_id')
+            ->whereDate('payments.created_at', '>=', $start_date)
+            ->whereDate('payments.created_at', '<=', $end_date)->sum('payments.amount');
         $gift_card_payment_sale = DB::table('payments')
-                            ->where('paying_method', 'Gift Card')
-                            ->whereNotNull('sale_id')
-                            ->whereDate('created_at', '>=' , $start_date)
-                            ->whereDate('created_at', '<=' , $end_date)
-                            ->sum('amount');
+            ->where('paying_method', 'Gift Card')
+            ->whereNotNull('sale_id')
+            ->whereDate('created_at', '>=', $start_date)
+            ->whereDate('created_at', '<=', $end_date)
+            ->sum('amount');
         $paypal_payment_sale = DB::table('payments')
-                            ->where('paying_method', 'Paypal')
-                            ->whereNotNull('sale_id')
-                            ->whereDate('created_at', '>=' , $start_date)
-                            ->whereDate('created_at', '<=' , $end_date)
-                            ->sum('amount');
+            ->where('paying_method', 'Paypal')
+            ->whereNotNull('sale_id')
+            ->whereDate('created_at', '>=', $start_date)
+            ->whereDate('created_at', '<=', $end_date)
+            ->sum('amount');
         $deposit_payment_sale = DB::table('payments')
-                            ->where('paying_method', 'Deposit')
-                            ->whereNotNull('sale_id')
-                            ->whereDate('created_at', '>=' , $start_date)
-                            ->whereDate('created_at', '<=' , $end_date)
-                            ->sum('amount');
+            ->where('paying_method', 'Deposit')
+            ->whereNotNull('sale_id')
+            ->whereDate('created_at', '>=', $start_date)
+            ->whereDate('created_at', '<=', $end_date)
+            ->sum('amount');
         $cash_payment_sale =  $payment_recieved - $credit_card_payment_sale - $cheque_payment_sale - $gift_card_payment_sale - $paypal_payment_sale - $deposit_payment_sale;
-        $payment_sent_number = DB::table('payments')->whereNotNull('purchase_id')->whereDate('created_at', '>=' , $start_date)
-            ->whereDate('created_at', '<=' , $end_date)->count();
-        $payment_sent = DB::table('payments')->whereNotNull('purchase_id')->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('payments.amount');
+        $payment_sent_number = DB::table('payments')->whereNotNull('purchase_id')->whereDate('created_at', '>=', $start_date)
+            ->whereDate('created_at', '<=', $end_date)->count();
+        $payment_sent = DB::table('payments')->whereNotNull('purchase_id')->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('payments.amount');
         $credit_card_payment_purchase = DB::table('payments')
-                            ->where('paying_method', 'Gift Card')
-                            ->whereNotNull('payments.purchase_id')
-                            ->whereDate('payments.created_at', '>=' , $start_date)
-                            ->whereDate('payments.created_at', '<=' , $end_date)->sum('payments.amount');
+            ->where('paying_method', 'Gift Card')
+            ->whereNotNull('payments.purchase_id')
+            ->whereDate('payments.created_at', '>=', $start_date)
+            ->whereDate('payments.created_at', '<=', $end_date)->sum('payments.amount');
         $cheque_payment_purchase = DB::table('payments')
-                            ->where('paying_method', 'Cheque')
-                            ->whereNotNull('payments.purchase_id')
-                            ->whereDate('payments.created_at', '>=' , $start_date)
-                            ->whereDate('payments.created_at', '<=' , $end_date)->sum('payments.amount');
+            ->where('paying_method', 'Cheque')
+            ->whereNotNull('payments.purchase_id')
+            ->whereDate('payments.created_at', '>=', $start_date)
+            ->whereDate('payments.created_at', '<=', $end_date)->sum('payments.amount');
         $cash_payment_purchase =  $payment_sent - $credit_card_payment_purchase - $cheque_payment_purchase;
-        $lims_warehouse_all = Warehouse::where('is_active',true)->get();
+        $lims_warehouse_all = Warehouse::where('is_active', true)->get();
         $warehouse_name = [];
         $warehouse_sale = [];
         $warehouse_purchase = [];
@@ -732,14 +709,14 @@ class ReportController extends Controller
         $warehouse_expense = [];
         foreach ($lims_warehouse_all as $warehouse) {
             $warehouse_name[] = $warehouse->name;
-            $warehouse_sale[] = Sale::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query2))->get();
-            $warehouse_purchase[] = Purchase::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query2))->get();
-            $warehouse_return[] = Returns::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query2))->get();
-            $warehouse_purchase_return[] = ReturnPurchase::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->selectRaw(implode(',', $query2))->get();
-            $warehouse_expense[] = Expense::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('amount');
+            $warehouse_sale[] = Sale::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query2))->get();
+            $warehouse_purchase[] = Purchase::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query2))->get();
+            $warehouse_return[] = Returns::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query2))->get();
+            $warehouse_purchase_return[] = ReturnPurchase::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->selectRaw(implode(',', $query2))->get();
+            $warehouse_expense[] = Expense::where('warehouse_id', $warehouse->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('amount');
         }
 
-        return view('backend.report.profit_loss', compact('purchase', 'product_cost', 'product_tax', 'total_purchase', 'sale', 'total_sale', 'return', 'purchase_return', 'total_return', 'total_purchase_return', 'expense','income', 'payroll', 'total_expense','total_income', 'total_payroll', 'payment_recieved', 'payment_recieved_number', 'cash_payment_sale', 'cheque_payment_sale', 'credit_card_payment_sale', 'gift_card_payment_sale', 'paypal_payment_sale', 'deposit_payment_sale', 'payment_sent', 'payment_sent_number', 'cash_payment_purchase', 'cheque_payment_purchase', 'credit_card_payment_purchase', 'warehouse_name', 'warehouse_sale', 'warehouse_purchase', 'warehouse_return', 'warehouse_purchase_return', 'warehouse_expense', 'start_date', 'end_date'));
+        return view('backend.report.profit_loss', compact('purchase', 'product_cost', 'product_tax', 'total_purchase', 'sale', 'total_sale', 'return', 'purchase_return', 'total_return', 'total_purchase_return', 'expense', 'income', 'payroll', 'total_expense', 'total_income', 'total_payroll', 'payment_recieved', 'payment_recieved_number', 'cash_payment_sale', 'cheque_payment_sale', 'credit_card_payment_sale', 'gift_card_payment_sale', 'paypal_payment_sale', 'deposit_payment_sale', 'payment_sent', 'payment_sent_number', 'cash_payment_purchase', 'cheque_payment_purchase', 'credit_card_payment_purchase', 'warehouse_name', 'warehouse_sale', 'warehouse_purchase', 'warehouse_return', 'warehouse_purchase_return', 'warehouse_expense', 'start_date', 'end_date'));
     }
 
     public function calculateAverageCOGS($product_sale_data)
@@ -748,27 +725,26 @@ class ReportController extends Controller
         $product_tax = 0;
         foreach ($product_sale_data as $key => $product_sale) {
             $product_data = Product::select('type', 'product_list', 'variant_list', 'qty_list')->find($product_sale->product_id);
-            if($product_data->type == 'combo') {
+            if ($product_data->type == 'combo') {
                 $product_list = explode(",", $product_data->product_list);
-                if($product_data->variant_list)
+                if ($product_data->variant_list)
                     $variant_list = explode(",", $product_data->variant_list);
                 else
                     $variant_list = [];
                 $qty_list = explode(",", $product_data->qty_list);
 
                 foreach ($product_list as $index => $product_id) {
-                    if(count($variant_list) && $variant_list[$index]) {
+                    if (count($variant_list) && $variant_list[$index]) {
                         $product_purchase_data = ProductPurchase::where([
                             ['product_id', $product_id],
-                            ['variant_id', $variant_list[$index] ]
+                            ['variant_id', $variant_list[$index]]
                         ])
-                        ->select('recieved', 'purchase_unit_id', 'tax', 'total')
-                        ->get();
-                    }
-                    else {
+                            ->select('recieved', 'purchase_unit_id', 'tax', 'total')
+                            ->get();
+                    } else {
                         $product_purchase_data = ProductPurchase::where('product_id', $product_id)
-                        ->select('recieved', 'purchase_unit_id', 'tax', 'total')
-                        ->get();
+                            ->select('recieved', 'purchase_unit_id', 'tax', 'total')
+                            ->get();
                     }
                     $total_received_qty = 0;
                     $total_purchased_amount = 0;
@@ -776,64 +752,59 @@ class ReportController extends Controller
                     $sold_qty = ($product_sale->sold_qty - $product_sale->return_qty) * $qty_list[$index];
                     foreach ($product_purchase_data as $key => $product_purchase) {
                         $purchase_unit_data = Unit::select('operator', 'operation_value')->find($product_purchase->purchase_unit_id);
-                        if($purchase_unit_data->operator == '*')
+                        if ($purchase_unit_data->operator == '*')
                             $total_received_qty += $product_purchase->recieved * $purchase_unit_data->operation_value;
                         else
                             $total_received_qty += $product_purchase->recieved / $purchase_unit_data->operation_value;
                         $total_purchased_amount += $product_purchase->total;
                         $total_tax += $product_purchase->tax;
                     }
-                    if($total_received_qty) {
+                    if ($total_received_qty) {
                         $averageCost = $total_purchased_amount / $total_received_qty;
                         $averageTax = $total_tax / $total_received_qty;
-                    }
-                    else {
+                    } else {
                         $averageCost = 0;
                         $averageTax = 0;
                     }
                     $product_cost += $sold_qty * $averageCost;
                     $product_tax += $sold_qty * $averageTax;
                 }
-            }
-            else {
-                if($product_sale->product_batch_id) {
+            } else {
+                if ($product_sale->product_batch_id) {
                     $product_purchase_data = ProductPurchase::where([
                         ['product_id', $product_sale->product_id],
                         ['product_batch_id', $product_sale->product_batch_id]
                     ])
-                    ->select('recieved', 'purchase_unit_id', 'tax', 'total')
-                    ->get();
-                }
-                elseif($product_sale->variant_id) {
+                        ->select('recieved', 'purchase_unit_id', 'tax', 'total')
+                        ->get();
+                } elseif ($product_sale->variant_id) {
                     $product_purchase_data = ProductPurchase::where([
                         ['product_id', $product_sale->product_id],
                         ['variant_id', $product_sale->variant_id]
                     ])
-                    ->select('recieved', 'purchase_unit_id', 'tax', 'total')
-                    ->get();
-                }
-                else {
+                        ->select('recieved', 'purchase_unit_id', 'tax', 'total')
+                        ->get();
+                } else {
                     $product_purchase_data = ProductPurchase::where('product_id', $product_sale->product_id)
-                    ->select('recieved', 'purchase_unit_id', 'tax', 'total')
-                    ->get();
+                        ->select('recieved', 'purchase_unit_id', 'tax', 'total')
+                        ->get();
                 }
                 $total_received_qty = 0;
                 $total_purchased_amount = 0;
                 $total_tax = 0;
-                if($product_sale->sale_unit_id) {
+                if ($product_sale->sale_unit_id) {
                     $sale_unit_data = Unit::select('operator', 'operation_value')->find($product_sale->sale_unit_id);
-                    if($sale_unit_data->operator == '*')
+                    if ($sale_unit_data->operator == '*')
                         $sold_qty = ($product_sale->sold_qty - $product_sale->return_qty) * $sale_unit_data->operation_value;
                     else
                         $sold_qty = ($product_sale->sold_qty - $product_sale->return_qty) / $sale_unit_data->operation_value;
-                }
-                else {
+                } else {
                     $sold_qty = ($product_sale->sold_qty - $product_sale->return_qty);
                 }
                 foreach ($product_purchase_data as $key => $product_purchase) {
                     $purchase_unit_data = Unit::select('operator', 'operation_value')->find($product_purchase->purchase_unit_id);
-                    if($purchase_unit_data) {
-                        if($purchase_unit_data->operator == '*')
+                    if ($purchase_unit_data) {
+                        if ($purchase_unit_data->operator == '*')
                             $total_received_qty += $product_purchase->recieved * $purchase_unit_data->operation_value;
                         else
                             $total_received_qty += $product_purchase->recieved / $purchase_unit_data->operation_value;
@@ -841,11 +812,10 @@ class ReportController extends Controller
                         $total_tax += $product_purchase->tax;
                     }
                 }
-                if($total_received_qty) {
+                if ($total_received_qty) {
                     $averageCost = $total_purchased_amount / $total_received_qty;
                     $averageTax = $total_tax / $total_received_qty;
-                }
-                else {
+                } else {
                     $averageCost = 0;
                     $averageTax = 0;
                 }
@@ -863,7 +833,7 @@ class ReportController extends Controller
         $end_date = $data['end_date'];
         $warehouse_id = $data['warehouse_id'];
         $lims_warehouse_list = Warehouse::where('is_active', true)->get();
-        return view('backend.report.product_report',compact('start_date', 'end_date', 'warehouse_id', 'lims_warehouse_list'));
+        return view('backend.report.product_report', compact('start_date', 'end_date', 'warehouse_id', 'lims_warehouse_list'));
     }
 
     public function productReportData(Request $request)
@@ -881,7 +851,7 @@ class ReportController extends Controller
             1 => 'name'
         );
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
@@ -889,64 +859,62 @@ class ReportController extends Controller
         $start = $request->input('start');
         $order = $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
-        if($request->input('search.value')) {
+        if ($request->input('search.value')) {
             $search = $request->input('search.value');
             $totalData = Product::where([
                 ['name', 'LIKE', "%{$search}%"],
                 ['is_active', true]
             ])->count();
             $lims_product_all = Product::with('category')
-                                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
-                                ->where([
-                                    ['name', 'LIKE', "%{$search}%"],
-                                    ['is_active', true]
-                                ])->offset($start)
-                                  ->limit($limit)
-                                  ->orderBy($order, $dir)
-                                  ->get();
-        }
-        else {
+                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
+                ->where([
+                    ['name', 'LIKE', "%{$search}%"],
+                    ['is_active', true]
+                ])->offset($start)
+                ->limit($limit)
+                ->orderBy($order, $dir)
+                ->get();
+        } else {
             $totalData = Product::where('is_active', true)->count();
             $lims_product_all = Product::with('category')
-                                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
-                                ->where('is_active', true)
-                                ->offset($start)
-                                ->limit($limit)
-                                ->orderBy($order, $dir)
-                                ->get();
+                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
+                ->where('is_active', true)
+                ->offset($start)
+                ->limit($limit)
+                ->orderBy($order, $dir)
+                ->get();
         }
 
         $totalFiltered = $totalData;
         $data = [];
         foreach ($lims_product_all as $product) {
             $variant_id_all = [];
-            if($warehouse_id == 0) {
-                if($product->is_variant) {
+            if ($warehouse_id == 0) {
+                if ($product->is_variant) {
                     $variant_id_all = ProductVariant::where('product_id', $product->id)->pluck('variant_id', 'item_code');
                     foreach ($variant_id_all as $item_code => $variant_id) {
                         $variant_data = Variant::select('name')->find($variant_id);
                         $nestedData['key'] = count($data);
-                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']'.'<br>'.$item_code;
+                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']' . '<br>' . $item_code;
                         $nestedData['category'] = $product->category->name;
                         //purchase data
                         $nestedData['purchased_amount'] = ProductPurchase::where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
                         $lims_product_purchase_data = ProductPurchase::select('purchase_unit_id', 'qty')->where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                         $purchased_qty = 0;
-                        if(count($lims_product_purchase_data)) {
+                        if (count($lims_product_purchase_data)) {
                             foreach ($lims_product_purchase_data as $product_purchase) {
                                 $unit = DB::table('units')->find($product_purchase->purchase_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $purchased_qty += $product_purchase->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $purchased_qty += $product_purchase->qty / $unit->operation_value;
                                 }
                             }
@@ -978,23 +946,22 @@ class ReportController extends Controller
                         $nestedData['transfered_qty'] = $transfered_qty;*/
                         //sale data
                         $nestedData['sold_amount'] = Product_Sale::where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
                         $lims_product_sale_data = Product_Sale::select('sale_unit_id', 'qty')->where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                         $sold_qty = 0;
-                        if(count($lims_product_sale_data)) {
+                        if (count($lims_product_sale_data)) {
                             foreach ($lims_product_sale_data as $product_sale) {
                                 $unit = DB::table('units')->find($product_sale->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $sold_qty += $product_sale->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $sold_qty += $product_sale->qty / $unit->operation_value;
                                 }
                             }
@@ -1002,23 +969,22 @@ class ReportController extends Controller
                         $nestedData['sold_qty'] = $sold_qty;
                         //return data
                         $nestedData['returned_amount'] = ProductReturn::where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
                         $lims_product_return_data = ProductReturn::select('sale_unit_id', 'qty')->where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                         $returned_qty = 0;
-                        if(count($lims_product_return_data)) {
+                        if (count($lims_product_return_data)) {
                             foreach ($lims_product_return_data as $product_return) {
                                 $unit = DB::table('units')->find($product_return->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $returned_qty += $product_return->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $returned_qty += $product_return->qty / $unit->operation_value;
                                 }
                             }
@@ -1026,67 +992,64 @@ class ReportController extends Controller
                         $nestedData['returned_qty'] = $returned_qty;
                         //purchase return data
                         $nestedData['purchase_returned_amount'] = PurchaseProductReturn::where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
                         $lims_product_purchase_return_data = PurchaseProductReturn::select('purchase_unit_id', 'qty')->where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                         $purchase_returned_qty = 0;
-                        if(count($lims_product_purchase_return_data)) {
+                        if (count($lims_product_purchase_return_data)) {
                             foreach ($lims_product_purchase_return_data as $product_purchase_return) {
                                 $unit = DB::table('units')->find($product_purchase_return->purchase_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $purchase_returned_qty += $product_purchase_return->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $purchase_returned_qty += $product_purchase_return->qty / $unit->operation_value;
                                 }
                             }
                         }
                         $nestedData['purchase_returned_qty'] = $purchase_returned_qty;
 
-                        if($nestedData['purchased_qty'] > 0)
+                        if ($nestedData['purchased_qty'] > 0)
                             $nestedData['profit'] = $nestedData['sold_amount'] - (($nestedData['purchased_amount'] / $nestedData['purchased_qty']) * $nestedData['sold_qty']);
                         else
-                           $nestedData['profit'] =  $nestedData['sold_amount'];
+                            $nestedData['profit'] =  $nestedData['sold_amount'];
                         $product_variant_data = ProductVariant::where([
                             ['product_id', $product->id],
                             ['variant_id', $variant_id]
                         ])->select('qty')->first();
                         $nestedData['in_stock'] = $product_variant_data->qty;
-                        if(config('currency_position') == 'prefix')
-                            $nestedData['stock_worth'] = config('currency').' '.($nestedData['in_stock'] * $product->price).' / '.config('currency').' '.($nestedData['in_stock'] * $product->cost);
+                        if (config('currency_position') == 'prefix')
+                            $nestedData['stock_worth'] = config('currency') . ' ' . ($nestedData['in_stock'] * $product->price) . ' / ' . config('currency') . ' ' . ($nestedData['in_stock'] * $product->cost);
                         else
-                            $nestedData['stock_worth'] = ($nestedData['in_stock'] * $product->price).' '.config('currency').' / '.($nestedData['in_stock'] * $product->cost).' '.config('currency');
+                            $nestedData['stock_worth'] = ($nestedData['in_stock'] * $product->price) . ' ' . config('currency') . ' / ' . ($nestedData['in_stock'] * $product->cost) . ' ' . config('currency');
 
                         $nestedData['profit'] = number_format((float)$nestedData['profit'], config('decimal'), '.', '');
 
                         /*if($nestedData['purchased_qty'] > 0 || $nestedData['transfered_qty'] > 0 || $nestedData['sold_qty'] > 0 || $nestedData['returned_qty'] > 0 || $nestedData['purchase_returned_qty']) {*/
-                            $data[] = $nestedData;
+                        $data[] = $nestedData;
                         //}
                     }
-                }
-                else {
+                } else {
                     $nestedData['key'] = count($data);
-                    $nestedData['name'] = $product->name.'<br>'.$product->code;
+                    $nestedData['name'] = $product->name . '<br>' . $product->code;
                     $nestedData['category'] = $product->category->name;
                     //purchase data
-                    $nestedData['purchased_amount'] = ProductPurchase::where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                    $nestedData['purchased_amount'] = ProductPurchase::where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
-                    $lims_product_purchase_data = ProductPurchase::select('purchase_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                    $lims_product_purchase_data = ProductPurchase::select('purchase_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                     $purchased_qty = 0;
-                    if(count($lims_product_purchase_data)) {
+                    if (count($lims_product_purchase_data)) {
                         foreach ($lims_product_purchase_data as $product_purchase) {
                             $unit = DB::table('units')->find($product_purchase->purchase_unit_id);
-                            if($unit->operator == '*'){
+                            if ($unit->operator == '*') {
                                 $purchased_qty += $product_purchase->qty * $unit->operation_value;
-                            }
-                            elseif($unit->operator == '/'){
+                            } elseif ($unit->operator == '/') {
                                 $purchased_qty += $product_purchase->qty / $unit->operation_value;
                             }
                         }
@@ -1111,113 +1074,107 @@ class ReportController extends Controller
                     }
                     $nestedData['transfered_qty'] = $transfered_qty;*/
                     //sale data
-                    $nestedData['sold_amount'] = Product_Sale::where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                    $nestedData['sold_amount'] = Product_Sale::where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
-                    $lims_product_sale_data = Product_Sale::select('sale_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                    $lims_product_sale_data = Product_Sale::select('sale_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                     $sold_qty = 0;
-                    if(count($lims_product_sale_data)) {
+                    if (count($lims_product_sale_data)) {
                         foreach ($lims_product_sale_data as $product_sale) {
-                            if($product_sale->sale_unit_id > 0) {
+                            if ($product_sale->sale_unit_id > 0) {
                                 $unit = DB::table('units')->find($product_sale->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $sold_qty += $product_sale->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $sold_qty += $product_sale->qty / $unit->operation_value;
                                 }
-                            }
-                            else
+                            } else
                                 $sold_qty = $product_sale->qty;
                         }
                     }
                     $nestedData['sold_qty'] = $sold_qty;
                     //return data
-                    $nestedData['returned_amount'] = ProductReturn::where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                    $nestedData['returned_amount'] = ProductReturn::where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
-                    $lims_product_return_data = ProductReturn::select('sale_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                    $lims_product_return_data = ProductReturn::select('sale_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                     $returned_qty = 0;
-                    if(count($lims_product_return_data)) {
+                    if (count($lims_product_return_data)) {
                         foreach ($lims_product_return_data as $product_return) {
                             $unit = DB::table('units')->find($product_return->sale_unit_id);
-                            if($unit->operator == '*'){
+                            if ($unit->operator == '*') {
                                 $returned_qty += $product_return->qty * $unit->operation_value;
-                            }
-                            elseif($unit->operator == '/'){
+                            } elseif ($unit->operator == '/') {
                                 $returned_qty += $product_return->qty / $unit->operation_value;
                             }
                         }
                     }
                     $nestedData['returned_qty'] = $returned_qty;
                     //purchase return data
-                    $nestedData['purchase_returned_amount'] = PurchaseProductReturn::where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                    $nestedData['purchase_returned_amount'] = PurchaseProductReturn::where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
-                    $lims_product_purchase_return_data = PurchaseProductReturn::select('purchase_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                    $lims_product_purchase_return_data = PurchaseProductReturn::select('purchase_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                     $purchase_returned_qty = 0;
-                    if(count($lims_product_purchase_return_data)) {
+                    if (count($lims_product_purchase_return_data)) {
                         foreach ($lims_product_purchase_return_data as $product_purchase_return) {
                             $unit = DB::table('units')->find($product_purchase_return->purchase_unit_id);
-                            if($unit->operator == '*'){
+                            if ($unit->operator == '*') {
                                 $purchase_returned_qty += $product_purchase_return->qty * $unit->operation_value;
-                            }
-                            elseif($unit->operator == '/'){
+                            } elseif ($unit->operator == '/') {
                                 $purchase_returned_qty += $product_purchase_return->qty / $unit->operation_value;
                             }
                         }
                     }
                     $nestedData['purchase_returned_qty'] = $purchase_returned_qty;
 
-                    if($nestedData['purchased_qty'] > 0)
-                            $nestedData['profit'] = $nestedData['sold_amount'] - (($nestedData['purchased_amount'] / $nestedData['purchased_qty']) * $nestedData['sold_qty']);
+                    if ($nestedData['purchased_qty'] > 0)
+                        $nestedData['profit'] = $nestedData['sold_amount'] - (($nestedData['purchased_amount'] / $nestedData['purchased_qty']) * $nestedData['sold_qty']);
                     else
-                       $nestedData['profit'] =  $nestedData['sold_amount'];
+                        $nestedData['profit'] =  $nestedData['sold_amount'];
                     $nestedData['in_stock'] = $product->qty;
-                    if(config('currency_position') == 'prefix')
-                        $nestedData['stock_worth'] = config('currency').' '.($nestedData['in_stock'] * $product->price).' / '.config('currency').' '.($nestedData['in_stock'] * $product->cost);
+                    if (config('currency_position') == 'prefix')
+                        $nestedData['stock_worth'] = config('currency') . ' ' . ($nestedData['in_stock'] * $product->price) . ' / ' . config('currency') . ' ' . ($nestedData['in_stock'] * $product->cost);
                     else
-                        $nestedData['stock_worth'] = ($nestedData['in_stock'] * $product->price).' '.config('currency').' / '.($nestedData['in_stock'] * $product->cost).' '.config('currency');
+                        $nestedData['stock_worth'] = ($nestedData['in_stock'] * $product->price) . ' ' . config('currency') . ' / ' . ($nestedData['in_stock'] * $product->cost) . ' ' . config('currency');
 
                     $nestedData['profit'] = number_format((float)$nestedData['profit'], config('decimal'), '.', '');
                     /*if($nestedData['purchased_qty'] > 0 || $nestedData['transfered_qty'] > 0 || $nestedData['sold_qty'] > 0 || $nestedData['returned_qty'] > 0 || $nestedData['purchase_returned_qty']) {*/
-                        $data[] = $nestedData;
+                    $data[] = $nestedData;
                     //}
                 }
-            }
-            else {
-                if($product->is_variant) {
+            } else {
+                if ($product->is_variant) {
                     $variant_id_all = ProductVariant::where('product_id', $product->id)->pluck('variant_id', 'item_code');
 
                     foreach ($variant_id_all as $item_code => $variant_id) {
                         $variant_data = Variant::select('name')->find($variant_id);
                         $nestedData['key'] = count($data);
-                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']'.'<br>'.$item_code;
+                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']' . '<br>' . $item_code;
                         $nestedData['category'] = $product->category->name;
                         //purchase data
                         $nestedData['purchased_amount'] = DB::table('purchases')
-                                    ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                        ['product_purchases.product_id', $product->id],
-                                        ['product_purchases.variant_id', $variant_id],
-                                        ['purchases.warehouse_id', $warehouse_id]
-                                    ])->whereDate('purchases.created_at','>=', $start_date)->whereDate('purchases.created_at','<=', $end_date)->sum('total');
+                            ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
+                                ['product_purchases.product_id', $product->id],
+                                ['product_purchases.variant_id', $variant_id],
+                                ['purchases.warehouse_id', $warehouse_id]
+                            ])->whereDate('purchases.created_at', '>=', $start_date)->whereDate('purchases.created_at', '<=', $end_date)->sum('total');
                         $lims_product_purchase_data = DB::table('purchases')
-                                    ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                        ['product_purchases.product_id', $product->id],
-                                        ['product_purchases.variant_id', $variant_id],
-                                        ['purchases.warehouse_id', $warehouse_id]
-                                    ])->whereDate('purchases.created_at','>=', $start_date)->whereDate('purchases.created_at','<=', $end_date)
-                                        ->select('product_purchases.purchase_unit_id', 'product_purchases.qty')
-                                        ->get();
+                            ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
+                                ['product_purchases.product_id', $product->id],
+                                ['product_purchases.variant_id', $variant_id],
+                                ['purchases.warehouse_id', $warehouse_id]
+                            ])->whereDate('purchases.created_at', '>=', $start_date)->whereDate('purchases.created_at', '<=', $end_date)
+                            ->select('product_purchases.purchase_unit_id', 'product_purchases.qty')
+                            ->get();
 
                         $purchased_qty = 0;
-                        if(count($lims_product_purchase_data)) {
+                        if (count($lims_product_purchase_data)) {
                             foreach ($lims_product_purchase_data as $product_purchase) {
                                 $unit = DB::table('units')->find($product_purchase->purchase_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $purchased_qty += $product_purchase->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $purchased_qty += $product_purchase->qty / $unit->operation_value;
                                 }
                             }
@@ -1259,29 +1216,28 @@ class ReportController extends Controller
                         $nestedData['transfered_qty'] = $transfered_qty;*/
                         //sale data
                         $nestedData['sold_amount'] = DB::table('sales')
-                                    ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
-                                        ['product_sales.product_id', $product->id],
-                                        ['variant_id', $variant_id],
-                                        ['sales.warehouse_id', $warehouse_id]
-                                    ])->whereDate('sales.created_at','>=', $start_date)->whereDate('sales.created_at','<=', $end_date)->sum('total');
+                            ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
+                                ['product_sales.product_id', $product->id],
+                                ['variant_id', $variant_id],
+                                ['sales.warehouse_id', $warehouse_id]
+                            ])->whereDate('sales.created_at', '>=', $start_date)->whereDate('sales.created_at', '<=', $end_date)->sum('total');
                         $lims_product_sale_data = DB::table('sales')
-                                    ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
-                                        ['product_sales.product_id', $product->id],
-                                        ['variant_id', $variant_id],
-                                        ['sales.warehouse_id', $warehouse_id]
-                                    ])->whereDate('sales.created_at','>=', $start_date)
-                                    ->whereDate('sales.created_at','<=', $end_date)
-                                    ->select('product_sales.sale_unit_id', 'product_sales.qty')
-                                    ->get();
+                            ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
+                                ['product_sales.product_id', $product->id],
+                                ['variant_id', $variant_id],
+                                ['sales.warehouse_id', $warehouse_id]
+                            ])->whereDate('sales.created_at', '>=', $start_date)
+                            ->whereDate('sales.created_at', '<=', $end_date)
+                            ->select('product_sales.sale_unit_id', 'product_sales.qty')
+                            ->get();
 
                         $sold_qty = 0;
-                        if(count($lims_product_sale_data)) {
+                        if (count($lims_product_sale_data)) {
                             foreach ($lims_product_sale_data as $product_sale) {
                                 $unit = DB::table('units')->find($product_sale->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $sold_qty += $product_sale->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $sold_qty += $product_sale->qty / $unit->operation_value;
                                 }
                             }
@@ -1289,34 +1245,33 @@ class ReportController extends Controller
                         $nestedData['sold_qty'] = $sold_qty;
                         //return data
                         $nestedData['returned_amount'] = DB::table('returns')
-                                ->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
-                                ->where([
-                                    ['product_returns.product_id', $product->id],
-                                    ['product_returns.variant_id', $variant_id],
-                                    ['returns.warehouse_id', $warehouse_id]
-                                ])->whereDate('returns.created_at', '>=', $start_date)
-                                  ->whereDate('returns.created_at', '<=' , $end_date)
-                                  ->sum('total');
+                            ->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
+                            ->where([
+                                ['product_returns.product_id', $product->id],
+                                ['product_returns.variant_id', $variant_id],
+                                ['returns.warehouse_id', $warehouse_id]
+                            ])->whereDate('returns.created_at', '>=', $start_date)
+                            ->whereDate('returns.created_at', '<=', $end_date)
+                            ->sum('total');
 
                         $lims_product_return_data = DB::table('returns')
-                                ->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
-                                ->where([
-                                    ['product_returns.product_id', $product->id],
-                                    ['product_returns.variant_id', $variant_id],
-                                    ['returns.warehouse_id', $warehouse_id]
-                                ])->whereDate('returns.created_at', '>=', $start_date)
-                                  ->whereDate('returns.created_at', '<=' , $end_date)
-                                  ->select('product_returns.sale_unit_id', 'product_returns.qty')
-                                  ->get();
+                            ->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
+                            ->where([
+                                ['product_returns.product_id', $product->id],
+                                ['product_returns.variant_id', $variant_id],
+                                ['returns.warehouse_id', $warehouse_id]
+                            ])->whereDate('returns.created_at', '>=', $start_date)
+                            ->whereDate('returns.created_at', '<=', $end_date)
+                            ->select('product_returns.sale_unit_id', 'product_returns.qty')
+                            ->get();
 
                         $returned_qty = 0;
-                        if(count($lims_product_return_data)) {
+                        if (count($lims_product_return_data)) {
                             foreach ($lims_product_return_data as $product_return) {
                                 $unit = DB::table('units')->find($product_return->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $returned_qty += $product_return->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $returned_qty += $product_return->qty / $unit->operation_value;
                                 }
                             }
@@ -1324,88 +1279,85 @@ class ReportController extends Controller
                         $nestedData['returned_qty'] = $returned_qty;
                         //purchase return data
                         $nestedData['purchase_returned_amount'] = DB::table('return_purchases')
-                                ->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
-                                ->where([
-                                    ['purchase_product_return.product_id', $product->id],
-                                    ['purchase_product_return.variant_id', $variant_id],
-                                    ['return_purchases.warehouse_id', $warehouse_id]
-                                ])->whereDate('return_purchases.created_at', '>=', $start_date)
-                                  ->whereDate('return_purchases.created_at', '<=' , $end_date)
-                                  ->sum('total');
+                            ->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
+                            ->where([
+                                ['purchase_product_return.product_id', $product->id],
+                                ['purchase_product_return.variant_id', $variant_id],
+                                ['return_purchases.warehouse_id', $warehouse_id]
+                            ])->whereDate('return_purchases.created_at', '>=', $start_date)
+                            ->whereDate('return_purchases.created_at', '<=', $end_date)
+                            ->sum('total');
                         $lims_product_purchase_return_data = DB::table('return_purchases')
-                                ->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
-                                ->where([
-                                    ['purchase_product_return.product_id', $product->id],
-                                    ['purchase_product_return.variant_id', $variant_id],
-                                    ['return_purchases.warehouse_id', $warehouse_id]
-                                ])->whereDate('return_purchases.created_at', '>=', $start_date)
-                                  ->whereDate('return_purchases.created_at', '<=' , $end_date)
-                                  ->select('purchase_product_return.purchase_unit_id', 'purchase_product_return.qty')
-                                  ->get();
+                            ->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
+                            ->where([
+                                ['purchase_product_return.product_id', $product->id],
+                                ['purchase_product_return.variant_id', $variant_id],
+                                ['return_purchases.warehouse_id', $warehouse_id]
+                            ])->whereDate('return_purchases.created_at', '>=', $start_date)
+                            ->whereDate('return_purchases.created_at', '<=', $end_date)
+                            ->select('purchase_product_return.purchase_unit_id', 'purchase_product_return.qty')
+                            ->get();
 
                         $purchase_returned_qty = 0;
-                        if(count($lims_product_purchase_return_data)) {
+                        if (count($lims_product_purchase_return_data)) {
                             foreach ($lims_product_purchase_return_data as $product_purchase_return) {
                                 $unit = DB::table('units')->find($product_purchase_return->purchase_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $purchase_returned_qty += $product_purchase_return->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $purchase_returned_qty += $product_purchase_return->qty / $unit->operation_value;
                                 }
                             }
                         }
                         $nestedData['purchase_returned_qty'] = $purchase_returned_qty;
 
-                        if($nestedData['purchased_qty'] > 0)
+                        if ($nestedData['purchased_qty'] > 0)
                             $nestedData['profit'] = $nestedData['sold_amount'] - (($nestedData['purchased_amount'] / $nestedData['purchased_qty']) * $nestedData['sold_qty']);
                         else
-                           $nestedData['profit'] =  $nestedData['sold_amount'];
+                            $nestedData['profit'] =  $nestedData['sold_amount'];
                         $product_warehouse = Product_Warehouse::where([
                             ['product_id', $product->id],
                             ['variant_id', $variant_id],
                             ['warehouse_id', $warehouse_id]
                         ])->select('qty')->first();
-                        if($product_warehouse)
+                        if ($product_warehouse)
                             $nestedData['in_stock'] = $product_warehouse->qty;
                         else
                             $nestedData['in_stock'] = 0;
-                        if(config('currency_position') == 'prefix')
-                            $nestedData['stock_worth'] = config('currency').' '.($nestedData['in_stock'] * $product->price).' / '.config('currency').' '.($nestedData['in_stock'] * $product->cost);
+                        if (config('currency_position') == 'prefix')
+                            $nestedData['stock_worth'] = config('currency') . ' ' . ($nestedData['in_stock'] * $product->price) . ' / ' . config('currency') . ' ' . ($nestedData['in_stock'] * $product->cost);
                         else
-                            $nestedData['stock_worth'] = ($nestedData['in_stock'] * $product->price).' '.config('currency').' / '.($nestedData['in_stock'] * $product->cost).' '.config('currency');
+                            $nestedData['stock_worth'] = ($nestedData['in_stock'] * $product->price) . ' ' . config('currency') . ' / ' . ($nestedData['in_stock'] * $product->cost) . ' ' . config('currency');
 
                         $nestedData['profit'] = number_format((float)$nestedData['profit'], config('decimal'), '.', '');
 
                         $data[] = $nestedData;
                     }
-                }
-                else {
+                } else {
                     $nestedData['key'] = count($data);
-                    $nestedData['name'] = $product->name.'<br>'.$product->code;
+                    $nestedData['name'] = $product->name . '<br>' . $product->code;
                     $nestedData['category'] = $product->category->name;
                     //purchase data
                     $nestedData['purchased_amount'] = DB::table('purchases')
-                                ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                    ['product_purchases.product_id', $product->id],
-                                    ['purchases.warehouse_id', $warehouse_id]
-                                ])->whereDate('purchases.created_at','>=', $start_date)->whereDate('purchases.created_at','<=', $end_date)->sum('total');
+                        ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
+                            ['product_purchases.product_id', $product->id],
+                            ['purchases.warehouse_id', $warehouse_id]
+                        ])->whereDate('purchases.created_at', '>=', $start_date)->whereDate('purchases.created_at', '<=', $end_date)->sum('total');
                     $lims_product_purchase_data = DB::table('purchases')
-                                ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                    ['product_purchases.product_id', $product->id],
-                                    ['purchases.warehouse_id', $warehouse_id]
-                                ])->whereDate('purchases.created_at','>=', $start_date)->whereDate('purchases.created_at','<=', $end_date)
-                                    ->select('product_purchases.purchase_unit_id', 'product_purchases.qty')
-                                    ->get();
+                        ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
+                            ['product_purchases.product_id', $product->id],
+                            ['purchases.warehouse_id', $warehouse_id]
+                        ])->whereDate('purchases.created_at', '>=', $start_date)->whereDate('purchases.created_at', '<=', $end_date)
+                        ->select('product_purchases.purchase_unit_id', 'product_purchases.qty')
+                        ->get();
 
                     $purchased_qty = 0;
-                    if(count($lims_product_purchase_data)) {
+                    if (count($lims_product_purchase_data)) {
                         foreach ($lims_product_purchase_data as $product_purchase) {
                             $unit = DB::table('units')->find($product_purchase->purchase_unit_id);
-                            if($unit->operator == '*'){
+                            if ($unit->operator == '*') {
                                 $purchased_qty += $product_purchase->qty * $unit->operation_value;
-                            }
-                            elseif($unit->operator == '/'){
+                            } elseif ($unit->operator == '/') {
                                 $purchased_qty += $product_purchase->qty / $unit->operation_value;
                             }
                         }
@@ -1445,28 +1397,27 @@ class ReportController extends Controller
                     $nestedData['transfered_qty'] = $transfered_qty;*/
                     //sale data
                     $nestedData['sold_amount'] = DB::table('sales')
-                                ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
-                                    ['product_sales.product_id', $product->id],
-                                    ['sales.warehouse_id', $warehouse_id]
-                                ])->whereDate('sales.created_at','>=', $start_date)->whereDate('sales.created_at','<=', $end_date)->sum('total');
+                        ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
+                            ['product_sales.product_id', $product->id],
+                            ['sales.warehouse_id', $warehouse_id]
+                        ])->whereDate('sales.created_at', '>=', $start_date)->whereDate('sales.created_at', '<=', $end_date)->sum('total');
                     $lims_product_sale_data = DB::table('sales')
-                                ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
-                                    ['product_sales.product_id', $product->id],
-                                    ['sales.warehouse_id', $warehouse_id]
-                                ])->whereDate('sales.created_at','>=', $start_date)
-                                ->whereDate('sales.created_at','<=', $end_date)
-                                ->select('product_sales.sale_unit_id', 'product_sales.qty')
-                                ->get();
+                        ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
+                            ['product_sales.product_id', $product->id],
+                            ['sales.warehouse_id', $warehouse_id]
+                        ])->whereDate('sales.created_at', '>=', $start_date)
+                        ->whereDate('sales.created_at', '<=', $end_date)
+                        ->select('product_sales.sale_unit_id', 'product_sales.qty', 'product_sales.grand_total')
+                        ->get();
 
                     $sold_qty = 0;
-                    if(count($lims_product_sale_data)) {
+                    if (count($lims_product_sale_data)) {
                         foreach ($lims_product_sale_data as $product_sale) {
-                            if($product_sale->sale_unit_id) {
+                            if ($product_sale->sale_unit_id) {
                                 $unit = DB::table('units')->find($product_sale->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $sold_qty += $product_sale->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $sold_qty += $product_sale->qty / $unit->operation_value;
                                 }
                             }
@@ -1475,32 +1426,31 @@ class ReportController extends Controller
                     $nestedData['sold_qty'] = $sold_qty;
                     //return data
                     $nestedData['returned_amount'] = DB::table('returns')
-                            ->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
-                            ->where([
-                                ['product_returns.product_id', $product->id],
-                                ['returns.warehouse_id', $warehouse_id]
-                            ])->whereDate('returns.created_at', '>=', $start_date)
-                              ->whereDate('returns.created_at', '<=' , $end_date)
-                              ->sum('total');
+                        ->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
+                        ->where([
+                            ['product_returns.product_id', $product->id],
+                            ['returns.warehouse_id', $warehouse_id]
+                        ])->whereDate('returns.created_at', '>=', $start_date)
+                        ->whereDate('returns.created_at', '<=', $end_date)
+                        ->sum('total');
 
                     $lims_product_return_data = DB::table('returns')
-                            ->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
-                            ->where([
-                                ['product_returns.product_id', $product->id],
-                                ['returns.warehouse_id', $warehouse_id]
-                            ])->whereDate('returns.created_at', '>=', $start_date)
-                              ->whereDate('returns.created_at', '<=' , $end_date)
-                              ->select('product_returns.sale_unit_id', 'product_returns.qty')
-                              ->get();
+                        ->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
+                        ->where([
+                            ['product_returns.product_id', $product->id],
+                            ['returns.warehouse_id', $warehouse_id]
+                        ])->whereDate('returns.created_at', '>=', $start_date)
+                        ->whereDate('returns.created_at', '<=', $end_date)
+                        ->select('product_returns.sale_unit_id', 'product_returns.qty')
+                        ->get();
 
                     $returned_qty = 0;
-                    if(count($lims_product_return_data)) {
+                    if (count($lims_product_return_data)) {
                         foreach ($lims_product_return_data as $product_return) {
                             $unit = DB::table('units')->find($product_return->sale_unit_id);
-                            if($unit->operator == '*'){
+                            if ($unit->operator == '*') {
                                 $returned_qty += $product_return->qty * $unit->operation_value;
-                            }
-                            elseif($unit->operator == '/'){
+                            } elseif ($unit->operator == '/') {
                                 $returned_qty += $product_return->qty / $unit->operation_value;
                             }
                         }
@@ -1508,54 +1458,53 @@ class ReportController extends Controller
                     $nestedData['returned_qty'] = $returned_qty;
                     //purchase return data
                     $nestedData['purchase_returned_amount'] = DB::table('return_purchases')
-                            ->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
-                            ->where([
-                                ['purchase_product_return.product_id', $product->id],
-                                ['return_purchases.warehouse_id', $warehouse_id]
-                            ])->whereDate('return_purchases.created_at', '>=', $start_date)
-                              ->whereDate('return_purchases.created_at', '<=' , $end_date)
-                              ->sum('total');
+                        ->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
+                        ->where([
+                            ['purchase_product_return.product_id', $product->id],
+                            ['return_purchases.warehouse_id', $warehouse_id]
+                        ])->whereDate('return_purchases.created_at', '>=', $start_date)
+                        ->whereDate('return_purchases.created_at', '<=', $end_date)
+                        ->sum('total');
                     $lims_product_purchase_return_data = DB::table('return_purchases')
-                            ->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
-                            ->where([
-                                ['purchase_product_return.product_id', $product->id],
-                                ['return_purchases.warehouse_id', $warehouse_id]
-                            ])->whereDate('return_purchases.created_at', '>=', $start_date)
-                              ->whereDate('return_purchases.created_at', '<=' , $end_date)
-                              ->select('purchase_product_return.purchase_unit_id', 'purchase_product_return.qty')
-                              ->get();
+                        ->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
+                        ->where([
+                            ['purchase_product_return.product_id', $product->id],
+                            ['return_purchases.warehouse_id', $warehouse_id]
+                        ])->whereDate('return_purchases.created_at', '>=', $start_date)
+                        ->whereDate('return_purchases.created_at', '<=', $end_date)
+                        ->select('purchase_product_return.purchase_unit_id', 'purchase_product_return.qty')
+                        ->get();
 
                     $purchase_returned_qty = 0;
-                    if(count($lims_product_purchase_return_data)) {
+                    if (count($lims_product_purchase_return_data)) {
                         foreach ($lims_product_purchase_return_data as $product_purchase_return) {
                             $unit = DB::table('units')->find($product_purchase_return->purchase_unit_id);
-                            if($unit->operator == '*'){
+                            if ($unit->operator == '*') {
                                 $purchase_returned_qty += $product_purchase_return->qty * $unit->operation_value;
-                            }
-                            elseif($unit->operator == '/'){
+                            } elseif ($unit->operator == '/') {
                                 $purchase_returned_qty += $product_purchase_return->qty / $unit->operation_value;
                             }
                         }
                     }
                     $nestedData['purchase_returned_qty'] = $purchase_returned_qty;
 
-                    if($nestedData['purchased_qty'] > 0)
-                            $nestedData['profit'] = $nestedData['sold_amount'] - (($nestedData['purchased_amount'] / $nestedData['purchased_qty']) * $nestedData['sold_qty']);
+                    if ($nestedData['purchased_qty'] > 0)
+                        $nestedData['profit'] = $nestedData['sold_amount'] - (($nestedData['purchased_amount'] / $nestedData['purchased_qty']) * $nestedData['sold_qty']);
                     else
-                       $nestedData['profit'] =  $nestedData['sold_amount'];
+                        $nestedData['profit'] =  $nestedData['sold_amount'];
 
                     $product_warehouse = Product_Warehouse::where([
                         ['product_id', $product->id],
                         ['warehouse_id', $warehouse_id]
                     ])->select('qty')->first();
-                    if($product_warehouse)
+                    if ($product_warehouse)
                         $nestedData['in_stock'] = $product_warehouse->qty;
                     else
                         $nestedData['in_stock'] = 0;
-                    if(config('currency_position') == 'prefix')
-                        $nestedData['stock_worth'] = config('currency').' '.($nestedData['in_stock'] * $product->price).' / '.config('currency').' '.($nestedData['in_stock'] * $product->cost);
+                    if (config('currency_position') == 'prefix')
+                        $nestedData['stock_worth'] = config('currency') . ' ' . ($nestedData['in_stock'] * $product->price) . ' / ' . config('currency') . ' ' . ($nestedData['in_stock'] * $product->cost);
                     else
-                        $nestedData['stock_worth'] = ($nestedData['in_stock'] * $product->price).' '.config('currency').' / '.($nestedData['in_stock'] * $product->cost).' '.config('currency');
+                        $nestedData['stock_worth'] = ($nestedData['in_stock'] * $product->price) . ' ' . config('currency') . ' / ' . ($nestedData['in_stock'] * $product->cost) . ' ' . config('currency');
 
                     $nestedData['profit'] = number_format((float)$nestedData['profit'], config('decimal'), '.', '');
 
@@ -1589,65 +1538,62 @@ class ReportController extends Controller
         foreach ($lims_product_all as $product) {
             $lims_product_purchase_data = null;
             $variant_id_all = [];
-            if($warehouse_id == 0) {
-                if($product->is_variant)
-                    $variant_id_all = ProductPurchase::distinct('variant_id')->where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->pluck('variant_id');
+            if ($warehouse_id == 0) {
+                if ($product->is_variant)
+                    $variant_id_all = ProductPurchase::distinct('variant_id')->where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->pluck('variant_id');
                 else
-                    $lims_product_purchase_data = ProductPurchase::where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->first();
-            }
-            else {
-                if($product->is_variant)
+                    $lims_product_purchase_data = ProductPurchase::where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->first();
+            } else {
+                if ($product->is_variant)
                     $variant_id_all = DB::table('purchases')
                         ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')
                         ->distinct('variant_id')
                         ->where([
                             ['product_purchases.product_id', $product->id],
                             ['purchases.warehouse_id', $warehouse_id]
-                        ])->whereDate('purchases.created_at','>=', $start_date)
-                          ->whereDate('purchases.created_at','<=', $end_date)
-                          ->pluck('variant_id');
+                        ])->whereDate('purchases.created_at', '>=', $start_date)
+                        ->whereDate('purchases.created_at', '<=', $end_date)
+                        ->pluck('variant_id');
                 else
                     $lims_product_purchase_data = DB::table('purchases')
                         ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                ['product_purchases.product_id', $product->id],
-                                ['purchases.warehouse_id', $warehouse_id]
-                        ])->whereDate('purchases.created_at','>=', $start_date)
-                          ->whereDate('purchases.created_at','<=', $end_date)
-                          ->first();
+                            ['product_purchases.product_id', $product->id],
+                            ['purchases.warehouse_id', $warehouse_id]
+                        ])->whereDate('purchases.created_at', '>=', $start_date)
+                        ->whereDate('purchases.created_at', '<=', $end_date)
+                        ->first();
             }
 
-            if($lims_product_purchase_data) {
+            if ($lims_product_purchase_data) {
                 $product_name[] = $product->name;
                 $product_id[] = $product->id;
                 $variant_id[] = null;
-                if($warehouse_id == 0)
+                if ($warehouse_id == 0)
                     $product_qty[] = $product->qty;
                 else
                     $product_qty[] = Product_Warehouse::where([
-                                    ['product_id', $product->id],
-                                    ['warehouse_id', $warehouse_id]
-                                ])->sum('qty');
-            }
-            elseif(count($variant_id_all)) {
+                        ['product_id', $product->id],
+                        ['warehouse_id', $warehouse_id]
+                    ])->sum('qty');
+            } elseif (count($variant_id_all)) {
                 foreach ($variant_id_all as $key => $variantId) {
                     $variant_data = Variant::find($variantId);
-                    $product_name[] = $product->name.' ['.$variant_data->name.']';
+                    $product_name[] = $product->name . ' [' . $variant_data->name . ']';
                     $product_id[] = $product->id;
                     $variant_id[] = $variant_data->id;
-                    if($warehouse_id == 0)
+                    if ($warehouse_id == 0)
                         $product_qty[] = ProductVariant::FindExactProduct($product->id, $variant_data->id)->first()->qty;
                     else
                         $product_qty[] = Product_Warehouse::where([
-                                        ['product_id', $product->id],
-                                        ['variant_id', $variant_data->id],
-                                        ['warehouse_id', $warehouse_id]
-                                    ])->first()->qty;
-
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_data->id],
+                            ['warehouse_id', $warehouse_id]
+                        ])->first()->qty;
                 }
             }
         }
         $lims_warehouse_list = Warehouse::where('is_active', true)->get();
-        return view('backend.report.purchase_report',compact('product_id', 'variant_id', 'product_name', 'product_qty', 'start_date', 'end_date', 'lims_warehouse_list', 'warehouse_id'));
+        return view('backend.report.purchase_report', compact('product_id', 'variant_id', 'product_name', 'product_qty', 'start_date', 'end_date', 'lims_warehouse_list', 'warehouse_id'));
     }
 
     public function purchaseReportData(Request $request)
@@ -1665,7 +1611,7 @@ class ReportController extends Controller
             1 => 'name'
         );
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
@@ -1673,64 +1619,62 @@ class ReportController extends Controller
         $start = $request->input('start');
         $order = $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
-        if($request->input('search.value')) {
+        if ($request->input('search.value')) {
             $search = $request->input('search.value');
             $totalData = Product::where([
                 ['name', 'LIKE', "%{$search}%"],
                 ['is_active', true]
             ])->count();
             $lims_product_all = Product::with('category')
-                                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
-                                ->where([
-                                    ['name', 'LIKE', "%{$search}%"],
-                                    ['is_active', true]
-                                ])->offset($start)
-                                  ->limit($limit)
-                                  ->orderBy($order, $dir)
-                                  ->get();
-        }
-        else {
+                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
+                ->where([
+                    ['name', 'LIKE', "%{$search}%"],
+                    ['is_active', true]
+                ])->offset($start)
+                ->limit($limit)
+                ->orderBy($order, $dir)
+                ->get();
+        } else {
             $totalData = Product::where('is_active', true)->count();
             $lims_product_all = Product::with('category')
-                                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
-                                ->where('is_active', true)
-                                ->offset($start)
-                                ->limit($limit)
-                                ->orderBy($order, $dir)
-                                ->get();
+                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
+                ->where('is_active', true)
+                ->offset($start)
+                ->limit($limit)
+                ->orderBy($order, $dir)
+                ->get();
         }
 
         $totalFiltered = $totalData;
         $data = [];
         foreach ($lims_product_all as $product) {
             $variant_id_all = [];
-            if($warehouse_id == 0) {
-                if($product->is_variant) {
+            if ($warehouse_id == 0) {
+                if ($product->is_variant) {
                     $variant_id_all = ProductVariant::where('product_id', $product->id)->pluck('variant_id', 'item_code');
                     foreach ($variant_id_all as $item_code => $variant_id) {
                         $variant_data = Variant::select('name')->find($variant_id);
                         $nestedData['key'] = count($data);
-                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']'.'<br>'.$item_code;
+                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']' . '<br>' . $item_code;
                         $nestedData['category'] = $product->category->name;
                         //purchase data
                         $nestedData['purchased_amount'] = ProductPurchase::where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
                         $lims_product_purchase_data = ProductPurchase::select('purchase_unit_id', 'qty')->where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                         $purchased_qty = 0;
-                        if(count($lims_product_purchase_data)) {
+                        if (count($lims_product_purchase_data)) {
                             foreach ($lims_product_purchase_data as $product_purchase) {
                                 $unit = DB::table('units')->find($product_purchase->purchase_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $purchased_qty += $product_purchase->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $purchased_qty += $product_purchase->qty / $unit->operation_value;
                                 }
                             }
@@ -1746,24 +1690,22 @@ class ReportController extends Controller
 
                         $data[] = $nestedData;
                     }
-                }
-                else {
+                } else {
                     $nestedData['key'] = count($data);
-                    $nestedData['name'] = $product->name.'<br>'.$product->code;
+                    $nestedData['name'] = $product->name . '<br>' . $product->code;
                     $nestedData['category'] = $product->category->name;
                     //purchase data
-                    $nestedData['purchased_amount'] = ProductPurchase::where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                    $nestedData['purchased_amount'] = ProductPurchase::where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
-                    $lims_product_purchase_data = ProductPurchase::select('purchase_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                    $lims_product_purchase_data = ProductPurchase::select('purchase_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                     $purchased_qty = 0;
-                    if(count($lims_product_purchase_data)) {
+                    if (count($lims_product_purchase_data)) {
                         foreach ($lims_product_purchase_data as $product_purchase) {
                             $unit = DB::table('units')->find($product_purchase->purchase_unit_id);
-                            if($unit->operator == '*'){
+                            if ($unit->operator == '*') {
                                 $purchased_qty += $product_purchase->qty * $unit->operation_value;
-                            }
-                            elseif($unit->operator == '/'){
+                            } elseif ($unit->operator == '/') {
                                 $purchased_qty += $product_purchase->qty / $unit->operation_value;
                             }
                         }
@@ -1773,40 +1715,38 @@ class ReportController extends Controller
 
                     $data[] = $nestedData;
                 }
-            }
-            else {
-                if($product->is_variant) {
+            } else {
+                if ($product->is_variant) {
                     $variant_id_all = ProductVariant::where('product_id', $product->id)->pluck('variant_id', 'item_code');
 
                     foreach ($variant_id_all as $item_code => $variant_id) {
                         $variant_data = Variant::select('name')->find($variant_id);
                         $nestedData['key'] = count($data);
-                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']'.'<br>'.$item_code;
+                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']' . '<br>' . $item_code;
                         $nestedData['category'] = $product->category->name;
                         //purchase data
                         $nestedData['purchased_amount'] = DB::table('purchases')
-                                    ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                        ['product_purchases.product_id', $product->id],
-                                        ['product_purchases.variant_id', $variant_id],
-                                        ['purchases.warehouse_id', $warehouse_id]
-                                    ])->whereDate('purchases.created_at','>=', $start_date)->whereDate('purchases.created_at','<=', $end_date)->sum('total');
+                            ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
+                                ['product_purchases.product_id', $product->id],
+                                ['product_purchases.variant_id', $variant_id],
+                                ['purchases.warehouse_id', $warehouse_id]
+                            ])->whereDate('purchases.created_at', '>=', $start_date)->whereDate('purchases.created_at', '<=', $end_date)->sum('total');
                         $lims_product_purchase_data = DB::table('purchases')
-                                    ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                        ['product_purchases.product_id', $product->id],
-                                        ['product_purchases.variant_id', $variant_id],
-                                        ['purchases.warehouse_id', $warehouse_id]
-                                    ])->whereDate('purchases.created_at','>=', $start_date)->whereDate('purchases.created_at','<=', $end_date)
-                                        ->select('product_purchases.purchase_unit_id', 'product_purchases.qty')
-                                        ->get();
+                            ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
+                                ['product_purchases.product_id', $product->id],
+                                ['product_purchases.variant_id', $variant_id],
+                                ['purchases.warehouse_id', $warehouse_id]
+                            ])->whereDate('purchases.created_at', '>=', $start_date)->whereDate('purchases.created_at', '<=', $end_date)
+                            ->select('product_purchases.purchase_unit_id', 'product_purchases.qty')
+                            ->get();
 
                         $purchased_qty = 0;
-                        if(count($lims_product_purchase_data)) {
+                        if (count($lims_product_purchase_data)) {
                             foreach ($lims_product_purchase_data as $product_purchase) {
                                 $unit = DB::table('units')->find($product_purchase->purchase_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $purchased_qty += $product_purchase->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $purchased_qty += $product_purchase->qty / $unit->operation_value;
                                 }
                             }
@@ -1818,40 +1758,38 @@ class ReportController extends Controller
                             ['variant_id', $variant_id],
                             ['warehouse_id', $warehouse_id]
                         ])->select('qty')->first();
-                        if($product_warehouse)
+                        if ($product_warehouse)
                             $nestedData['in_stock'] = $product_warehouse->qty;
                         else
                             $nestedData['in_stock'] = 0;
 
                         $data[] = $nestedData;
                     }
-                }
-                else {
+                } else {
                     $nestedData['key'] = count($data);
-                    $nestedData['name'] = $product->name.'<br>'.$product->code;
+                    $nestedData['name'] = $product->name . '<br>' . $product->code;
                     $nestedData['category'] = $product->category->name;
                     //purchase data
                     $nestedData['purchased_amount'] = DB::table('purchases')
-                                ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                    ['product_purchases.product_id', $product->id],
-                                    ['purchases.warehouse_id', $warehouse_id]
-                                ])->whereDate('purchases.created_at','>=', $start_date)->whereDate('purchases.created_at','<=', $end_date)->sum('total');
+                        ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
+                            ['product_purchases.product_id', $product->id],
+                            ['purchases.warehouse_id', $warehouse_id]
+                        ])->whereDate('purchases.created_at', '>=', $start_date)->whereDate('purchases.created_at', '<=', $end_date)->sum('total');
                     $lims_product_purchase_data = DB::table('purchases')
-                                ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
-                                    ['product_purchases.product_id', $product->id],
-                                    ['purchases.warehouse_id', $warehouse_id]
-                                ])->whereDate('purchases.created_at','>=', $start_date)->whereDate('purchases.created_at','<=', $end_date)
-                                    ->select('product_purchases.purchase_unit_id', 'product_purchases.qty')
-                                    ->get();
+                        ->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')->where([
+                            ['product_purchases.product_id', $product->id],
+                            ['purchases.warehouse_id', $warehouse_id]
+                        ])->whereDate('purchases.created_at', '>=', $start_date)->whereDate('purchases.created_at', '<=', $end_date)
+                        ->select('product_purchases.purchase_unit_id', 'product_purchases.qty')
+                        ->get();
 
                     $purchased_qty = 0;
-                    if(count($lims_product_purchase_data)) {
+                    if (count($lims_product_purchase_data)) {
                         foreach ($lims_product_purchase_data as $product_purchase) {
                             $unit = DB::table('units')->find($product_purchase->purchase_unit_id);
-                            if($unit->operator == '*'){
+                            if ($unit->operator == '*') {
                                 $purchased_qty += $product_purchase->qty * $unit->operation_value;
-                            }
-                            elseif($unit->operator == '/'){
+                            } elseif ($unit->operator == '/') {
                                 $purchased_qty += $product_purchase->qty / $unit->operation_value;
                             }
                         }
@@ -1862,7 +1800,7 @@ class ReportController extends Controller
                         ['product_id', $product->id],
                         ['warehouse_id', $warehouse_id]
                     ])->select('qty')->first();
-                    if($product_warehouse)
+                    if ($product_warehouse)
                         $nestedData['in_stock'] = $product_warehouse->qty;
                     else
                         $nestedData['in_stock'] = 0;
@@ -1889,11 +1827,536 @@ class ReportController extends Controller
         $end_date = $data['end_date'];
         $warehouse_id = $data['warehouse_id'];
         $lims_warehouse_list = Warehouse::where('is_active', true)->get();
-        return view('backend.report.sale_report',compact('start_date', 'end_date', 'warehouse_id', 'lims_warehouse_list'));
+        return view('backend.report.sale_report', compact('start_date', 'end_date', 'warehouse_id', 'lims_warehouse_list'));
         // return view('backend.report.sale_report',compact('product_id', 'variant_id', 'product_name', 'product_qty', 'start_date', 'end_date', 'lims_warehouse_list','warehouse_id'));
     }
 
+    public function currencyReport(Request $request)
+    {
+        return $this->loadReportView('currency_report', $request);
+    }
+
+    public function customerReport(Request $request)
+    {
+        return $this->loadReportView('customer_report', $request);
+    }
+
+    public function duePaymentReport(Request $request)
+    {
+        return $this->loadReportView('due_payment_report', $request);
+    }
+
+    /* 🔁 Shared Logic */
+    private function loadReportView($viewName, Request $request)
+    {
+        $start_date = $request->input('start_date', date('Y-m') . '-01');
+        $end_date   = $request->input('end_date', date('Y-m-d'));
+        $warehouse_id = $request->input('warehouse_id', 0);
+
+        $lims_warehouse_list = Warehouse::where('is_active', true)->get();
+
+        return view("backend.report.$viewName", compact(
+            'start_date',
+            'end_date',
+            'warehouse_id',
+            'lims_warehouse_list'
+        ));
+    }
+
+
     public function saleReportData(Request $request)
+    {
+        $start_date = $request->input('start_date');
+        $end_date = $request->input('end_date');
+        $report_type = $request->input('report_type', 'invoice'); // invoice|daily|monthly|due|currency
+        $base_currency_id = intval($request->input('base_currency_id', 0));
+        $exchange_currency_id = intval($request->input('exchange_currency_id', 0));
+
+        $draw = intval($request->input('draw', 0));
+        $start = intval($request->input('start', 0));
+        $length = intval($request->input('length', 10));
+        $searchValue = $request->input('search.value', '');
+
+        // currency map
+        $currencyMap = \App\Models\Currency::pluck('code', 'id')->toArray();
+
+        /*
+     * payments subquery: sum of payments in base (amount) and local (converted_amount)
+     * so we can compute due in base currency easily.
+     */
+        $paymentsSub = "(SELECT sale_id, SUM(CAST(amount AS DECIMAL(30,2))) as payments_base, SUM(CAST(converted_amount AS DECIMAL(30,2))) as payments_local FROM payments GROUP BY sale_id) pgs";
+
+        // Base sale-level query
+        $baseQuery = DB::table('sales as s')
+            ->leftJoin('product_sales as ps', 'ps.sale_id', '=', 's.id')
+            ->leftJoin(DB::raw($paymentsSub), 'pgs.sale_id', '=', 's.id')
+            ->leftJoin('customers as c', 'c.id', '=', 's.customer_id')
+            ->select(
+                's.id as sale_id',
+                's.reference_no',
+                's.created_at',
+                'c.name as customer_name',
+                's.grand_total as base_amount',
+                's.currency_id as sale_base_currency_id',
+
+                // invoice_local now comes directly from product_sales JSON (no SUM)
+                DB::raw("COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(ps.detailed_currency_data, '$.converted_amount')) AS DECIMAL(30,2)), 0) as invoice_local"),
+                DB::raw("COALESCE(JSON_UNQUOTE(JSON_EXTRACT(ps.detailed_currency_data, '$.selected_currency')), '') as invoice_currency_raw"),
+                DB::raw("COALESCE(JSON_UNQUOTE(JSON_EXTRACT(ps.detailed_currency_data, '$.exchange_rate')), '') as invoice_exchange_rate_raw"),
+
+                // payments sums from paymentsSub (aggregated)
+                DB::raw("COALESCE(pgs.payments_local, 0) as payments_local"),
+                DB::raw("COALESCE(pgs.payments_base, 0) as payments_base")
+            )
+            ->when($start_date && $end_date, function ($q) use ($start_date, $end_date) {
+                $q->whereDate('s.created_at', '>=', $start_date)->whereDate('s.created_at', '<=', $end_date);
+            })
+            // group by sales primary keys and the product_sales JSON field (ps.detailed_currency_data)
+            ->groupBy(
+                's.id',
+                's.reference_no',
+                's.created_at',
+                'c.name',
+                's.grand_total',
+                's.currency_id',
+                'ps.detailed_currency_data',
+                'pgs.payments_local',
+                'pgs.payments_base'
+            );
+
+        // filters: base currency
+        if ($base_currency_id > 0) {
+            $baseQuery->where('s.currency_id', $base_currency_id);
+        }
+
+        // simple search on invoice or customer
+        if ($searchValue) {
+            // Use having to search grouped columns
+            $baseQuery->havingRaw("(s.reference_no LIKE ? OR c.name LIKE ?)", ["%{$searchValue}%", "%{$searchValue}%"]);
+        }
+
+        $rows = [];
+        $totalRecords = 0;
+        $totalFiltered = 0;
+
+        if (in_array($report_type, ['invoice', 'due'])) {
+            $query = clone $baseQuery;
+
+            if ($report_type === 'due') {
+                // invoices where invoice_local (local converted) - payments_local > 0
+                $query->havingRaw("(
+                COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(ps.detailed_currency_data, '$.converted_amount')) AS DECIMAL(30,2)),0)
+                - COALESCE(pgs.payments_local,0)
+            ) > 0");
+            }
+
+            // total filtered count (safe mergeBindings)
+            $countSql = DB::table(DB::raw("({$query->toSql()}) as t"))->mergeBindings($query)
+                ->select(DB::raw('COUNT(*) as cnt'));
+            $totalFiltered = intval($countSql->value('cnt') ?: 0);
+            $totalRecords = $totalFiltered;
+
+            // fetch paginated sale rows
+            $sales = $query->orderBy('s.created_at', 'desc')->offset($start)->limit($length)->get();
+
+            // collect sale ids
+            $saleIds = $sales->pluck('sale_id')->toArray();
+            $payments = $saleIds ? DB::table('payments')->whereIn('sale_id', $saleIds)->orderBy('created_at', 'asc')->get() : collect([]);
+
+            // group payments by sale
+            $paymentsBySale = [];
+            foreach ($payments as $p) {
+                $paymentsBySale[$p->sale_id][] = $p;
+            }
+
+            $i = $start + 1;
+            foreach ($sales as $s) {
+                // numeric fields
+                $invoice_local = floatval($s->invoice_local);
+                $payments_local = floatval($s->payments_local);
+                $payments_base = floatval($s->payments_base);
+                $base_amount = floatval($s->base_amount);
+
+                // due in local and due in base
+                $due_amount = $base_amount - $payments_base;
+                $due_base = $base_amount - $payments_base;
+
+                // invoice_rate parsing
+                $invoice_rate = null;
+                if (is_numeric($s->invoice_exchange_rate_raw) && strlen($s->invoice_exchange_rate_raw)) {
+                    $invoice_rate = floatval($s->invoice_exchange_rate_raw);
+                }
+
+                // invoice currency code resolution
+                $invoice_currency_code = '';
+                if (is_numeric($s->invoice_currency_raw) && intval($s->invoice_currency_raw) > 0) {
+                    $cid = intval($s->invoice_currency_raw);
+                    $invoice_currency_code = $currencyMap[$cid] ?? (string)$s->invoice_currency_raw;
+                } else {
+                    $raw = trim($s->invoice_currency_raw);
+                    if ($raw !== '') {
+                        $found = '';
+                        foreach ($currencyMap as $id => $code) {
+                            if (stripos($raw, $code) !== false) {
+                                $found = $code;
+                                break;
+                            }
+                        }
+                        $invoice_currency_code = $found ?: $raw;
+                    } else {
+                        $invoice_currency_code = $currencyMap[intval($s->sale_base_currency_id)] ?? '';
+                    }
+                }
+
+                // build payments_html + compute total realised gain/loss (local)
+                $payment_rows = $paymentsBySale[$s->sale_id] ?? [];
+                $payments_currency_summary = [];
+                $payments_html = '';
+                $total_realised_gain_loss_local = 0.0;
+
+                if (count($payment_rows)) {
+                    $payments_html .= '<table class="table table-sm table-borderless mb-0"><thead><tr><th>Date</th><th>Paid (Base)</th><th>Curr</th><th>Rate</th><th>Local</th><th>Gain/Loss</th></tr></thead><tbody>';
+                    foreach ($payment_rows as $p) {
+                        $paid_base = floatval($p->amount); // amount in base invoice currency
+                        $p_rate = floatval($p->exchange_rate); // payment exchange rate
+                        $p_local = floatval($p->converted_amount); // converted at payment time
+
+                        // compute per-payment gain/loss (local)
+                        $gain_loss_local = 0.0;
+                        if ($invoice_rate !== null) {
+                            $gain_loss_local = ($p_rate - $invoice_rate) * $paid_base;
+                        }
+                        $total_realised_gain_loss_local += $gain_loss_local;
+
+                        // store currency@rate summary (unique)
+                        $p_currency_code = $currencyMap[intval($p->currency_id)] ?? $p->currency_id;
+                        $payments_currency_summary[] = $p_currency_code . '@' . number_format($p_rate, 4);
+
+                        // rounded display / class
+                        $rounded_pl = round($gain_loss_local, 2);
+                        $class = ($rounded_pl >= 0) ? 'text-success' : 'text-danger';
+                        $display_val = ($rounded_pl >= 0) ? number_format($rounded_pl, 2) : '-' . number_format(abs($rounded_pl), 2);
+
+                        // row
+                        $payments_html .= '<tr>';
+                        $payments_html .= '<td>' . date('Y-m-d', strtotime($p->created_at)) . '</td>';
+                        $payments_html .= '<td>' . number_format($paid_base, 2) . '</td>';
+                        $payments_html .= '<td>' . e($p_currency_code) . '</td>';
+                        $payments_html .= '<td>' . number_format($p_rate, 4) . '</td>';
+                        $payments_html .= '<td>' . number_format($p_local, 2) . '</td>';
+                        $payments_html .= '<td class="' . $class . '">' . $display_val . '</td>';
+                        $payments_html .= '</tr>';
+                    }
+                    $payments_html .= '</tbody></table>';
+
+                    // unique summary
+                    $payments_currency_summary = array_values(array_unique($payments_currency_summary));
+                    $payments_currency_summary = implode(', ', $payments_currency_summary);
+                } else {
+                    $payments_html = '<small class="text-muted">No payments</small>';
+                    $payments_currency_summary = '';
+                }
+
+                // total realised gain/loss rounding + html
+                $rounded_gain = round($total_realised_gain_loss_local, 2);
+                if ($rounded_gain > 0) {
+                    // Profit (green, no minus)
+                    $gain_loss_html = '<span class="text-success">' . number_format($rounded_gain, 2) . '</span>';
+                } elseif ($rounded_gain < 0) {
+                    // Loss (red, show minus)
+                    $gain_loss_html = '<span class="text-danger">-' . number_format(abs($rounded_gain), 2) . '</span>';
+                } else {
+                    // Zero
+                    $gain_loss_html = '<span class="text-muted">0.00</span>';
+                }
+
+                // prepare row (note: include numeric fields for front-end totals)
+                $rows[] = [
+                    'key' => $i++,
+                    'date' => date('Y-m-d', strtotime($s->created_at)),
+                    'label' => $s->reference_no,
+                    'customer' => $s->customer_name ?? '',
+                    'base_currency_code' => $currencyMap[intval($s->sale_base_currency_id)] ?? '',
+                    'base_amount' => number_format($base_amount, 2),
+                    'invoice_currency_code' => $invoice_currency_code,
+                    'invoice_exchange_rate' => $invoice_rate !== null ? number_format($invoice_rate, 4) : '',
+                    'invoice_local' => number_format($invoice_local, 2),
+                    'payments_local' => number_format($payments_local, 2),
+                    'payments_base' => number_format($payments_base, 2),
+                    'payments_currency_summary' => $payments_currency_summary,
+                    'due_amount' => number_format($due_amount, 2),
+                    'due_base' => number_format($due_base, 2),
+                    'gain_loss' => $rounded_gain, // numeric for footer sums
+                    'gain_loss_html' => $gain_loss_html,
+                    'payments_html' => $payments_html
+                ];
+            }
+
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => $totalRecords,
+                'recordsFiltered' => $totalFiltered,
+                'data' => $rows
+            ]);
+        }
+
+        // For daily/monthly/currency reports: you can implement aggregated summaries similarly (groupBy date/month/currency)
+        // For now return empty for other types to avoid breaking existing callers
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => []
+        ]);
+    }
+
+
+    public function saleDueReportData(Request $request)
+    {
+        $start_date = $request->input('start_date');
+        $end_date = $request->input('end_date');
+        $report_type = $request->input('report_type', 'due'); // default due
+        $base_currency_id = intval($request->input('base_currency_id', 0));
+        $exchange_currency_id = intval($request->input('exchange_currency_id', 0));
+
+        $draw = intval($request->input('draw', 0));
+        $start = intval($request->input('start', 0));
+        $length = intval($request->input('length', 10));
+        $searchValue = trim($request->input('search.value', ''));
+
+        // currency map
+        $currencyMap = \App\Models\Currency::pluck('code', 'id')->toArray();
+
+        // payments subquery: aggregated sums per sale
+        $paymentsSub = "(SELECT sale_id, SUM(CAST(amount AS DECIMAL(30,2))) as payments_base, SUM(CAST(converted_amount AS DECIMAL(30,2))) as payments_local FROM payments GROUP BY sale_id) pgs";
+
+        // Base sale-level query: use MAX(...) on product_sales JSON fields to avoid duplicate rows per sale
+        $baseQuery = DB::table('sales as s')
+            ->leftJoin('product_sales as ps', 'ps.sale_id', '=', 's.id')
+            ->leftJoin(DB::raw($paymentsSub), 'pgs.sale_id', '=', 's.id')
+            ->leftJoin('customers as c', 'c.id', '=', 's.customer_id')
+            ->select(
+                's.id as sale_id',
+                's.reference_no',
+                's.created_at',
+                'c.name as customer_name',
+                's.grand_total as base_amount',
+                's.currency_id as sale_base_currency_id',
+
+                // aggregate JSON values using MAX to ensure single row per sale
+                DB::raw("COALESCE(CAST(MAX(JSON_UNQUOTE(JSON_EXTRACT(ps.detailed_currency_data, '$.converted_amount'))) AS DECIMAL(30,2)), 0) as invoice_local"),
+                DB::raw("COALESCE(MAX(JSON_UNQUOTE(JSON_EXTRACT(ps.detailed_currency_data, '$.selected_currency'))), '') as invoice_currency_raw"),
+                DB::raw("COALESCE(MAX(JSON_UNQUOTE(JSON_EXTRACT(ps.detailed_currency_data, '$.exchange_rate'))), '') as invoice_exchange_rate_raw"),
+
+                // payments sums from paymentsSub (aggregated)
+                DB::raw("COALESCE(pgs.payments_local, 0) as payments_local"),
+                DB::raw("COALESCE(pgs.payments_base, 0) as payments_base")
+            )
+            ->when($start_date && $end_date, function ($q) use ($start_date, $end_date) {
+                $q->whereDate('s.created_at', '>=', $start_date)->whereDate('s.created_at', '<=', $end_date);
+            });
+
+        // filters: base currency
+        if ($base_currency_id > 0) {
+            $baseQuery->where('s.currency_id', $base_currency_id);
+        }
+
+        // simple search on invoice or customer (works with groupBy)
+        if ($searchValue) {
+            $baseQuery->where(function ($q) use ($searchValue) {
+                $q->where('s.reference_no', 'LIKE', "%{$searchValue}%")
+                    ->orWhere('c.name', 'LIKE', "%{$searchValue}%");
+            });
+        }
+
+        // group by sale-level columns (no ps.detailed_currency_data to avoid duplicate rows)
+        $baseQuery->groupBy(
+            's.id',
+            's.reference_no',
+            's.created_at',
+            'c.name',
+            's.grand_total',
+            's.currency_id',
+            'pgs.payments_local',
+            'pgs.payments_base'
+        );
+
+        // total records (unfiltered) — DataTables expects total count without filters
+        $totalRecords = (int) DB::table('sales')->count();
+
+        $rows = [];
+        $totalFiltered = 0;
+
+        if (in_array($report_type, ['invoice', 'due'])) {
+            $query = clone $baseQuery;
+
+            if ($report_type === 'due') {
+                // DUE determined in base currency: grand_total - payments_base > 0
+                $query->havingRaw("(
+                s.grand_total - COALESCE(pgs.payments_base, 0)
+            ) > 0");
+            }
+
+            // recordsFiltered: count after filters (safe mergeBindings)
+            $countSql = DB::table(DB::raw("({$query->toSql()}) as t"))->mergeBindings($query)
+                ->select(DB::raw('COUNT(*) as cnt'));
+            $totalFiltered = intval($countSql->value('cnt') ?: 0);
+
+            // fetch paginated sale rows
+            $sales = $query->orderBy('s.created_at', 'desc')->offset($start)->limit($length)->get();
+
+            // collect sale ids and related payments
+            $saleIds = $sales->pluck('sale_id')->toArray();
+            $payments = $saleIds ? DB::table('payments')->whereIn('sale_id', $saleIds)->orderBy('created_at', 'asc')->get() : collect([]);
+
+            // group payments by sale
+            $paymentsBySale = [];
+            foreach ($payments as $p) {
+                $paymentsBySale[$p->sale_id][] = $p;
+            }
+
+            $i = $start + 1;
+            foreach ($sales as $s) {
+                // numeric fields
+                $invoice_local = floatval($s->invoice_local);
+                $payments_local = floatval($s->payments_local);
+                $payments_base = floatval($s->payments_base);
+                $base_amount = floatval($s->base_amount);
+
+                // due in base currency (grand_total - payments_base)
+                $due_base = $base_amount - $payments_base;
+                $due_amount = $due_base; // for compatibility with your front-end naming
+
+                // invoice_rate parsing
+                $invoice_rate = null;
+                if (is_numeric($s->invoice_exchange_rate_raw) && strlen($s->invoice_exchange_rate_raw)) {
+                    $invoice_rate = floatval($s->invoice_exchange_rate_raw);
+                }
+
+                // invoice currency code resolution
+                $invoice_currency_code = '';
+                if (is_numeric($s->invoice_currency_raw) && intval($s->invoice_currency_raw) > 0) {
+                    $cid = intval($s->invoice_currency_raw);
+                    $invoice_currency_code = $currencyMap[$cid] ?? (string)$s->invoice_currency_raw;
+                } else {
+                    $raw = trim($s->invoice_currency_raw);
+                    if ($raw !== '') {
+                        $found = '';
+                        foreach ($currencyMap as $id => $code) {
+                            if (stripos($raw, $code) !== false) {
+                                $found = $code;
+                                break;
+                            }
+                        }
+                        $invoice_currency_code = $found ?: $raw;
+                    } else {
+                        $invoice_currency_code = $currencyMap[intval($s->sale_base_currency_id)] ?? '';
+                    }
+                }
+
+                // build payments_html + compute total realised gain/loss (local)
+                $payment_rows = $paymentsBySale[$s->sale_id] ?? [];
+                $payments_currency_summary = [];
+                $payments_html = '';
+                $total_realised_gain_loss_local = 0.0;
+
+                if (count($payment_rows)) {
+                    $payments_html .= '<table class="table table-sm table-borderless mb-0"><thead><tr><th>Date</th><th>Paid (Base)</th><th>Curr</th><th>Rate</th><th>Local</th><th>Gain/Loss</th></tr></thead><tbody>';
+                    foreach ($payment_rows as $p) {
+                        $paid_base = floatval($p->amount); // amount in base invoice currency
+                        $p_rate = floatval($p->exchange_rate); // payment exchange rate
+                        $p_local = floatval($p->converted_amount); // converted at payment time
+
+                        // compute per-payment gain/loss (local) using invoice_rate
+                        $gain_loss_local = 0.0;
+                        if ($invoice_rate !== null) {
+                            $gain_loss_local = ($p_rate - $invoice_rate) * $paid_base;
+                        }
+                        $total_realised_gain_loss_local += $gain_loss_local;
+
+                        // store currency@rate summary (unique)
+                        $p_currency_code = $currencyMap[intval($p->currency_id)] ?? $p->currency_id;
+                        $payments_currency_summary[] = $p_currency_code . '@' . number_format($p_rate, 4);
+
+                        // rounded display / class
+                        $rounded_pl = round($gain_loss_local, 2);
+                        $class = ($rounded_pl >= 0) ? 'text-success' : 'text-danger';
+                        $display_val = ($rounded_pl >= 0) ? number_format($rounded_pl, 2) : '-' . number_format(abs($rounded_pl), 2);
+
+                        // row
+                        $payments_html .= '<tr>';
+                        $payments_html .= '<td>' . date('Y-m-d', strtotime($p->created_at)) . '</td>';
+                        $payments_html .= '<td>' . number_format($paid_base, 2) . '</td>';
+                        $payments_html .= '<td>' . e($p_currency_code) . '</td>';
+                        $payments_html .= '<td>' . number_format($p_rate, 4) . '</td>';
+                        $payments_html .= '<td>' . number_format($p_local, 2) . '</td>';
+                        $payments_html .= '<td class="' . $class . '">' . $display_val . '</td>';
+                        $payments_html .= '</tr>';
+                    }
+                    $payments_html .= '</tbody></table>';
+
+                    // unique summary
+                    $payments_currency_summary = array_values(array_unique($payments_currency_summary));
+                    $payments_currency_summary = implode(', ', $payments_currency_summary);
+                } else {
+                    $payments_html = '<small class="text-muted">No payments</small>';
+                    $payments_currency_summary = '';
+                }
+
+                // total realised gain/loss rounding + html
+                $rounded_gain = round($total_realised_gain_loss_local, 2);
+                if ($rounded_gain > 0) {
+                    $gain_loss_html = '<span class="text-success">' . number_format($rounded_gain, 2) . '</span>';
+                } elseif ($rounded_gain < 0) {
+                    $gain_loss_html = '<span class="text-danger">-' . number_format(abs($rounded_gain), 2) . '</span>';
+                } else {
+                    $gain_loss_html = '<span class="text-muted">0.00</span>';
+                }
+
+                // prepare row (note: include numeric fields for front-end totals)
+                $rows[] = [
+                    'key' => $i++,
+                    'date' => date('Y-m-d', strtotime($s->created_at)),
+                    'label' => $s->reference_no,
+                    'customer' => $s->customer_name ?? '',
+                    'base_currency_code' => $currencyMap[intval($s->sale_base_currency_id)] ?? '',
+                    'base_amount' => number_format($base_amount, 2),
+                    'invoice_currency_code' => $invoice_currency_code,
+                    'invoice_exchange_rate' => $invoice_rate !== null ? number_format($invoice_rate, 4) : '',
+                    'invoice_local' => number_format($invoice_local, 2),
+                    'payments_local' => number_format($payments_local, 2),
+                    'payments_base' => number_format($payments_base, 2),
+                    'payments_currency_summary' => $payments_currency_summary,
+                    'due_amount' => number_format($due_amount, 2),
+                    'due_base' => number_format($due_base, 2),
+                    'gain_loss' => $rounded_gain, // numeric for footer sums
+                    'gain_loss_html' => $gain_loss_html,
+                    'payments_html' => $payments_html
+                ];
+            }
+
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => $totalRecords,
+                'recordsFiltered' => $totalFiltered,
+                'data' => $rows
+            ]);
+        }
+
+        // fallback for other report types
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => []
+        ]);
+    }
+
+
+
+
+
+    public function saleReportDataOld(Request $request)
     {
         $data = $request->all();
         $start_date = $data['start_date'];
@@ -1905,7 +2368,7 @@ class ReportController extends Controller
             1 => 'name'
         );
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
@@ -1914,64 +2377,62 @@ class ReportController extends Controller
         $order = $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
 
-        if($request->input('search.value')) {
+        if ($request->input('search.value')) {
             $search = $request->input('search.value');
             $totalData = Product::where([
                 ['name', 'LIKE', "%{$search}%"],
                 ['is_active', true]
             ])->count();
             $lims_product_all = Product::with('category')
-                                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
-                                ->where([
-                                    ['name', 'LIKE', "%{$search}%"],
-                                    ['is_active', true]
-                                ])->offset($start)
-                                  ->limit($limit)
-                                  ->orderBy($order, $dir)
-                                  ->get();
-        }
-        else {
+                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
+                ->where([
+                    ['name', 'LIKE', "%{$search}%"],
+                    ['is_active', true]
+                ])->offset($start)
+                ->limit($limit)
+                ->orderBy($order, $dir)
+                ->get();
+        } else {
             $totalData = Product::where('is_active', true)->count();
             $lims_product_all = Product::with('category')
-                                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
-                                ->where('is_active', true)
-                                ->offset($start)
-                                ->limit($limit)
-                                ->orderBy($order, $dir)
-                                ->get();
+                ->select('id', 'name', 'code', 'category_id', 'qty', 'is_variant', 'price', 'cost')
+                ->where('is_active', true)
+                ->offset($start)
+                ->limit($limit)
+                ->orderBy($order, $dir)
+                ->get();
         }
 
         $totalFiltered = $totalData;
         $data = [];
         foreach ($lims_product_all as $product) {
             $variant_id_all = [];
-            if($warehouse_id == 0) {
-                if($product->is_variant) {
+            if ($warehouse_id == 0) {
+                if ($product->is_variant) {
                     $variant_id_all = ProductVariant::where('product_id', $product->id)->pluck('variant_id', 'item_code');
                     foreach ($variant_id_all as $item_code => $variant_id) {
                         $variant_data = Variant::select('name')->find($variant_id);
                         $nestedData['key'] = count($data);
-                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']'.'<br>'.$item_code;
+                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']' . '<br>' . $item_code;
                         $nestedData['category'] = $product->category->name;
                         //sale data
                         $nestedData['sold_amount'] = Product_Sale::where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
                         $lims_product_sale_data = Product_Sale::select('sale_unit_id', 'qty')->where([
-                                                ['product_id', $product->id],
-                                                ['variant_id', $variant_id]
-                                        ])->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                            ['product_id', $product->id],
+                            ['variant_id', $variant_id]
+                        ])->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                         $sold_qty = 0;
-                        if(count($lims_product_sale_data)) {
+                        if (count($lims_product_sale_data)) {
                             foreach ($lims_product_sale_data as $product_sale) {
                                 $unit = DB::table('units')->find($product_sale->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $sold_qty += $product_sale->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $sold_qty += $product_sale->qty / $unit->operation_value;
                                 }
                             }
@@ -1985,30 +2446,27 @@ class ReportController extends Controller
                         $nestedData['in_stock'] = $product_variant_data->qty;
                         $data[] = $nestedData;
                     }
-                }
-                else {
+                } else {
                     $nestedData['key'] = count($data);
-                    $nestedData['name'] = $product->name.'<br>'.$product->code;
+                    $nestedData['name'] = $product->name . '<br>' . $product->code;
                     $nestedData['category'] = $product->category->name;
 
                     //sale data
-                    $nestedData['sold_amount'] = Product_Sale::where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->sum('total');
+                    $nestedData['sold_amount'] = Product_Sale::where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->sum('total');
 
-                    $lims_product_sale_data = Product_Sale::select('sale_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
+                    $lims_product_sale_data = Product_Sale::select('sale_unit_id', 'qty')->where('product_id', $product->id)->whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
 
                     $sold_qty = 0;
-                    if(count($lims_product_sale_data)) {
+                    if (count($lims_product_sale_data)) {
                         foreach ($lims_product_sale_data as $product_sale) {
-                            if($product_sale->sale_unit_id > 0) {
+                            if ($product_sale->sale_unit_id > 0) {
                                 $unit = DB::table('units')->find($product_sale->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $sold_qty += $product_sale->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $sold_qty += $product_sale->qty / $unit->operation_value;
                                 }
-                            }
-                            else
+                            } else
                                 $sold_qty = $product_sale->qty;
                         }
                     }
@@ -2017,42 +2475,40 @@ class ReportController extends Controller
                     $nestedData['in_stock'] = $product->qty;
                     $data[] = $nestedData;
                 }
-            }
-            else {
-                if($product->is_variant) {
+            } else {
+                if ($product->is_variant) {
                     $variant_id_all = ProductVariant::where('product_id', $product->id)->pluck('variant_id', 'item_code');
 
                     foreach ($variant_id_all as $item_code => $variant_id) {
                         $variant_data = Variant::select('name')->find($variant_id);
                         $nestedData['key'] = count($data);
-                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']'.'<br>'.$item_code;
+                        $nestedData['name'] = $product->name . ' [' . $variant_data->name . ']' . '<br>' . $item_code;
                         $nestedData['category'] = $product->category->name;
 
                         //sale data
                         $nestedData['sold_amount'] = DB::table('sales')
-                                    ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
-                                        ['product_sales.product_id', $product->id],
-                                        ['variant_id', $variant_id],
-                                        ['sales.warehouse_id', $warehouse_id]
-                                    ])->whereDate('sales.created_at','>=', $start_date)->whereDate('sales.created_at','<=', $end_date)->sum('total');
+                            ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
+                                ['product_sales.product_id', $product->id],
+                                ['variant_id', $variant_id],
+                                ['sales.warehouse_id', $warehouse_id]
+                            ])->whereDate('sales.created_at', '>=', $start_date)->whereDate('sales.created_at', '<=', $end_date)->sum('total');
                         $lims_product_sale_data = DB::table('sales')
-                                    ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
-                                        ['product_sales.product_id', $product->id],
-                                        ['variant_id', $variant_id],
-                                        ['sales.warehouse_id', $warehouse_id]
-                                    ])->whereDate('sales.created_at','>=', $start_date)
-                                    ->whereDate('sales.created_at','<=', $end_date)
-                                    ->select('product_sales.sale_unit_id', 'product_sales.qty')
-                                    ->get();
+                            ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
+                                ['product_sales.product_id', $product->id],
+                                ['variant_id', $variant_id],
+                                ['sales.warehouse_id', $warehouse_id]
+                            ])->whereDate('sales.created_at', '>=', $start_date)
+                            ->whereDate('sales.created_at', '<=', $end_date)
+                            ->select('product_sales.sale_unit_id', 'product_sales.qty', 'product_sales.grand_total')
+                            ->get();
 
                         $sold_qty = 0;
-                        if(count($lims_product_sale_data)) {
+                        if (count($lims_product_sale_data)) {
                             foreach ($lims_product_sale_data as $product_sale) {
                                 $unit = DB::table('units')->find($product_sale->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $sold_qty += $product_sale->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $sold_qty += $product_sale->qty / $unit->operation_value;
                                 }
                             }
@@ -2066,43 +2522,41 @@ class ReportController extends Controller
                             ['variant_id', $variant_id],
                             ['warehouse_id', $warehouse_id]
                         ])->select('qty')->first();
-                        if($product_warehouse)
+                        if ($product_warehouse)
                             $nestedData['in_stock'] = $product_warehouse->qty;
                         else
                             $nestedData['in_stock'] = 0;
 
                         $data[] = $nestedData;
                     }
-                }
-                else {
+                } else {
                     $nestedData['key'] = count($data);
-                    $nestedData['name'] = $product->name.'<br>'.$product->code;
+                    $nestedData['name'] = $product->name . '<br>' . $product->code;
                     $nestedData['category'] = $product->category->name;
 
                     //sale data
                     $nestedData['sold_amount'] = DB::table('sales')
-                                ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
-                                    ['product_sales.product_id', $product->id],
-                                    ['sales.warehouse_id', $warehouse_id]
-                                ])->whereDate('sales.created_at','>=', $start_date)->whereDate('sales.created_at','<=', $end_date)->sum('total');
+                        ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
+                            ['product_sales.product_id', $product->id],
+                            ['sales.warehouse_id', $warehouse_id]
+                        ])->whereDate('sales.created_at', '>=', $start_date)->whereDate('sales.created_at', '<=', $end_date)->sum('total');
                     $lims_product_sale_data = DB::table('sales')
-                                ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
-                                    ['product_sales.product_id', $product->id],
-                                    ['sales.warehouse_id', $warehouse_id]
-                                ])->whereDate('sales.created_at','>=', $start_date)
-                                ->whereDate('sales.created_at','<=', $end_date)
-                                ->select('product_sales.sale_unit_id', 'product_sales.qty')
-                                ->get();
+                        ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')->where([
+                            ['product_sales.product_id', $product->id],
+                            ['sales.warehouse_id', $warehouse_id]
+                        ])->whereDate('sales.created_at', '>=', $start_date)
+                        ->whereDate('sales.created_at', '<=', $end_date)
+                        ->select('product_sales.sale_unit_id', 'product_sales.qty')
+                        ->get();
 
                     $sold_qty = 0;
-                    if(count($lims_product_sale_data)) {
+                    if (count($lims_product_sale_data)) {
                         foreach ($lims_product_sale_data as $product_sale) {
-                            if($product_sale->sale_unit_id) {
+                            if ($product_sale->sale_unit_id) {
                                 $unit = DB::table('units')->find($product_sale->sale_unit_id);
-                                if($unit->operator == '*'){
+                                if ($unit->operator == '*') {
                                     $sold_qty += $product_sale->qty * $unit->operation_value;
-                                }
-                                elseif($unit->operator == '/'){
+                                } elseif ($unit->operator == '/') {
                                     $sold_qty += $product_sale->qty / $unit->operation_value;
                                 }
                             }
@@ -2114,7 +2568,7 @@ class ReportController extends Controller
                         ['product_id', $product->id],
                         ['warehouse_id', $warehouse_id]
                     ])->select('qty')->first();
-                    if($product_warehouse)
+                    if ($product_warehouse)
                         $nestedData['in_stock'] = $product_warehouse->qty;
                     else
                         $nestedData['in_stock'] = 0;
@@ -2134,15 +2588,397 @@ class ReportController extends Controller
 
         echo json_encode($json_data);
     }
+
+
+    public function saleCurrencyReportData(Request $request)
+    {
+        $start_date = $request->input('start_date');
+        $end_date = $request->input('end_date');
+
+        $draw = intval($request->input('draw', 0));
+        $start = intval($request->input('start', 0));
+        $length = intval($request->input('length', 10));
+        $searchValue = trim($request->input('search.value', ''));
+
+        // currency map id => code
+        $currencyMap = \App\Models\Currency::pluck('code', 'id')->toArray();
+
+        // date filter
+        $dateWhere = '';
+        $bindings = [];
+        if ($start_date && $end_date) {
+            $dateWhere = "WHERE DATE(s.created_at) >= ? AND DATE(s.created_at) <= ?";
+            $bindings[] = $start_date;
+            $bindings[] = $end_date;
+        }
+
+        // 1) payments aggregated per sale
+        $pgsSub = "(
+        SELECT
+            sale_id,
+            COALESCE(SUM(amount),0) AS payments_base,
+            COALESCE(SUM(converted_amount),0) AS payments_local,
+            AVG(COALESCE(NULLIF(exchange_rate, 0), 0)) AS avg_payment_rate
+        FROM payments
+        GROUP BY sale_id
+   		 ) pgs";
+
+        // 2) product_sales aggregated per sale
+        $psSub = "(
+        SELECT
+            sale_id,
+            SUM(CAST(JSON_UNQUOTE(JSON_EXTRACT(detailed_currency_data, '$.converted_amount')) AS DECIMAL(30,2))) AS invoice_local,
+            CAST(JSON_UNQUOTE(JSON_EXTRACT(detailed_currency_data, '$.selected_currency')) AS UNSIGNED) AS selected_currency
+        FROM product_sales
+        WHERE JSON_EXTRACT(detailed_currency_data, '$.selected_currency') IS NOT NULL
+        GROUP BY sale_id
+    	) ps";
+
+        // 3) totals by base currency
+        $totalsSql = "
+        SELECT
+            s.currency_id AS base_currency_id,
+            SUM(s.grand_total) AS total_sales_base,
+            SUM(COALESCE(pgs.payments_base,0)) AS total_payments_base,
+            SUM(COALESCE(pgs.payments_local,0)) AS total_payments_local,
+            SUM(COALESCE(s.grand_total,0) - COALESCE(s.paid_amount,0)) AS total_due
+        FROM sales s
+        LEFT JOIN {$pgsSub} ON pgs.sale_id = s.id
+        {$dateWhere}
+        GROUP BY s.currency_id
+    	";
+        $totals = DB::select($totalsSql, $bindings);
+
+        $totalsMap = [];
+        foreach ($totals as $t) {
+            $baseId = intval($t->base_currency_id);
+            $totalsMap[$baseId] = [
+                'base_currency_id' => $baseId,
+                'total_sales_base' => floatval($t->total_sales_base),
+                'total_payments_base' => floatval($t->total_payments_base),
+                'total_payments_local' => floatval($t->total_payments_local),
+                'total_due' => floatval($t->total_due),
+            ];
+        }
+
+        // 4) invoice aggregates (corrected: sum all product converted amounts)
+        $invoiceSql = "
+        SELECT
+            s.currency_id AS base_currency_id,
+            GROUP_CONCAT(DISTINCT CAST(ps.selected_currency AS CHAR) ORDER BY ps.selected_currency ASC SEPARATOR ',') AS invoice_currency_ids,
+            SUM(ps.invoice_local) AS total_invoice_amount
+        FROM sales s
+        JOIN {$psSub} ON ps.sale_id = s.id
+        {$dateWhere}
+        GROUP BY s.currency_id
+    	";
+        $invoiceRows = DB::select($invoiceSql, $bindings);
+        $invoiceMap = [];
+        foreach ($invoiceRows as $ir) {
+            $baseId = intval($ir->base_currency_id);
+            $invoiceMap[$baseId] = [
+                'invoice_currency_ids' => $ir->invoice_currency_ids ?: '',
+                'total_invoice_amount' => floatval($ir->total_invoice_amount),
+            ];
+        }
+
+        // All base currencies involved
+        $allBaseIds = array_unique(array_merge(array_keys($totalsMap), array_keys($invoiceMap)));
+        sort($allBaseIds);
+
+        // Search filter
+        if ($searchValue !== '') {
+            $filtered = [];
+            $svLower = strtolower($searchValue);
+            foreach ($allBaseIds as $bid) {
+                $baseCode = strtolower($currencyMap[$bid] ?? (string)$bid);
+                $match = strpos($baseCode, $svLower) !== false;
+
+                if (!$match && isset($invoiceMap[$bid])) {
+                    $ids = explode(',', $invoiceMap[$bid]['invoice_currency_ids']);
+                    foreach ($ids as $id) {
+                        $c = strtolower($currencyMap[intval($id)] ?? (string)$id);
+                        if (strpos($c, $svLower) !== false) {
+                            $match = true;
+                            break;
+                        }
+                    }
+                }
+                if ($match) $filtered[] = $bid;
+            }
+            $allBaseIds = $filtered;
+        }
+
+        $recordsTotal = count($allBaseIds);
+        $recordsFiltered = $recordsTotal;
+
+        // Sort alphabetically by currency code
+        usort($allBaseIds, fn($a, $b) => strcmp($currencyMap[$a] ?? $a, $currencyMap[$b] ?? $b));
+
+        $pagedBaseIds = array_slice($allBaseIds, $start, $length);
+
+        // Final rows
+        $rows = [];
+        $sn = $start + 1;
+        $grandTotals = [
+            'total_sales_base' => 0.0,
+            'total_invoice_amount' => 0.0,
+            'total_payments_base' => 0.0,
+            'total_payments_local' => 0.0,
+            'total_due' => 0.0,
+            'gain_loss' => 0.0
+        ];
+
+        foreach ($pagedBaseIds as $baseId) {
+            $t = $totalsMap[$baseId] ?? ['total_sales_base' => 0, 'total_payments_base' => 0, 'total_payments_local' => 0, 'total_due' => 0];
+            $inv = $invoiceMap[$baseId] ?? ['invoice_currency_ids' => '', 'total_invoice_amount' => 0];
+
+            $total_sales_base = $t['total_sales_base'];
+            $total_invoice_amount = $inv['total_invoice_amount'];
+            $total_payments_base = $t['total_payments_base'];
+            $total_payments_local = $t['total_payments_local'];
+            $total_due = $t['total_due'];
+
+            $avg_sales_exchange_rate = $total_sales_base ? ($total_invoice_amount / $total_sales_base) : null;
+            $avg_payment_exchange_rate = $total_payments_base ? ($total_payments_local / $total_payments_base) : null;
+
+            // Display invoice currency codes (INR / USD etc.)
+            $invoice_currency_display = '';
+            if ($inv['invoice_currency_ids']) {
+                $ids = array_unique(explode(',', $inv['invoice_currency_ids']));
+                $invoice_currency_display = implode(' / ', array_map(fn($id) => $currencyMap[intval($id)] ?? $id, $ids));
+            }
+
+            // ✅ Correct Gain/Loss: payments - invoices
+            $gain_loss = $total_payments_local - $total_invoice_amount;
+            $rounded_gain = round($gain_loss, 2);
+            $gain_loss_html =
+                $rounded_gain > 0 ? '<span class="text-success">+' . number_format($rounded_gain, 2) . '</span>' : ($rounded_gain < 0 ? '<span class="text-danger">-' . number_format(abs($rounded_gain), 2) . '</span>' :
+                    '<span class="text-muted">0.00</span>');
+
+            $rows[] = [
+                'sn' => $sn++,
+                'base_currency' => $currencyMap[$baseId] ?? (string)$baseId,
+                'total_sales_base' => number_format($total_sales_base, 2),
+                'invoice_currency' => $invoice_currency_display,
+                'total_invoice_amount' => number_format($total_invoice_amount, 2),
+                'avg_sales_exchange_rate' => $avg_sales_exchange_rate ? number_format($avg_sales_exchange_rate, 4) : '',
+                'total_payments_base' => number_format($total_payments_base, 2),
+                'total_payments_local' => number_format($total_payments_local, 2),
+                'avg_payment_exchange_rate' => $avg_payment_exchange_rate ? number_format($avg_payment_exchange_rate, 4) : '',
+                'total_due' => number_format($total_due, 2),
+                'gain_loss_numeric' => $rounded_gain,
+                'gain_loss_html' => $gain_loss_html,
+            ];
+
+            // accumulate totals
+            $grandTotals['total_sales_base'] += $total_sales_base;
+            $grandTotals['total_invoice_amount'] += $total_invoice_amount;
+            $grandTotals['total_payments_base'] += $total_payments_base;
+            $grandTotals['total_payments_local'] += $total_payments_local;
+            $grandTotals['total_due'] += $total_due;
+            $grandTotals['gain_loss'] += $gain_loss;
+        }
+
+        // Summary row
+        $summary = [
+            'total_sales_base' => number_format($grandTotals['total_sales_base'], 2),
+            'total_invoice_amount' => number_format($grandTotals['total_invoice_amount'], 2),
+            'total_payments_base' => number_format($grandTotals['total_payments_base'], 2),
+            'total_payments_local' => number_format($grandTotals['total_payments_local'], 2),
+            'total_due' => number_format($grandTotals['total_due'], 2),
+            'gain_loss' => number_format($grandTotals['gain_loss'], 2),
+        ];
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'summary' => $summary,
+            'data' => $rows
+        ]);
+    }
+
+
+    public function saleCustomerReportData(Request $request)
+    {
+        $start_date = $request->input('start_date');
+        $end_date = $request->input('end_date');
+
+        $draw = intval($request->input('draw', 0));
+        $start = intval($request->input('start', 0));
+        $length = intval($request->input('length', 10));
+        $searchValue = trim($request->input('search.value', ''));
+
+        // currency map id => code
+        $currencyMap = \App\Models\Currency::pluck('code', 'id')->toArray();
+
+        // date filter
+        $dateWhere = '';
+        $bindings = [];
+        if ($start_date && $end_date) {
+            $dateWhere = "WHERE DATE(s.created_at) >= ? AND DATE(s.created_at) <= ?";
+            $bindings[] = $start_date;
+            $bindings[] = $end_date;
+        }
+
+        // payments aggregated per sale
+        $pgsSub = "(
+        SELECT
+            sale_id,
+            COALESCE(SUM(amount),0) AS payments_base,
+            COALESCE(SUM(converted_amount),0) AS payments_local
+        FROM payments
+        GROUP BY sale_id
+    ) pgs";
+
+        // product_sales aggregated per sale
+        $psSub = "(
+        SELECT
+            sale_id,
+            SUM(CAST(JSON_UNQUOTE(JSON_EXTRACT(detailed_currency_data, '$.converted_amount')) AS DECIMAL(30,2))) AS invoice_local,
+            CAST(JSON_UNQUOTE(JSON_EXTRACT(detailed_currency_data, '$.selected_currency')) AS UNSIGNED) AS selected_currency
+        FROM product_sales
+        WHERE JSON_EXTRACT(detailed_currency_data, '$.selected_currency') IS NOT NULL
+        GROUP BY sale_id
+    ) ps";
+
+        // main aggregated data grouped by customer
+        $sql = "
+        SELECT
+            c.id AS customer_id,
+            IFNULL(c.company_name, c.name) AS customer_name,
+            s.currency_id AS base_currency_id,
+            COALESCE(SUM(s.grand_total),0) AS total_sales_base,
+            COALESCE(SUM(pgs.payments_base),0) AS total_payments_base,
+            COALESCE(SUM(pgs.payments_local),0) AS total_payments_local,
+            COALESCE(SUM(s.grand_total - s.paid_amount),0) AS total_due,
+            GROUP_CONCAT(DISTINCT CAST(ps.selected_currency AS CHAR) ORDER BY ps.selected_currency ASC SEPARATOR ',') AS invoice_currency_ids,
+            COALESCE(SUM(ps.invoice_local),0) AS total_invoice_amount
+        FROM sales s
+        JOIN customers c ON c.id = s.customer_id
+        LEFT JOIN {$pgsSub} ON pgs.sale_id = s.id
+        LEFT JOIN {$psSub} ON ps.sale_id = s.id
+        {$dateWhere}
+        GROUP BY c.id, s.currency_id
+    ";
+
+        $rowsRaw = DB::select($sql, $bindings);
+
+        // convert to grouped by customer with multi-currency rows
+        $grouped = [];
+        foreach ($rowsRaw as $r) {
+            $cid = $r->customer_id;
+            if (!isset($grouped[$cid])) {
+                $grouped[$cid] = [
+                    'customer_name' => $r->customer_name,
+                    'rows' => []
+                ];
+            }
+            $grouped[$cid]['rows'][] = $r;
+        }
+
+        // flatten for datatable
+        $flat = [];
+        foreach ($grouped as $cg) {
+            foreach ($cg['rows'] as $r) {
+                $flat[] = $r;
+            }
+        }
+
+        // search by customer name
+        if ($searchValue !== '') {
+            $svLower = strtolower($searchValue);
+            $flat = array_filter($flat, function ($r) use ($svLower) {
+                return strpos(strtolower($r->customer_name), $svLower) !== false;
+            });
+        }
+
+        $recordsTotal = count($flat);
+        $recordsFiltered = $recordsTotal;
+
+        // sort by customer asc
+        usort($flat, fn($a, $b) => strcmp($a->customer_name, $b->customer_name));
+
+        // paginate
+        $paged = array_slice($flat, $start, $length);
+
+        $data = [];
+        $sn = $start + 1;
+
+        // grand totals for footer
+        $grand = [
+            'total_sales_base' => 0,
+            'total_invoice_amount' => 0,
+            'total_payments_base' => 0,
+            'total_payments_local' => 0,
+            'total_due' => 0,
+            'gain_loss' => 0
+        ];
+
+        foreach ($paged as $r) {
+            $invoice_currency_display = '';
+            if ($r->invoice_currency_ids) {
+                $ids = array_unique(explode(',', $r->invoice_currency_ids));
+                $invoice_currency_display = implode(' / ', array_map(fn($id) => $currencyMap[intval($id)] ?? $id, $ids));
+            }
+
+            $gain_loss = $r->total_payments_local - $r->total_invoice_amount;
+            $rounded_gain = round($gain_loss, 2);
+            $gain_loss_html =
+                $rounded_gain > 0 ? '<span class="text-success">+' . number_format($rounded_gain, 2) . '</span>' : ($rounded_gain < 0 ? '<span class="text-danger">-' . number_format(abs($rounded_gain), 2) . '</span>' :
+                    '<span class="text-muted">0.00</span>');
+
+            $data[] = [
+                'sn' => $sn++,
+                'customer_name' => $r->customer_name,
+                'base_currency' => $currencyMap[$r->base_currency_id] ?? $r->base_currency_id,
+                'invoice_currency' => $invoice_currency_display,
+                'total_sales_base' => number_format($r->total_sales_base, 2),
+                'total_invoice_amount' => number_format($r->total_invoice_amount, 2),
+                'total_payments_base' => number_format($r->total_payments_base, 2),
+                'total_payments_local' => number_format($r->total_payments_local, 2),
+                'total_due' => number_format($r->total_due, 2),
+                'gain_loss_numeric' => $rounded_gain,
+                'gain_loss_html' => $gain_loss_html,
+            ];
+
+            // accumulate
+            $grand['total_sales_base'] += $r->total_sales_base;
+            $grand['total_invoice_amount'] += $r->total_invoice_amount;
+            $grand['total_payments_base'] += $r->total_payments_base;
+            $grand['total_payments_local'] += $r->total_payments_local;
+            $grand['total_due'] += $r->total_due;
+            $grand['gain_loss'] += $gain_loss;
+        }
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'summary' => [
+                'total_sales_base' => number_format($grand['total_sales_base'], 2),
+                'total_invoice_amount' => number_format($grand['total_invoice_amount'], 2),
+                'total_payments_base' => number_format($grand['total_payments_base'], 2),
+                'total_payments_local' => number_format($grand['total_payments_local'], 2),
+                'total_due' => number_format($grand['total_due'], 2),
+                'gain_loss' => number_format($grand['gain_loss'], 2),
+            ],
+            'data' => $data
+        ]);
+    }
+
+
+
+
     public function challanReport(Request $request)
     {
-        if($request->input('starting_date')) {
+        if ($request->input('starting_date')) {
             $starting_date = $request->input('starting_date');
             $ending_date = $request->input('ending_date');
             $based_on = $request->input('based_on');
-        }
-        else {
-            $starting_date = date("Y-m-"."01");
+        } else {
+            $starting_date = date("Y-m-" . "01");
             $ending_date = date("Y-m-d");
             $based_on = 'created_at';
         }
@@ -2157,13 +2993,12 @@ class ReportController extends Controller
         $end_date = strtotime($request->end_date);
         $warehouse_id = $request->warehouse_id;
         $time_period = $request->time_period;
-        if($time_period == 'monthly') {
-            for($i = strtotime($start_date); $i <= $end_date; $i = strtotime('+1 month', $i)) {
+        if ($time_period == 'monthly') {
+            for ($i = strtotime($start_date); $i <= $end_date; $i = strtotime('+1 month', $i)) {
                 $date_points[] = date('Y-m-d', $i);
             }
-        }
-        else {
-            for($i = strtotime('Saturday', strtotime($start_date)); $i <= $end_date; $i = strtotime('+1 week', $i)) {
+        } else {
+            for ($i = strtotime('Saturday', strtotime($start_date)); $i <= $end_date; $i = strtotime('+1 week', $i)) {
                 $date_points[] = date('Y-m-d', $i);
             }
         }
@@ -2174,9 +3009,9 @@ class ReportController extends Controller
                 ->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')
                 ->whereDate('sales.created_at', '>=', $start_date)
                 ->whereDate('sales.created_at', '<', $date_point);
-            if($warehouse_id)
+            if ($warehouse_id)
                 $qty = $q->where('sales.warehouse_id', $warehouse_id);
-            if(isset($request->product_list)) {
+            if (isset($request->product_list)) {
                 $product_ids = Product::whereIn('code', explode(",", trim($request->product_list)))->pluck('id')->toArray();
                 $q->whereIn('product_sales.product_id', $product_ids);
             }
@@ -2196,24 +3031,23 @@ class ReportController extends Controller
         $start_date = $data['start_date'];
         $end_date = $data['end_date'];
 
-        $lims_payment_data = Payment::whereDate('created_at', '>=' , $start_date)->whereDate('created_at', '<=' , $end_date)->get();
-        return view('backend.report.payment_report',compact('lims_payment_data', 'start_date', 'end_date'));
+        $lims_payment_data = Payment::whereDate('created_at', '>=', $start_date)->whereDate('created_at', '<=', $end_date)->get();
+        return view('backend.report.payment_report', compact('lims_payment_data', 'start_date', 'end_date'));
     }
 
     public function warehouseReport(Request $request)
     {
         $warehouse_id = $request->input('warehouse_id');
 
-        if($request->input('start_date')) {
+        if ($request->input('start_date')) {
             $start_date = $request->input('start_date');
             $end_date = $request->input('end_date');
-        }
-        else {
-            $start_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 year', strtotime(date('Y-m-d') )))));
+        } else {
+            $start_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 year', strtotime(date('Y-m-d'))))));
             $end_date = date("Y-m-d");
         }
         $lims_warehouse_list = Warehouse::where('is_active', true)->get();
-        return view('backend.report.warehouse_report',compact('start_date', 'end_date', 'warehouse_id', 'lims_warehouse_list'));
+        return view('backend.report.warehouse_report', compact('start_date', 'end_date', 'warehouse_id', 'lims_warehouse_list'));
     }
 
     public function warehouseSaleData(Request $request)
@@ -2227,95 +3061,87 @@ class ReportController extends Controller
         $q = DB::table('sales')
             ->join('customers', 'sales.customer_id', '=', 'customers.id')
             ->where('sales.warehouse_id', $warehouse_id)
-            ->whereDate('sales.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('sales.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('sales.created_at', '>=', $request->input('start_date'))
+            ->whereDate('sales.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'sales.'.$columns[$request->input('order.0.column')];
+        $order = 'sales.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('sales.id', 'sales.reference_no', 'sales.grand_total', 'sales.paid_amount', 'sales.sale_status', 'sales.created_at', 'customers.name as customer')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $sales = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('sales.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('sales.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $sales =  $q->orwhere([
-                                ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['sales.created_at', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['sales.created_at', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $sales =  $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($sales))
-        {
-            foreach ($sales as $key => $sale)
-            {
+        if (!empty($sales)) {
+            foreach ($sales as $key => $sale) {
                 $nestedData['id'] = $sale->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
                 $nestedData['reference_no'] = $sale->reference_no;
                 $nestedData['customer'] = $sale->customer;
                 $product_sale_data = DB::table('sales')->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')
-                                    ->join('products', 'product_sales.product_id', '=', 'products.id')
-                                    ->where('sales.id', $sale->id)
-                                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_sales.product_id', '=', 'products.id')
+                    ->where('sales.id', $sale->id)
+                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
+                    ->get();
                 foreach ($product_sale_data as $index => $product_sale) {
-                    if($product_sale->sale_unit_id) {
+                    if ($product_sale->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_sale->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
                 $nestedData['paid'] = number_format($sale->paid_amount, cache()->get('general_setting')->decimal);
                 $nestedData['due'] = number_format($sale->grand_total - $sale->paid_amount, cache()->get('general_setting')->decimal);
-                if($sale->sale_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
+                if ($sale->sale_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
                     $sale_status = trans('file.Completed');
-                }
-                elseif($sale->sale_status == 2){
-                    $nestedData['sale_status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
+                } elseif ($sale->sale_status == 2) {
+                    $nestedData['sale_status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
                     $sale_status = trans('file.Pending');
-                }
-                else{
-                    $nestedData['sale_status'] = '<div class="badge badge-warning">'.trans('file.Draft').'</div>';
+                } else {
+                    $nestedData['sale_status'] = '<div class="badge badge-warning">' . trans('file.Draft') . '</div>';
                     $sale_status = trans('file.Draft');
                 }
                 $data[] = $nestedData;
@@ -2341,100 +3167,91 @@ class ReportController extends Controller
         $q = DB::table('purchases')
             //->join('suppliers', 'purchases.supplier_id', '=', 'suppliers.id')
             ->where('purchases.warehouse_id', $warehouse_id)
-            ->whereDate('purchases.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('purchases.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('purchases.created_at', '>=', $request->input('start_date'))
+            ->whereDate('purchases.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'purchases.'.$columns[$request->input('order.0.column')];
+        $order = 'purchases.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('purchases.id', 'purchases.reference_no', 'purchases.supplier_id', 'purchases.grand_total', 'purchases.paid_amount', 'purchases.status', 'purchases.created_at')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $purchases = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('purchases.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('purchases.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $purchases =  $q->orwhere([
-                                ['purchases.reference_no', 'LIKE', "%{$search}%"],
-                                ['purchases.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['purchases.created_at', 'LIKE', "%{$search}%"],
-                                ['purchases.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
+                    ['purchases.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['purchases.created_at', 'LIKE', "%{$search}%"],
+                        ['purchases.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
-                                    ['purchases.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['purchases.created_at', 'LIKE', "%{$search}%"],
-                                    ['purchases.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
+                    ['purchases.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['purchases.created_at', 'LIKE', "%{$search}%"],
+                        ['purchases.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $purchases =  $q->orwhere('purchases.created_at', 'LIKE', "%{$search}%")->orwhere('purchases.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('purchases.created_at', 'LIKE', "%{$search}%")->orwhere('purchases.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($purchases))
-        {
-            foreach ($purchases as $key => $purchase)
-            {
+        if (!empty($purchases)) {
+            foreach ($purchases as $key => $purchase) {
                 $nestedData['id'] = $purchase->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($purchase->created_at));
                 $nestedData['reference_no'] = $purchase->reference_no;
-                if($purchase->supplier_id) {
-                    $supplier = DB::table('suppliers')->select('name')->where('id',$purchase->supplier_id)->first();
+                if ($purchase->supplier_id) {
+                    $supplier = DB::table('suppliers')->select('name')->where('id', $purchase->supplier_id)->first();
                     $nestedData['supplier'] = $supplier->name;
-                }
-                else
+                } else
                     $nestedData['supplier'] = 'N/A';
                 $product_purchase_data = DB::table('purchases')->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')
-                                    ->join('products', 'product_purchases.product_id', '=', 'products.id')
-                                    ->where('purchases.id', $purchase->id)
-                                    ->select('products.name as product_name', 'product_purchases.qty', 'product_purchases.purchase_unit_id')
-                                    ->get();
+                    ->join('products', 'product_purchases.product_id', '=', 'products.id')
+                    ->where('purchases.id', $purchase->id)
+                    ->select('products.name as product_name', 'product_purchases.qty', 'product_purchases.purchase_unit_id')
+                    ->get();
                 foreach ($product_purchase_data as $index => $product_purchase) {
-                    if($product_purchase->purchase_unit_id) {
+                    if ($product_purchase->purchase_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_purchase->purchase_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_purchase->product_name.' ('.number_format($product_purchase->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_purchase->product_name . ' (' . number_format($product_purchase->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_purchase->product_name.' ('.number_format($product_purchase->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_purchase->product_name . ' (' . number_format($product_purchase->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($purchase->grand_total, cache()->get('general_setting')->decimal);
                 $nestedData['paid'] = number_format($purchase->paid_amount, cache()->get('general_setting')->decimal);
                 $nestedData['balance'] = number_format($purchase->grand_total - $purchase->paid_amount, cache()->get('general_setting')->decimal);
-                if($purchase->status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
+                if ($purchase->status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
                     $status = trans('file.Completed');
-                }
-                elseif($purchase->status == 2){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
+                } elseif ($purchase->status == 2) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
                     $status = trans('file.Pending');
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-warning">'.trans('file.Draft').'</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-warning">' . trans('file.Draft') . '</div>';
                     $status = trans('file.Draft');
                 }
                 $data[] = $nestedData;
@@ -2462,93 +3279,85 @@ class ReportController extends Controller
             ->leftJoin('suppliers', 'quotations.supplier_id', '=', 'suppliers.id')
             ->join('warehouses', 'quotations.warehouse_id', '=', 'warehouses.id')
             ->where('quotations.warehouse_id', $warehouse_id)
-            ->whereDate('quotations.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('quotations.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('quotations.created_at', '>=', $request->input('start_date'))
+            ->whereDate('quotations.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'quotations.'.$columns[$request->input('order.0.column')];
+        $order = 'quotations.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('quotations.id', 'quotations.reference_no', 'quotations.supplier_id', 'quotations.grand_total', 'quotations.quotation_status', 'quotations.created_at', 'suppliers.name as supplier_name', 'customers.name as customer_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $quotations = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('quotations.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('quotations.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $quotations =  $q->orwhere([
-                                ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $quotations =  $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($quotations))
-        {
-            foreach ($quotations as $key => $quotation)
-            {
+        if (!empty($quotations)) {
+            foreach ($quotations as $key => $quotation) {
                 $nestedData['id'] = $quotation->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($quotation->created_at));
                 $nestedData['reference_no'] = $quotation->reference_no;
                 $nestedData['customer'] = $quotation->customer_name;
-                if($quotation->supplier_id) {
+                if ($quotation->supplier_id) {
                     $nestedData['supplier'] = $quotation->supplier_name;
-                }
-                else
+                } else
                     $nestedData['supplier'] = 'N/A';
                 $product_quotation_data = DB::table('quotations')->join('product_quotation', 'quotations.id', '=', 'product_quotation.quotation_id')
-                                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
-                                    ->where('quotations.id', $quotation->id)
-                                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
+                    ->where('quotations.id', $quotation->id)
+                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
+                    ->get();
                 foreach ($product_quotation_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($quotation->grand_total, cache()->get('general_setting')->decimal);
-                if($quotation->quotation_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Sent').'</div>';
+                if ($quotation->quotation_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Sent') . '</div>';
                 }
                 $data[] = $nestedData;
             }
@@ -2574,60 +3383,55 @@ class ReportController extends Controller
             ->join('customers', 'returns.customer_id', '=', 'customers.id')
             ->leftJoin('billers', 'returns.biller_id', '=', 'billers.id')
             ->where('returns.warehouse_id', $warehouse_id)
-            ->whereDate('returns.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('returns.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('returns.created_at', '>=', $request->input('start_date'))
+            ->whereDate('returns.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'returns.'.$columns[$request->input('order.0.column')];
+        $order = 'returns.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('returns.id', 'returns.reference_no', 'returns.grand_total', 'returns.created_at', 'customers.name as customer_name', 'billers.name as biller_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $returns = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('returns.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('returns.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $returns =  $q->orwhere([
-                                ['returns.reference_no', 'LIKE', "%{$search}%"],
-                                ['returns.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['returns.created_at', 'LIKE', "%{$search}%"],
-                                ['returns.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['returns.reference_no', 'LIKE', "%{$search}%"],
+                    ['returns.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['returns.created_at', 'LIKE', "%{$search}%"],
+                        ['returns.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['returns.reference_no', 'LIKE', "%{$search}%"],
-                                    ['returns.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['returns.created_at', 'LIKE', "%{$search}%"],
-                                    ['returns.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['returns.reference_no', 'LIKE', "%{$search}%"],
+                    ['returns.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['returns.created_at', 'LIKE', "%{$search}%"],
+                        ['returns.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $returns =  $q->orwhere('returns.created_at', 'LIKE', "%{$search}%")->orwhere('returns.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('returns.created_at', 'LIKE', "%{$search}%")->orwhere('returns.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($returns))
-        {
-            foreach ($returns as $key => $sale)
-            {
+        if (!empty($returns)) {
+            foreach ($returns as $key => $sale) {
                 $nestedData['id'] = $sale->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
@@ -2635,21 +3439,20 @@ class ReportController extends Controller
                 $nestedData['customer'] = $sale->customer_name;
                 $nestedData['biller'] = $sale->biller_name;
                 $product_return_data = DB::table('returns')->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
-                                    ->join('products', 'product_returns.product_id', '=', 'products.id')
-                                    ->where('returns.id', $sale->id)
-                                    ->select('products.name as product_name', 'product_returns.qty', 'product_returns.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_returns.product_id', '=', 'products.id')
+                    ->where('returns.id', $sale->id)
+                    ->select('products.name as product_name', 'product_returns.qty', 'product_returns.sale_unit_id')
+                    ->get();
                 foreach ($product_return_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
                 $data[] = $nestedData;
@@ -2675,60 +3478,55 @@ class ReportController extends Controller
         $q = DB::table('expenses')
             ->join('expense_categories', 'expenses.expense_category_id', '=', 'expense_categories.id')
             ->where('expenses.warehouse_id', $warehouse_id)
-            ->whereDate('expenses.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('expenses.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('expenses.created_at', '>=', $request->input('start_date'))
+            ->whereDate('expenses.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'expenses.'.$columns[$request->input('order.0.column')];
+        $order = 'expenses.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('expenses.id', 'expenses.reference_no', 'expenses.amount', 'expenses.created_at', 'expenses.note', 'expense_categories.name as category')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $expenses = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('expenses.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('expenses.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $expenses =  $q->orwhere([
-                                ['expenses.reference_no', 'LIKE', "%{$search}%"],
-                                ['expenses.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['expenses.created_at', 'LIKE', "%{$search}%"],
-                                ['expenses.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['expenses.reference_no', 'LIKE', "%{$search}%"],
+                    ['expenses.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['expenses.created_at', 'LIKE', "%{$search}%"],
+                        ['expenses.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['expenses.reference_no', 'LIKE', "%{$search}%"],
-                                    ['expenses.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['expenses.created_at', 'LIKE', "%{$search}%"],
-                                    ['expenses.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['expenses.reference_no', 'LIKE', "%{$search}%"],
+                    ['expenses.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['expenses.created_at', 'LIKE', "%{$search}%"],
+                        ['expenses.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $expenses =  $q->orwhere('expenses.created_at', 'LIKE', "%{$search}%")->orwhere('expenses.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('expenses.created_at', 'LIKE', "%{$search}%")->orwhere('expenses.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($expenses))
-        {
-            foreach ($expenses as $key => $expense)
-            {
+        if (!empty($expenses)) {
+            foreach ($expenses as $key => $expense) {
                 $nestedData['id'] = $expense->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($expense->created_at));
@@ -2781,60 +3579,55 @@ class ReportController extends Controller
             ->join('customers', 'sales.customer_id', '=', 'customers.id')
             ->join('warehouses', 'sales.warehouse_id', '=', 'warehouses.id')
             ->where('sales.biller_id', $biller_id)
-            ->whereDate('sales.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('sales.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('sales.created_at', '>=', $request->input('start_date'))
+            ->whereDate('sales.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'sales.'.$columns[$request->input('order.0.column')];
+        $order = 'sales.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('sales.id', 'sales.reference_no', 'sales.grand_total', 'sales.paid_amount', 'sales.sale_status', 'sales.created_at', 'customers.name as customer', 'warehouses.name as warehouse')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $sales = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('sales.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('sales.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $sales =  $q->orwhere([
-                                ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['sales.created_at', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['sales.created_at', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $sales =  $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($sales))
-        {
-            foreach ($sales as $key => $sale)
-            {
+        if (!empty($sales)) {
+            foreach ($sales as $key => $sale) {
                 $nestedData['id'] = $sale->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
@@ -2842,35 +3635,32 @@ class ReportController extends Controller
                 $nestedData['customer'] = $sale->customer;
                 $nestedData['warehouse'] = $sale->warehouse;
                 $product_sale_data = DB::table('sales')->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')
-                                    ->join('products', 'product_sales.product_id', '=', 'products.id')
-                                    ->where('sales.id', $sale->id)
-                                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_sales.product_id', '=', 'products.id')
+                    ->where('sales.id', $sale->id)
+                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
+                    ->get();
                 foreach ($product_sale_data as $index => $product_sale) {
-                    if($product_sale->sale_unit_id) {
+                    if ($product_sale->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_sale->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
                 $nestedData['paid'] = number_format($sale->paid_amount, cache()->get('general_setting')->decimal);
                 $nestedData['due'] = number_format($sale->grand_total - $sale->paid_amount, cache()->get('general_setting')->decimal);
-                if($sale->sale_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
+                if ($sale->sale_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
                     $sale_status = trans('file.Completed');
-                }
-                elseif($sale->sale_status == 2){
-                    $nestedData['sale_status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
+                } elseif ($sale->sale_status == 2) {
+                    $nestedData['sale_status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
                     $sale_status = trans('file.Pending');
-                }
-                else{
-                    $nestedData['sale_status'] = '<div class="badge badge-warning">'.trans('file.Draft').'</div>';
+                } else {
+                    $nestedData['sale_status'] = '<div class="badge badge-warning">' . trans('file.Draft') . '</div>';
                     $sale_status = trans('file.Draft');
                 }
                 $data[] = $nestedData;
@@ -2897,60 +3687,55 @@ class ReportController extends Controller
             ->join('customers', 'quotations.customer_id', '=', 'customers.id')
             ->join('warehouses', 'quotations.warehouse_id', '=', 'warehouses.id')
             ->where('quotations.biller_id', $biller_id)
-            ->whereDate('quotations.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('quotations.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('quotations.created_at', '>=', $request->input('start_date'))
+            ->whereDate('quotations.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'quotations.'.$columns[$request->input('order.0.column')];
+        $order = 'quotations.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('quotations.id', 'quotations.reference_no', 'quotations.grand_total', 'quotations.quotation_status', 'quotations.created_at', 'warehouses.name as warehouse_name', 'customers.name as customer_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $quotations = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('quotations.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('quotations.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $quotations =  $q->orwhere([
-                                ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $quotations =  $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($quotations))
-        {
-            foreach ($quotations as $key => $quotation)
-            {
+        if (!empty($quotations)) {
+            foreach ($quotations as $key => $quotation) {
                 $nestedData['id'] = $quotation->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($quotation->created_at));
@@ -2958,28 +3743,26 @@ class ReportController extends Controller
                 $nestedData['customer'] = $quotation->customer_name;
                 $nestedData['warehouse'] = $quotation->warehouse_name;
                 $product_quotation_data = DB::table('quotations')->join('product_quotation', 'quotations.id', '=', 'product_quotation.quotation_id')
-                                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
-                                    ->where('quotations.id', $quotation->id)
-                                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
+                    ->where('quotations.id', $quotation->id)
+                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
+                    ->get();
                 foreach ($product_quotation_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($quotation->grand_total, cache()->get('general_setting')->decimal);
-                if($quotation->quotation_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Sent').'</div>';
+                if ($quotation->quotation_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Sent') . '</div>';
                 }
                 $data[] = $nestedData;
             }
@@ -3002,62 +3785,57 @@ class ReportController extends Controller
 
         $biller_id = $request->input('biller_id');
         $q = DB::table('payments')
-           ->join('sales', 'payments.sale_id', '=', 'sales.id')
-           ->where('sales.biller_Id',$biller_id)
-           ->whereDate('payments.created_at', '>=' , $request->input('start_date'))
-           ->whereDate('payments.created_at', '<=' , $request->input('end_date'));
+            ->join('sales', 'payments.sale_id', '=', 'sales.id')
+            ->where('sales.biller_Id', $biller_id)
+            ->whereDate('payments.created_at', '>=', $request->input('start_date'))
+            ->whereDate('payments.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'payments.'.$columns[$request->input('order.0.column')];
+        $order = 'payments.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('payments.*')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $payments = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('payments.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('payments.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $payments =  $q->orwhere([
-                                ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['payments.created_at', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['payments.created_at', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $payments =  $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($payments))
-        {
-            foreach ($payments as $key => $payment)
-            {
+        if (!empty($payments)) {
+            foreach ($payments as $key => $payment) {
                 $nestedData['id'] = $payment->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($payment->created_at));
@@ -3088,60 +3866,55 @@ class ReportController extends Controller
             ->join('customers', 'sales.customer_id', '=', 'customers.id')
             ->join('warehouses', 'sales.warehouse_id', '=', 'warehouses.id')
             ->where('sales.user_id', $user_id)
-            ->whereDate('sales.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('sales.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('sales.created_at', '>=', $request->input('start_date'))
+            ->whereDate('sales.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'sales.'.$columns[$request->input('order.0.column')];
+        $order = 'sales.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('sales.id', 'sales.reference_no', 'sales.grand_total', 'sales.paid_amount', 'sales.sale_status', 'sales.created_at', 'customers.name as customer', 'warehouses.name as warehouse')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $sales = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('sales.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('sales.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $sales =  $q->orwhere([
-                                ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['sales.created_at', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['sales.created_at', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $sales =  $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($sales))
-        {
-            foreach ($sales as $key => $sale)
-            {
+        if (!empty($sales)) {
+            foreach ($sales as $key => $sale) {
                 $nestedData['id'] = $sale->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
@@ -3149,35 +3922,32 @@ class ReportController extends Controller
                 $nestedData['customer'] = $sale->customer;
                 $nestedData['warehouse'] = $sale->warehouse;
                 $product_sale_data = DB::table('sales')->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')
-                                    ->join('products', 'product_sales.product_id', '=', 'products.id')
-                                    ->where('sales.id', $sale->id)
-                                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_sales.product_id', '=', 'products.id')
+                    ->where('sales.id', $sale->id)
+                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
+                    ->get();
                 foreach ($product_sale_data as $index => $product_sale) {
-                    if($product_sale->sale_unit_id) {
+                    if ($product_sale->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_sale->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
                 $nestedData['paid'] = number_format($sale->paid_amount, cache()->get('general_setting')->decimal);
                 $nestedData['due'] = number_format($sale->grand_total - $sale->paid_amount, cache()->get('general_setting')->decimal);
-                if($sale->sale_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
+                if ($sale->sale_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
                     $sale_status = trans('file.Completed');
-                }
-                elseif($sale->sale_status == 2){
-                    $nestedData['sale_status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
+                } elseif ($sale->sale_status == 2) {
+                    $nestedData['sale_status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
                     $sale_status = trans('file.Pending');
-                }
-                else{
-                    $nestedData['sale_status'] = '<div class="badge badge-warning">'.trans('file.Draft').'</div>';
+                } else {
+                    $nestedData['sale_status'] = '<div class="badge badge-warning">' . trans('file.Draft') . '</div>';
                     $sale_status = trans('file.Draft');
                 }
                 $data[] = $nestedData;
@@ -3203,101 +3973,92 @@ class ReportController extends Controller
         $q = DB::table('purchases')
             ->join('warehouses', 'purchases.warehouse_id', '=', 'warehouses.id')
             ->where('purchases.user_id', $user_id)
-            ->whereDate('purchases.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('purchases.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('purchases.created_at', '>=', $request->input('start_date'))
+            ->whereDate('purchases.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'purchases.'.$columns[$request->input('order.0.column')];
+        $order = 'purchases.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('purchases.id', 'purchases.reference_no', 'purchases.supplier_id', 'purchases.grand_total', 'purchases.paid_amount', 'purchases.status', 'purchases.created_at', 'warehouses.name as warehouse')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $purchases = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('purchases.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('purchases.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $purchases =  $q->orwhere([
-                                ['purchases.reference_no', 'LIKE', "%{$search}%"],
-                                ['purchases.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['purchases.created_at', 'LIKE', "%{$search}%"],
-                                ['purchases.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
+                    ['purchases.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['purchases.created_at', 'LIKE', "%{$search}%"],
+                        ['purchases.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
-                                    ['purchases.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['purchases.created_at', 'LIKE', "%{$search}%"],
-                                    ['purchases.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
+                    ['purchases.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['purchases.created_at', 'LIKE', "%{$search}%"],
+                        ['purchases.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $purchases =  $q->orwhere('purchases.created_at', 'LIKE', "%{$search}%")->orwhere('purchases.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('purchases.created_at', 'LIKE', "%{$search}%")->orwhere('purchases.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($purchases))
-        {
-            foreach ($purchases as $key => $purchase)
-            {
+        if (!empty($purchases)) {
+            foreach ($purchases as $key => $purchase) {
                 $nestedData['id'] = $purchase->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($purchase->created_at));
                 $nestedData['reference_no'] = $purchase->reference_no;
                 $nestedData['warehouse'] = $purchase->warehouse;
-                if($purchase->supplier_id) {
-                    $supplier = DB::table('suppliers')->select('name')->where('id',$purchase->supplier_id)->first();
+                if ($purchase->supplier_id) {
+                    $supplier = DB::table('suppliers')->select('name')->where('id', $purchase->supplier_id)->first();
                     $nestedData['supplier'] = $supplier->name;
-                }
-                else
+                } else
                     $nestedData['supplier'] = 'N/A';
                 $product_purchase_data = DB::table('purchases')->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')
-                                    ->join('products', 'product_purchases.product_id', '=', 'products.id')
-                                    ->where('purchases.id', $purchase->id)
-                                    ->select('products.name as product_name', 'product_purchases.qty', 'product_purchases.purchase_unit_id')
-                                    ->get();
+                    ->join('products', 'product_purchases.product_id', '=', 'products.id')
+                    ->where('purchases.id', $purchase->id)
+                    ->select('products.name as product_name', 'product_purchases.qty', 'product_purchases.purchase_unit_id')
+                    ->get();
                 foreach ($product_purchase_data as $index => $product_purchase) {
-                    if($product_purchase->purchase_unit_id) {
+                    if ($product_purchase->purchase_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_purchase->purchase_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_purchase->product_name.' ('.number_format($product_purchase->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_purchase->product_name . ' (' . number_format($product_purchase->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_purchase->product_name.' ('.number_format($product_purchase->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_purchase->product_name . ' (' . number_format($product_purchase->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($purchase->grand_total, cache()->get('general_setting')->decimal);
                 $nestedData['paid'] = number_format($purchase->paid_amount, cache()->get('general_setting')->decimal);
                 $nestedData['balance'] = number_format($purchase->grand_total - $purchase->paid_amount, cache()->get('general_setting')->decimal);
-                if($purchase->status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
+                if ($purchase->status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
                     $status = trans('file.Completed');
-                }
-                elseif($purchase->status == 2){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
+                } elseif ($purchase->status == 2) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
                     $status = trans('file.Pending');
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-warning">'.trans('file.Draft').'</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-warning">' . trans('file.Draft') . '</div>';
                     $status = trans('file.Draft');
                 }
                 $data[] = $nestedData;
@@ -3324,60 +4085,55 @@ class ReportController extends Controller
             ->join('customers', 'quotations.customer_id', '=', 'customers.id')
             ->join('warehouses', 'quotations.warehouse_id', '=', 'warehouses.id')
             ->where('quotations.user_id', $user_id)
-            ->whereDate('quotations.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('quotations.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('quotations.created_at', '>=', $request->input('start_date'))
+            ->whereDate('quotations.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'quotations.'.$columns[$request->input('order.0.column')];
+        $order = 'quotations.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('quotations.id', 'quotations.reference_no', 'quotations.grand_total', 'quotations.quotation_status', 'quotations.created_at', 'warehouses.name as warehouse_name', 'customers.name as customer_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $quotations = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('quotations.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('quotations.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $quotations =  $q->orwhere([
-                                ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $quotations =  $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($quotations))
-        {
-            foreach ($quotations as $key => $quotation)
-            {
+        if (!empty($quotations)) {
+            foreach ($quotations as $key => $quotation) {
                 $nestedData['id'] = $quotation->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($quotation->created_at));
@@ -3385,28 +4141,26 @@ class ReportController extends Controller
                 $nestedData['customer'] = $quotation->customer_name;
                 $nestedData['warehouse'] = $quotation->warehouse_name;
                 $product_quotation_data = DB::table('quotations')->join('product_quotation', 'quotations.id', '=', 'product_quotation.quotation_id')
-                                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
-                                    ->where('quotations.id', $quotation->id)
-                                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
+                    ->where('quotations.id', $quotation->id)
+                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
+                    ->get();
                 foreach ($product_quotation_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($quotation->grand_total, cache()->get('general_setting')->decimal);
-                if($quotation->quotation_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Sent').'</div>';
+                if ($quotation->quotation_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Sent') . '</div>';
                 }
                 $data[] = $nestedData;
             }
@@ -3429,63 +4183,58 @@ class ReportController extends Controller
 
         $user_id = $request->input('user_id');
         $q = DB::table('transfers')
-           ->join('warehouses as fromWarehouse', 'transfers.from_warehouse_id', '=', 'fromWarehouse.id')
-           ->join('warehouses as toWarehouse', 'transfers.to_warehouse_id', '=', 'toWarehouse.id')
-           ->where('transfers.user_id', $user_id)
-           ->whereDate('transfers.created_at', '>=' , $request->input('start_date'))
-           ->whereDate('transfers.created_at', '<=' , $request->input('end_date'));
+            ->join('warehouses as fromWarehouse', 'transfers.from_warehouse_id', '=', 'fromWarehouse.id')
+            ->join('warehouses as toWarehouse', 'transfers.to_warehouse_id', '=', 'toWarehouse.id')
+            ->where('transfers.user_id', $user_id)
+            ->whereDate('transfers.created_at', '>=', $request->input('start_date'))
+            ->whereDate('transfers.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'transfers.'.$columns[$request->input('order.0.column')];
+        $order = 'transfers.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('transfers.id', 'transfers.status', 'transfers.created_at', 'transfers.reference_no', 'transfers.grand_total', 'fromWarehouse.name as fromWarehouse', 'toWarehouse.name as toWarehouse')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $transfers = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('transfers.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('transfers.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $transfers =  $q->orwhere([
-                                ['transfers.reference_no', 'LIKE', "%{$search}%"],
-                                ['transfers.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['transfers.created_at', 'LIKE', "%{$search}%"],
-                                ['transfers.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['transfers.reference_no', 'LIKE', "%{$search}%"],
+                    ['transfers.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['transfers.created_at', 'LIKE', "%{$search}%"],
+                        ['transfers.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['transfers.reference_no', 'LIKE', "%{$search}%"],
-                                    ['transfers.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['transfers.created_at', 'LIKE', "%{$search}%"],
-                                    ['transfers.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['transfers.reference_no', 'LIKE', "%{$search}%"],
+                    ['transfers.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['transfers.created_at', 'LIKE', "%{$search}%"],
+                        ['transfers.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $transfers =  $q->orwhere('transfers.created_at', 'LIKE', "%{$search}%")->orwhere('transfers.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('transfers.created_at', 'LIKE', "%{$search}%")->orwhere('transfers.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($transfers))
-        {
-            foreach ($transfers as $key => $transfer)
-            {
+        if (!empty($transfers)) {
+            foreach ($transfers as $key => $transfer) {
                 $nestedData['id'] = $transfer->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($transfer->created_at));
@@ -3493,38 +4242,36 @@ class ReportController extends Controller
                 $nestedData['fromWarehouse'] = $transfer->fromWarehouse;
                 $nestedData['toWarehouse'] = $transfer->toWarehouse;
                 $product_transfer_data = DB::table('product_transfer')
-                                    ->where('transfer_id', $transfer->id)
-                                    ->get();
+                    ->where('transfer_id', $transfer->id)
+                    ->get();
                 foreach ($product_transfer_data as $index => $product_transfer) {
                     $product = DB::table('products')->find($product_transfer->product_id);
-                    if($product_transfer->variant_id) {
+                    if ($product_transfer->variant_id) {
                         $variant = DB::table('variants')->find($product_transfer->variant_id);
-                        $product->name .= ' ['.$variant->name.']';
+                        $product->name .= ' [' . $variant->name . ']';
                     }
                     $unit = DB::table('units')->find($product_transfer->purchase_unit_id);
-                    if($index){
-                        if($unit){
-                            $nestedData['product'] .= $product->name.' ('.$product_transfer->qty.' '.$unit->unit_code.')';
-                        }else{
-                            $nestedData['product'] .= $product->name.' ('.$product_transfer->qty.')';
+                    if ($index) {
+                        if ($unit) {
+                            $nestedData['product'] .= $product->name . ' (' . $product_transfer->qty . ' ' . $unit->unit_code . ')';
+                        } else {
+                            $nestedData['product'] .= $product->name . ' (' . $product_transfer->qty . ')';
                         }
-                    }else{
-                        if($unit){
-                            $nestedData['product'] = $product->name.' ('.$product_transfer->qty.' '.$unit->unit_code.')';
-                        }else{
-                            $nestedData['product'] = $product->name.' ('.$product_transfer->qty.')';
+                    } else {
+                        if ($unit) {
+                            $nestedData['product'] = $product->name . ' (' . $product_transfer->qty . ' ' . $unit->unit_code . ')';
+                        } else {
+                            $nestedData['product'] = $product->name . ' (' . $product_transfer->qty . ')';
                         }
                     }
                 }
                 $nestedData['grandTotal'] = number_format($transfer->grand_total, cache()->get('general_setting')->decimal);
-                if($transfer->status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
-                }
-                elseif($transfer->status == 2) {
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Sent').'</div>';
+                if ($transfer->status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
+                } elseif ($transfer->status == 2) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Sent') . '</div>';
                 }
                 $data[] = $nestedData;
             }
@@ -3546,61 +4293,56 @@ class ReportController extends Controller
 
         $user_id = $request->input('user_id');
         $q = DB::table('payments')
-           ->where('payments.user_id', $user_id)
-           ->whereDate('payments.created_at', '>=' , $request->input('start_date'))
-           ->whereDate('payments.created_at', '<=' , $request->input('end_date'));
+            ->where('payments.user_id', $user_id)
+            ->whereDate('payments.created_at', '>=', $request->input('start_date'))
+            ->whereDate('payments.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'payments.'.$columns[$request->input('order.0.column')];
+        $order = 'payments.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('payments.*')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $payments = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('payments.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('payments.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $payments =  $q->orwhere([
-                                ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['payments.created_at', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['payments.created_at', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $payments =  $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($payments))
-        {
-            foreach ($payments as $key => $payment)
-            {
+        if (!empty($payments)) {
+            foreach ($payments as $key => $payment) {
                 $nestedData['id'] = $payment->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($payment->created_at));
@@ -3628,71 +4370,66 @@ class ReportController extends Controller
 
         $user_id = $request->input('user_id');
         $q = DB::table('payrolls')
-           ->join('employees', 'payrolls.employee_id', '=', 'employees.id')
-           ->where('payrolls.user_id', $user_id)
-           ->whereDate('payrolls.created_at', '>=' , $request->input('start_date'))
-           ->whereDate('payrolls.created_at', '<=' , $request->input('end_date'));
+            ->join('employees', 'payrolls.employee_id', '=', 'employees.id')
+            ->where('payrolls.user_id', $user_id)
+            ->whereDate('payrolls.created_at', '>=', $request->input('start_date'))
+            ->whereDate('payrolls.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'payrolls.'.$columns[$request->input('order.0.column')];
+        $order = 'payrolls.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('payrolls.id', 'payrolls.created_at', 'payrolls.reference_no', 'payrolls.amount', 'payrolls.paying_method', 'employees.name as employee')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $payrolls = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('payrolls.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('payrolls.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $payrolls =  $q->orwhere([
-                                ['payrolls.reference_no', 'LIKE', "%{$search}%"],
-                                ['payrolls.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['payrolls.created_at', 'LIKE', "%{$search}%"],
-                                ['payrolls.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['payrolls.reference_no', 'LIKE', "%{$search}%"],
+                    ['payrolls.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payrolls.created_at', 'LIKE', "%{$search}%"],
+                        ['payrolls.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['payrolls.reference_no', 'LIKE', "%{$search}%"],
-                                    ['payrolls.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['payrolls.created_at', 'LIKE', "%{$search}%"],
-                                    ['payrolls.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['payrolls.reference_no', 'LIKE', "%{$search}%"],
+                    ['payrolls.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payrolls.created_at', 'LIKE', "%{$search}%"],
+                        ['payrolls.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $payrolls =  $q->orwhere('payrolls.created_at', 'LIKE', "%{$search}%")->orwhere('payrolls.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('payrolls.created_at', 'LIKE', "%{$search}%")->orwhere('payrolls.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($payrolls))
-        {
-            foreach ($payrolls as $key => $payroll)
-            {
+        if (!empty($payrolls)) {
+            foreach ($payrolls as $key => $payroll) {
                 $nestedData['id'] = $payroll->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($payroll->created_at));
                 $nestedData['reference_no'] = $payroll->reference_no;
                 $nestedData['employee'] = $payroll->employee;
                 $nestedData['amount'] = number_format($payroll->amount, cache()->get('general_setting')->decimal);
-                if($payroll->paying_method == 0)
+                if ($payroll->paying_method == 0)
                     $nestedData['method'] = 'Cash';
-                elseif($payroll->paying_method == 1)
+                elseif ($payroll->paying_method == 1)
                     $nestedData['method'] = 'Cheque';
                 else
                     $nestedData['method'] = 'Credit Card';
@@ -3720,60 +4457,55 @@ class ReportController extends Controller
             ->join('warehouses', 'expenses.warehouse_id', '=', 'warehouses.id')
             ->join('expense_categories', 'expenses.expense_category_id', '=', 'expense_categories.id')
             ->where('expenses.user_id', $user_id)
-            ->whereDate('expenses.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('expenses.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('expenses.created_at', '>=', $request->input('start_date'))
+            ->whereDate('expenses.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'expenses.'.$columns[$request->input('order.0.column')];
+        $order = 'expenses.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('expenses.id', 'expenses.reference_no', 'expenses.amount', 'expenses.created_at', 'expenses.note', 'expense_categories.name as category', 'warehouses.name as warehouse')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $expenses = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('expenses.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('expenses.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $expenses =  $q->orwhere([
-                                ['expenses.reference_no', 'LIKE', "%{$search}%"],
-                                ['expenses.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['expenses.created_at', 'LIKE', "%{$search}%"],
-                                ['expenses.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['expenses.reference_no', 'LIKE', "%{$search}%"],
+                    ['expenses.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['expenses.created_at', 'LIKE', "%{$search}%"],
+                        ['expenses.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['expenses.reference_no', 'LIKE', "%{$search}%"],
-                                    ['expenses.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['expenses.created_at', 'LIKE', "%{$search}%"],
-                                    ['expenses.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['expenses.reference_no', 'LIKE', "%{$search}%"],
+                    ['expenses.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['expenses.created_at', 'LIKE', "%{$search}%"],
+                        ['expenses.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $expenses =  $q->orwhere('expenses.created_at', 'LIKE', "%{$search}%")->orwhere('expenses.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('expenses.created_at', 'LIKE', "%{$search}%")->orwhere('expenses.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($expenses))
-        {
-            foreach ($expenses as $key => $expense)
-            {
+        if (!empty($expenses)) {
+            foreach ($expenses as $key => $expense) {
                 $nestedData['id'] = $expense->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($expense->created_at));
@@ -3794,19 +4526,18 @@ class ReportController extends Controller
         echo json_encode($json_data);
     }
 
-    public function customerReport(Request $request)
+    public function customerReportold(Request $request)
     {
         $customer_id = $request->input('customer_id');
-        if($request->input('start_date')) {
+        if ($request->input('start_date')) {
             $start_date = $request->input('start_date');
             $end_date = $request->input('end_date');
-        }
-        else {
-            $start_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 year', strtotime(date('Y-m-d') )))));
+        } else {
+            $start_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 year', strtotime(date('Y-m-d'))))));
             $end_date = date("Y-m-d");
         }
         $lims_customer_list = Customer::where('is_active', true)->get();
-        return view('backend.report.customer_report',compact('start_date', 'end_date', 'customer_id', 'lims_customer_list'));
+        return view('backend.report.customer_report', compact('start_date', 'end_date', 'customer_id', 'lims_customer_list'));
     }
 
     public function customerSaleData(Request $request)
@@ -3821,90 +4552,84 @@ class ReportController extends Controller
             ->join('customers', 'sales.customer_id', '=', 'customers.id')
             ->join('warehouses', 'sales.warehouse_id', '=', 'warehouses.id')
             ->where('sales.customer_id', $customer_id)
-            ->whereDate('sales.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('sales.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('sales.created_at', '>=', $request->input('start_date'))
+            ->whereDate('sales.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'sales.'.$columns[$request->input('order.0.column')];
+        $order = 'sales.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('sales.id', 'sales.reference_no', 'sales.total_price', 'sales.grand_total', 'sales.paid_amount', 'sales.sale_status', 'sales.created_at', 'warehouses.name as warehouse_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $sales = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('sales.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('sales.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $sales =  $q->orwhere([
-                                ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['sales.created_at', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['sales.created_at', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $sales =  $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($sales))
-        {
-            foreach ($sales as $key => $sale)
-            {
+        if (!empty($sales)) {
+            foreach ($sales as $key => $sale) {
                 $nestedData['id'] = $sale->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
                 $nestedData['reference_no'] = $sale->reference_no;
                 $nestedData['warehouse'] = $sale->warehouse_name;
                 $product_sale_data = DB::table('sales')->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')
-                                    ->join('products', 'product_sales.product_id', '=', 'products.id')
-                                    ->where('sales.id', $sale->id)
-                                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_sales.product_id', '=', 'products.id')
+                    ->where('sales.id', $sale->id)
+                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
+                    ->get();
                 foreach ($product_sale_data as $index => $product_sale) {
-                    if($product_sale->sale_unit_id) {
+                    if ($product_sale->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_sale->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 //calculating product purchase cost
                 config()->set('database.connections.mysql.strict', false);
                 DB::reconnect();
-                $product_sale_data = Sale::join('product_sales', 'sales.id','=', 'product_sales.sale_id')
+                $product_sale_data = Sale::join('product_sales', 'sales.id', '=', 'product_sales.sale_id')
                     ->select(DB::raw('product_sales.product_id, product_sales.product_batch_id, product_sales.sale_unit_id, sum(product_sales.qty) as sold_qty, sum(product_sales.total) as sold_amount'))
                     ->where('sales.id', $sale->id)
-                    ->whereDate('sales.created_at', '>=' , $request->input('start_date'))
-                    ->whereDate('sales.created_at', '<=' , $request->input('end_date'))
+                    ->whereDate('sales.created_at', '>=', $request->input('start_date'))
+                    ->whereDate('sales.created_at', '<=', $request->input('end_date'))
                     ->groupBy('product_sales.product_id', 'product_sales.product_batch_id')
                     ->get();
                 config()->set('database.connections.mysql.strict', true);
@@ -3914,16 +4639,14 @@ class ReportController extends Controller
                 $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
                 $nestedData['paid'] = number_format($sale->paid_amount, cache()->get('general_setting')->decimal);
                 $nestedData['due'] = number_format($sale->grand_total - $sale->paid_amount, cache()->get('general_setting')->decimal);
-                if($sale->sale_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
+                if ($sale->sale_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
                     $sale_status = trans('file.Completed');
-                }
-                elseif($sale->sale_status == 2){
-                    $nestedData['sale_status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
+                } elseif ($sale->sale_status == 2) {
+                    $nestedData['sale_status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
                     $sale_status = trans('file.Pending');
-                }
-                else{
-                    $nestedData['sale_status'] = '<div class="badge badge-warning">'.trans('file.Draft').'</div>';
+                } else {
+                    $nestedData['sale_status'] = '<div class="badge badge-warning">' . trans('file.Draft') . '</div>';
                     $sale_status = trans('file.Draft');
                 }
                 $data[] = $nestedData;
@@ -3947,63 +4670,58 @@ class ReportController extends Controller
 
         $customer_id = $request->input('customer_id');
         $q = DB::table('payments')
-           ->join('sales', 'payments.sale_id', '=', 'sales.id')
-           ->join('customers', 'customers.id', '=', 'sales.customer_id')
-           ->where('sales.customer_id', $customer_id)
-           ->whereDate('payments.created_at', '>=' , $request->input('start_date'))
-           ->whereDate('payments.created_at', '<=' , $request->input('end_date'));
+            ->join('sales', 'payments.sale_id', '=', 'sales.id')
+            ->join('customers', 'customers.id', '=', 'sales.customer_id')
+            ->where('sales.customer_id', $customer_id)
+            ->whereDate('payments.created_at', '>=', $request->input('start_date'))
+            ->whereDate('payments.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'payments.'.$columns[$request->input('order.0.column')];
+        $order = 'payments.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('payments.*', 'sales.reference_no as sale_reference')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $payments = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('payments.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('payments.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $payments =  $q->orwhere([
-                                ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['payments.created_at', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['payments.created_at', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $payments =  $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($payments))
-        {
-            foreach ($payments as $key => $payment)
-            {
+        if (!empty($payments)) {
+            foreach ($payments as $key => $payment) {
                 $nestedData['id'] = $payment->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($payment->created_at));
@@ -4036,93 +4754,85 @@ class ReportController extends Controller
             ->leftJoin('suppliers', 'quotations.supplier_id', '=', 'suppliers.id')
             ->join('warehouses', 'quotations.warehouse_id', '=', 'warehouses.id')
             ->where('quotations.customer_id', $customer_id)
-            ->whereDate('quotations.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('quotations.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('quotations.created_at', '>=', $request->input('start_date'))
+            ->whereDate('quotations.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'quotations.'.$columns[$request->input('order.0.column')];
+        $order = 'quotations.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('quotations.id', 'quotations.reference_no', 'quotations.supplier_id', 'quotations.grand_total', 'quotations.quotation_status', 'quotations.created_at', 'suppliers.name as supplier_name', 'warehouses.name as warehouse_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $quotations = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('quotations.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('quotations.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $quotations =  $q->orwhere([
-                                ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $quotations =  $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($quotations))
-        {
-            foreach ($quotations as $key => $quotation)
-            {
+        if (!empty($quotations)) {
+            foreach ($quotations as $key => $quotation) {
                 $nestedData['id'] = $quotation->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($quotation->created_at));
                 $nestedData['reference_no'] = $quotation->reference_no;
                 $nestedData['warehouse'] = $quotation->warehouse_name;
-                if($quotation->supplier_id) {
+                if ($quotation->supplier_id) {
                     $nestedData['supplier'] = $quotation->supplier_name;
-                }
-                else
+                } else
                     $nestedData['supplier'] = 'N/A';
                 $product_quotation_data = DB::table('quotations')->join('product_quotation', 'quotations.id', '=', 'product_quotation.quotation_id')
-                                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
-                                    ->where('quotations.id', $quotation->id)
-                                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
+                    ->where('quotations.id', $quotation->id)
+                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
+                    ->get();
                 foreach ($product_quotation_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($quotation->grand_total, cache()->get('general_setting')->decimal);
-                if($quotation->quotation_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Sent').'</div>';
+                if ($quotation->quotation_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Sent') . '</div>';
                 }
                 $data[] = $nestedData;
             }
@@ -4149,60 +4859,55 @@ class ReportController extends Controller
             ->join('warehouses', 'returns.warehouse_id', '=', 'warehouses.id')
             ->leftJoin('billers', 'returns.biller_id', '=', 'billers.id')
             ->where('returns.customer_id', $customer_id)
-            ->whereDate('returns.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('returns.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('returns.created_at', '>=', $request->input('start_date'))
+            ->whereDate('returns.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'returns.'.$columns[$request->input('order.0.column')];
+        $order = 'returns.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('returns.id', 'returns.reference_no', 'returns.grand_total', 'returns.created_at', 'warehouses.name as warehouse_name', 'billers.name as biller_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $returns = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('returns.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('returns.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $returns =  $q->orwhere([
-                                ['returns.reference_no', 'LIKE', "%{$search}%"],
-                                ['returns.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['returns.created_at', 'LIKE', "%{$search}%"],
-                                ['returns.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['returns.reference_no', 'LIKE', "%{$search}%"],
+                    ['returns.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['returns.created_at', 'LIKE', "%{$search}%"],
+                        ['returns.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['returns.reference_no', 'LIKE', "%{$search}%"],
-                                    ['returns.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['returns.created_at', 'LIKE', "%{$search}%"],
-                                    ['returns.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['returns.reference_no', 'LIKE', "%{$search}%"],
+                    ['returns.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['returns.created_at', 'LIKE', "%{$search}%"],
+                        ['returns.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $returns =  $q->orwhere('returns.created_at', 'LIKE', "%{$search}%")->orwhere('returns.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('returns.created_at', 'LIKE', "%{$search}%")->orwhere('returns.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($returns))
-        {
-            foreach ($returns as $key => $sale)
-            {
+        if (!empty($returns)) {
+            foreach ($returns as $key => $sale) {
                 $nestedData['id'] = $sale->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
@@ -4210,21 +4915,20 @@ class ReportController extends Controller
                 $nestedData['warehouse'] = $sale->warehouse_name;
                 $nestedData['biller'] = $sale->biller_name;
                 $product_return_data = DB::table('returns')->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
-                                    ->join('products', 'product_returns.product_id', '=', 'products.id')
-                                    ->where('returns.id', $sale->id)
-                                    ->select('products.name as product_name', 'product_returns.qty', 'product_returns.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_returns.product_id', '=', 'products.id')
+                    ->where('returns.id', $sale->id)
+                    ->select('products.name as product_name', 'product_returns.qty', 'product_returns.sale_unit_id')
+                    ->get();
                 foreach ($product_return_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
                 $data[] = $nestedData;
@@ -4242,16 +4946,15 @@ class ReportController extends Controller
     public function customerGroupReport(Request $request)
     {
         $customer_group_id = $request->input('customer_group_id');
-        if($request->input('starting_date')) {
+        if ($request->input('starting_date')) {
             $starting_date = $request->input('starting_date');
             $ending_date = $request->input('ending_date');
-        }
-        else {
-            $starting_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 year', strtotime(date('Y-m-d') )))));
+        } else {
+            $starting_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 year', strtotime(date('Y-m-d'))))));
             $ending_date = date("Y-m-d");
         }
         $lims_customer_group_list = CustomerGroup::where('is_active', true)->get();
-        return view('backend.report.customer_group_report',compact('starting_date', 'ending_date', 'customer_group_id', 'lims_customer_group_list'));
+        return view('backend.report.customer_group_report', compact('starting_date', 'ending_date', 'customer_group_id', 'lims_customer_group_list'));
     }
 
     public function customerGroupSaleData(Request $request)
@@ -4267,96 +4970,88 @@ class ReportController extends Controller
             ->join('customers', 'sales.customer_id', '=', 'customers.id')
             ->join('warehouses', 'sales.warehouse_id', '=', 'warehouses.id')
             ->whereIn('sales.customer_id', $customer_ids)
-            ->whereDate('sales.created_at', '>=' ,$request->input('starting_date'))
-            ->whereDate('sales.created_at', '<=' ,$request->input('ending_date'));
+            ->whereDate('sales.created_at', '>=', $request->input('starting_date'))
+            ->whereDate('sales.created_at', '<=', $request->input('ending_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'sales.'.$columns[$request->input('order.0.column')];
+        $order = 'sales.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('sales.id', 'sales.reference_no', 'sales.grand_total', 'sales.paid_amount', 'sales.sale_status', 'sales.created_at', 'customers.name as customer_name', 'customers.phone_number as customer_number', 'warehouses.name as warehouse_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $sales = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('sales.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('sales.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $sales =  $q->orwhere([
-                                ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['sales.created_at', 'LIKE', "%{$search}%"],
-                                ['sales.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['sales.created_at', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $sales =  $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($sales))
-        {
-            foreach ($sales as $key => $sale)
-            {
+        if (!empty($sales)) {
+            foreach ($sales as $key => $sale) {
                 $nestedData['id'] = $sale->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
                 $nestedData['reference_no'] = $sale->reference_no;
                 $nestedData['warehouse'] = $sale->warehouse_name;
-                $nestedData['customer'] = $sale->customer_name.' ['.($sale->customer_number).']';
+                $nestedData['customer'] = $sale->customer_name . ' [' . ($sale->customer_number) . ']';
                 $product_sale_data = DB::table('sales')->join('product_sales', 'sales.id', '=', 'product_sales.sale_id')
-                                    ->join('products', 'product_sales.product_id', '=', 'products.id')
-                                    ->where('sales.id', $sale->id)
-                                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_sales.product_id', '=', 'products.id')
+                    ->where('sales.id', $sale->id)
+                    ->select('products.name as product_name', 'product_sales.qty', 'product_sales.sale_unit_id')
+                    ->get();
                 foreach ($product_sale_data as $index => $product_sale) {
-                    if($product_sale->sale_unit_id) {
+                    if ($product_sale->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_sale->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_sale->product_name.' ('.number_format($product_sale->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_sale->product_name . ' (' . number_format($product_sale->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
                 $nestedData['paid'] = number_format($sale->paid_amount, cache()->get('general_setting')->decimal);
                 $nestedData['due'] = number_format($sale->grand_total - $sale->paid_amount, cache()->get('general_setting')->decimal);
-                if($sale->sale_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
+                if ($sale->sale_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
                     $sale_status = trans('file.Completed');
-                }
-                elseif($sale->sale_status == 2){
-                    $nestedData['sale_status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
+                } elseif ($sale->sale_status == 2) {
+                    $nestedData['sale_status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
                     $sale_status = trans('file.Pending');
-                }
-                else{
-                    $nestedData['sale_status'] = '<div class="badge badge-warning">'.trans('file.Draft').'</div>';
+                } else {
+                    $nestedData['sale_status'] = '<div class="badge badge-warning">' . trans('file.Draft') . '</div>';
                     $sale_status = trans('file.Draft');
                 }
                 $data[] = $nestedData;
@@ -4381,63 +5076,58 @@ class ReportController extends Controller
         $customer_group_id = $request->input('customer_group_id');
         $customer_ids = Customer::where('customer_group_id', $customer_group_id)->pluck('id');
         $q = DB::table('payments')
-           ->join('sales', 'payments.sale_id', '=', 'sales.id')
-           ->join('customers', 'customers.id', '=', 'sales.customer_id')
-           ->whereIn('sales.customer_id', $customer_ids)
-           ->whereDate('payments.created_at', '>=' , $request->input('starting_date'))
-           ->whereDate('payments.created_at', '<=' , $request->input('ending_date'));
+            ->join('sales', 'payments.sale_id', '=', 'sales.id')
+            ->join('customers', 'customers.id', '=', 'sales.customer_id')
+            ->whereIn('sales.customer_id', $customer_ids)
+            ->whereDate('payments.created_at', '>=', $request->input('starting_date'))
+            ->whereDate('payments.created_at', '<=', $request->input('ending_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'sales.'.$columns[$request->input('order.0.column')];
+        $order = 'sales.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('payments.*', 'sales.reference_no as sale_reference', 'customers.name as customer_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $payments = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('payments.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('payments.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $payments =  $q->orwhere([
-                                ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['payments.created_at', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['payments.created_at', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $payments =  $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($payments))
-        {
-            foreach ($payments as $key => $payment)
-            {
+        if (!empty($payments)) {
+            foreach ($payments as $key => $payment) {
                 $nestedData['id'] = $payment->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($payment->created_at));
@@ -4472,94 +5162,86 @@ class ReportController extends Controller
             ->leftJoin('suppliers', 'quotations.supplier_id', '=', 'suppliers.id')
             ->join('warehouses', 'quotations.warehouse_id', '=', 'warehouses.id')
             ->whereIn('quotations.customer_id', $customer_ids)
-            ->whereDate('quotations.created_at', '>=' ,$request->input('starting_date'))
-            ->whereDate('quotations.created_at', '<=' ,$request->input('ending_date'));
+            ->whereDate('quotations.created_at', '>=', $request->input('starting_date'))
+            ->whereDate('quotations.created_at', '<=', $request->input('ending_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'quotations.'.$columns[$request->input('order.0.column')];
+        $order = 'quotations.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('quotations.id', 'quotations.reference_no', 'quotations.supplier_id', 'quotations.grand_total', 'quotations.quotation_status', 'quotations.created_at', 'customers.name as customer_name', 'customers.phone_number as customer_number', 'suppliers.name as supplier_name', 'warehouses.name as warehouse_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $quotations = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('quotations.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('quotations.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $quotations =  $q->orwhere([
-                                ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $quotations =  $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($quotations))
-        {
-            foreach ($quotations as $key => $quotation)
-            {
+        if (!empty($quotations)) {
+            foreach ($quotations as $key => $quotation) {
                 $nestedData['id'] = $quotation->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($quotation->created_at));
                 $nestedData['reference_no'] = $quotation->reference_no;
                 $nestedData['warehouse'] = $quotation->warehouse_name;
-                $nestedData['customer'] = $quotation->customer_name.' ['.($quotation->customer_number).']';
-                if($quotation->supplier_id) {
+                $nestedData['customer'] = $quotation->customer_name . ' [' . ($quotation->customer_number) . ']';
+                if ($quotation->supplier_id) {
                     $nestedData['supplier'] = $quotation->supplier_name;
-                }
-                else
+                } else
                     $nestedData['supplier'] = 'N/A';
                 $product_quotation_data = DB::table('quotations')->join('product_quotation', 'quotations.id', '=', 'product_quotation.quotation_id')
-                                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
-                                    ->where('quotations.id', $quotation->id)
-                                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
+                    ->where('quotations.id', $quotation->id)
+                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
+                    ->get();
                 foreach ($product_quotation_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($quotation->grand_total, cache()->get('general_setting')->decimal);
-                if($quotation->quotation_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Sent').'</div>';
+                if ($quotation->quotation_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Sent') . '</div>';
                 }
                 $data[] = $nestedData;
             }
@@ -4586,82 +5268,76 @@ class ReportController extends Controller
             ->join('customers', 'returns.customer_id', '=', 'customers.id')
             ->join('warehouses', 'returns.warehouse_id', '=', 'warehouses.id')
             ->whereIn('returns.customer_id', $customer_ids)
-            ->whereDate('returns.created_at', '>=' ,$request->input('starting_date'))
-            ->whereDate('returns.created_at', '<=' ,$request->input('ending_date'));
+            ->whereDate('returns.created_at', '>=', $request->input('starting_date'))
+            ->whereDate('returns.created_at', '<=', $request->input('ending_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'returns.'.$columns[$request->input('order.0.column')];
+        $order = 'returns.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('returns.id', 'returns.reference_no', 'returns.grand_total', 'returns.created_at', 'customers.name as customer_name', 'customers.phone_number as customer_number', 'warehouses.name as warehouse_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $returns = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('returns.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('returns.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $returns =  $q->orwhere([
-                                ['returns.reference_no', 'LIKE', "%{$search}%"],
-                                ['returns.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['returns.created_at', 'LIKE', "%{$search}%"],
-                                ['returns.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['returns.reference_no', 'LIKE', "%{$search}%"],
+                    ['returns.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['returns.created_at', 'LIKE', "%{$search}%"],
+                        ['returns.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['returns.reference_no', 'LIKE', "%{$search}%"],
-                                    ['returns.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['returns.created_at', 'LIKE', "%{$search}%"],
-                                    ['returns.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['returns.reference_no', 'LIKE', "%{$search}%"],
+                    ['returns.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['returns.created_at', 'LIKE', "%{$search}%"],
+                        ['returns.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $returns =  $q->orwhere('returns.created_at', 'LIKE', "%{$search}%")->orwhere('returns.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('returns.created_at', 'LIKE', "%{$search}%")->orwhere('returns.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($returns))
-        {
-            foreach ($returns as $key => $sale)
-            {
+        if (!empty($returns)) {
+            foreach ($returns as $key => $sale) {
                 $nestedData['id'] = $sale->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
                 $nestedData['reference_no'] = $sale->reference_no;
                 $nestedData['warehouse'] = $sale->warehouse_name;
-                $nestedData['customer'] = $sale->customer_name.' ['.($sale->customer_number).']';
+                $nestedData['customer'] = $sale->customer_name . ' [' . ($sale->customer_number) . ']';
                 $product_return_data = DB::table('returns')->join('product_returns', 'returns.id', '=', 'product_returns.return_id')
-                                    ->join('products', 'product_returns.product_id', '=', 'products.id')
-                                    ->where('returns.id', $sale->id)
-                                    ->select('products.name as product_name', 'product_returns.qty', 'product_returns.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_returns.product_id', '=', 'products.id')
+                    ->where('returns.id', $sale->id)
+                    ->select('products.name as product_name', 'product_returns.qty', 'product_returns.sale_unit_id')
+                    ->get();
                 foreach ($product_return_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
                 $data[] = $nestedData;
@@ -4714,16 +5390,15 @@ class ReportController extends Controller
     public function supplierReport(Request $request)
     {
         $supplier_id = $request->input('supplier_id');
-        if($request->input('start_date')) {
+        if ($request->input('start_date')) {
             $start_date = $request->input('start_date');
             $end_date = $request->input('end_date');
-        }
-        else {
-            $start_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 year', strtotime(date('Y-m-d') )))));
+        } else {
+            $start_date = date("Y-m-d", strtotime(date('Y-m-d', strtotime('-1 year', strtotime(date('Y-m-d'))))));
             $end_date = date("Y-m-d");
         }
         $lims_supplier_list = Supplier::where('is_active', true)->get();
-        return view('backend.report.supplier_report',compact('start_date', 'end_date', 'supplier_id', 'lims_supplier_list'));
+        return view('backend.report.supplier_report', compact('start_date', 'end_date', 'supplier_id', 'lims_supplier_list'));
     }
 
     public function supplierPurchaseData(Request $request)
@@ -4738,95 +5413,87 @@ class ReportController extends Controller
             ->join('suppliers', 'purchases.supplier_id', '=', 'suppliers.id')
             ->join('warehouses', 'purchases.warehouse_id', '=', 'warehouses.id')
             ->where('purchases.supplier_id', $supplier_id)
-            ->whereDate('purchases.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('purchases.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('purchases.created_at', '>=', $request->input('start_date'))
+            ->whereDate('purchases.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'purchases.'.$columns[$request->input('order.0.column')];
+        $order = 'purchases.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('purchases.id', 'purchases.reference_no', 'purchases.grand_total', 'purchases.paid_amount', 'purchases.status', 'purchases.created_at', 'warehouses.name as warehouse_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $purchases = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('purchases.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('purchases.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $purchases =  $q->orwhere([
-                                ['purchases.reference_no', 'LIKE', "%{$search}%"],
-                                ['purchases.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['purchases.created_at', 'LIKE', "%{$search}%"],
-                                ['purchases.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
+                    ['purchases.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['purchases.created_at', 'LIKE', "%{$search}%"],
+                        ['purchases.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
-                                    ['purchases.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['purchases.created_at', 'LIKE', "%{$search}%"],
-                                    ['purchases.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['purchases.reference_no', 'LIKE', "%{$search}%"],
+                    ['purchases.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['purchases.created_at', 'LIKE', "%{$search}%"],
+                        ['purchases.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $purchases =  $q->orwhere('purchases.created_at', 'LIKE', "%{$search}%")->orwhere('purchases.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('purchases.created_at', 'LIKE', "%{$search}%")->orwhere('purchases.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($purchases))
-        {
-            foreach ($purchases as $key => $purchase)
-            {
+        if (!empty($purchases)) {
+            foreach ($purchases as $key => $purchase) {
                 $nestedData['id'] = $purchase->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($purchase->created_at));
                 $nestedData['reference_no'] = $purchase->reference_no;
                 $nestedData['warehouse'] = $purchase->warehouse_name;
                 $product_purchase_data = DB::table('purchases')->join('product_purchases', 'purchases.id', '=', 'product_purchases.purchase_id')
-                                    ->join('products', 'product_purchases.product_id', '=', 'products.id')
-                                    ->where('purchases.id', $purchase->id)
-                                    ->select('products.name as product_name', 'product_purchases.qty', 'product_purchases.purchase_unit_id')
-                                    ->get();
+                    ->join('products', 'product_purchases.product_id', '=', 'products.id')
+                    ->where('purchases.id', $purchase->id)
+                    ->select('products.name as product_name', 'product_purchases.qty', 'product_purchases.purchase_unit_id')
+                    ->get();
                 foreach ($product_purchase_data as $index => $product_purchase) {
-                    if($product_purchase->purchase_unit_id) {
+                    if ($product_purchase->purchase_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_purchase->purchase_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_purchase->product_name.' ('.number_format($product_purchase->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_purchase->product_name . ' (' . number_format($product_purchase->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_purchase->product_name.' ('.number_format($product_purchase->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_purchase->product_name . ' (' . number_format($product_purchase->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($purchase->grand_total, cache()->get('general_setting')->decimal);
                 $nestedData['paid'] = number_format($purchase->paid_amount, cache()->get('general_setting')->decimal);
                 $nestedData['balance'] = number_format($purchase->grand_total - $purchase->paid_amount, cache()->get('general_setting')->decimal);
-                if($purchase->status == 1){
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Completed').'</div>';
+                if ($purchase->status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Completed') . '</div>';
                     $status = trans('file.Completed');
-                }
-                elseif($purchase->status == 2){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
+                } elseif ($purchase->status == 2) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
                     $status = trans('file.Pending');
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-warning">'.trans('file.Draft').'</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-warning">' . trans('file.Draft') . '</div>';
                     $status = trans('file.Draft');
                 }
                 $data[] = $nestedData;
@@ -4850,62 +5517,57 @@ class ReportController extends Controller
 
         $supplier_id = $request->input('supplier_id');
         $q = DB::table('payments')
-           ->join('purchases', 'payments.purchase_id', '=', 'purchases.id')
-           ->where('purchases.supplier_id', $supplier_id)
-           ->whereDate('payments.created_at', '>=' , $request->input('start_date'))
-           ->whereDate('payments.created_at', '<=' , $request->input('end_date'));
+            ->join('purchases', 'payments.purchase_id', '=', 'purchases.id')
+            ->where('purchases.supplier_id', $supplier_id)
+            ->whereDate('payments.created_at', '>=', $request->input('start_date'))
+            ->whereDate('payments.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'payments.'.$columns[$request->input('order.0.column')];
+        $order = 'payments.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('payments.*', 'purchases.reference_no as purchase_reference')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $payments = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('payments.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('payments.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $payments =  $q->orwhere([
-                                ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['payments.created_at', 'LIKE', "%{$search}%"],
-                                ['payments.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['payments.created_at', 'LIKE', "%{$search}%"],
-                                    ['payments.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['payments.payment_reference', 'LIKE', "%{$search}%"],
+                    ['payments.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['payments.created_at', 'LIKE', "%{$search}%"],
+                        ['payments.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $payments =  $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('payments.created_at', 'LIKE', "%{$search}%")->orwhere('payments.payment_reference', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($payments))
-        {
-            foreach ($payments as $key => $payment)
-            {
+        if (!empty($payments)) {
+            foreach ($payments as $key => $payment) {
                 $nestedData['id'] = $payment->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($payment->created_at));
@@ -4937,81 +5599,75 @@ class ReportController extends Controller
             ->join('suppliers', 'return_purchases.supplier_id', '=', 'suppliers.id')
             ->join('warehouses', 'return_purchases.warehouse_id', '=', 'warehouses.id')
             ->where('return_purchases.supplier_id', $supplier_id)
-            ->whereDate('return_purchases.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('return_purchases.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('return_purchases.created_at', '>=', $request->input('start_date'))
+            ->whereDate('return_purchases.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start');
-        $order = 'return_purchases.'.$columns[$request->input('order.0.column')];
+        $order = 'return_purchases.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('return_purchases.id', 'return_purchases.reference_no', 'return_purchases.grand_total', 'return_purchases.created_at', 'warehouses.name as warehouse_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $return_purchases = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('return_purchases.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('return_purchases.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $return_purchases =  $q->orwhere([
-                                ['return_purchases.reference_no', 'LIKE', "%{$search}%"],
-                                ['return_purchases.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['return_purchases.created_at', 'LIKE', "%{$search}%"],
-                                ['return_purchases.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['return_purchases.reference_no', 'LIKE', "%{$search}%"],
+                    ['return_purchases.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['return_purchases.created_at', 'LIKE', "%{$search}%"],
+                        ['return_purchases.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['return_purchases.reference_no', 'LIKE', "%{$search}%"],
-                                    ['return_purchases.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['return_purchases.created_at', 'LIKE', "%{$search}%"],
-                                    ['return_purchases.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['return_purchases.reference_no', 'LIKE', "%{$search}%"],
+                    ['return_purchases.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['return_purchases.created_at', 'LIKE', "%{$search}%"],
+                        ['return_purchases.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $return_purchases =  $q->orwhere('return_purchases.created_at', 'LIKE', "%{$search}%")->orwhere('return_purchases.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('return_purchases.created_at', 'LIKE', "%{$search}%")->orwhere('return_purchases.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($return_purchases))
-        {
-            foreach ($return_purchases as $key => $return)
-            {
+        if (!empty($return_purchases)) {
+            foreach ($return_purchases as $key => $return) {
                 $nestedData['id'] = $return->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($return->created_at));
                 $nestedData['reference_no'] = $return->reference_no;
                 $nestedData['warehouse'] = $return->warehouse_name;
                 $product_return_data = DB::table('return_purchases')->join('purchase_product_return', 'return_purchases.id', '=', 'purchase_product_return.return_id')
-                                    ->join('products', 'purchase_product_return.product_id', '=', 'products.id')
-                                    ->where('return_purchases.id', $return->id)
-                                    ->select('products.name as product_name', 'purchase_product_return.qty', 'purchase_product_return.purchase_unit_id')
-                                    ->get();
+                    ->join('products', 'purchase_product_return.product_id', '=', 'products.id')
+                    ->where('return_purchases.id', $return->id)
+                    ->select('products.name as product_name', 'purchase_product_return.qty', 'purchase_product_return.purchase_unit_id')
+                    ->get();
                 foreach ($product_return_data as $index => $product_return) {
-                    if($product_return->purchase_unit_id) {
+                    if ($product_return->purchase_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->purchase_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($return->grand_total, cache()->get('general_setting')->decimal);
                 $data[] = $nestedData;
@@ -5039,60 +5695,55 @@ class ReportController extends Controller
             ->leftJoin('customers', 'quotations.customer_id', '=', 'customers.id')
             ->join('warehouses', 'quotations.warehouse_id', '=', 'warehouses.id')
             ->where('quotations.supplier_id', $supplier_id)
-            ->whereDate('quotations.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('quotations.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('quotations.created_at', '>=', $request->input('start_date'))
+            ->whereDate('quotations.created_at', '<=', $request->input('end_date'));
 
         $totalData = $q->count();
         $totalFiltered = $totalData;
 
-        if($request->input('length') != -1)
+        if ($request->input('length') != -1)
             $limit = $request->input('length');
         else
             $limit = $totalData;
         $start = $request->input('start_date');
-        $order = 'quotations.'.$columns[$request->input('order.0.column')];
+        $order = 'quotations.' . $columns[$request->input('order.0.column')];
         $dir = $request->input('order.0.dir');
         $q = $q->select('quotations.id', 'quotations.reference_no', 'quotations.supplier_id', 'quotations.grand_total', 'quotations.quotation_status', 'quotations.created_at', 'customers.name as customer_name', 'warehouses.name as warehouse_name')
             ->offset($start)
             ->limit($limit)
             ->orderBy($order, $dir);
-        if(empty($request->input('search.value'))) {
+        if (empty($request->input('search.value'))) {
             $quotations = $q->get();
-        }
-        else
-        {
+        } else {
             $search = $request->input('search.value');
-            $q = $q->whereDate('quotations.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-            if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+            $q = $q->whereDate('quotations.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
                 $quotations =  $q->orwhere([
-                                ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->orwhere([
-                                ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                ['quotations.user_id', Auth::id()]
-                            ])
-                            ->get();
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->get();
                 $totalFiltered = $q->orwhere([
-                                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['quotations.created_at', 'LIKE', "%{$search}%"],
-                                    ['quotations.user_id', Auth::id()]
-                                ])
-                                ->count();
-            }
-            else {
+                    ['quotations.reference_no', 'LIKE', "%{$search}%"],
+                    ['quotations.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['quotations.created_at', 'LIKE', "%{$search}%"],
+                        ['quotations.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
                 $quotations =  $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->get();
                 $totalFiltered = $q->orwhere('quotations.created_at', 'LIKE', "%{$search}%")->orwhere('quotations.reference_no', 'LIKE', "%{$search}%")->count();
             }
         }
         $data = array();
-        if(!empty($quotations))
-        {
-            foreach ($quotations as $key => $quotation)
-            {
+        if (!empty($quotations)) {
+            foreach ($quotations as $key => $quotation) {
                 $nestedData['id'] = $quotation->id;
                 $nestedData['key'] = $key;
                 $nestedData['date'] = date(config('date_format'), strtotime($quotation->created_at));
@@ -5100,28 +5751,26 @@ class ReportController extends Controller
                 $nestedData['warehouse'] = $quotation->warehouse_name;
                 $nestedData['customer'] = $quotation->customer_name;
                 $product_quotation_data = DB::table('quotations')->join('product_quotation', 'quotations.id', '=', 'product_quotation.quotation_id')
-                                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
-                                    ->where('quotations.id', $quotation->id)
-                                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
-                                    ->get();
+                    ->join('products', 'product_quotation.product_id', '=', 'products.id')
+                    ->where('quotations.id', $quotation->id)
+                    ->select('products.name as product_name', 'product_quotation.qty', 'product_quotation.sale_unit_id')
+                    ->get();
                 foreach ($product_quotation_data as $index => $product_return) {
-                    if($product_return->sale_unit_id) {
+                    if ($product_return->sale_unit_id) {
                         $unit_data = DB::table('units')->select('unit_code')->find($product_return->sale_unit_id);
                         $unitCode = $unit_data->unit_code;
-                    }
-                    else
+                    } else
                         $unitCode = '';
-                    if($index)
-                        $nestedData['product'] .= '<br>'.$product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                    if ($index)
+                        $nestedData['product'] .= '<br>' . $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                     else
-                        $nestedData['product'] = $product_return->product_name.' ('.number_format($product_return->qty, cache()->get('general_setting')->decimal).' '.$unitCode.')';
+                        $nestedData['product'] = $product_return->product_name . ' (' . number_format($product_return->qty, cache()->get('general_setting')->decimal) . ' ' . $unitCode . ')';
                 }
                 $nestedData['grand_total'] = number_format($quotation->grand_total, cache()->get('general_setting')->decimal);
-                if($quotation->quotation_status == 1){
-                    $nestedData['status'] = '<div class="badge badge-danger">'.trans('file.Pending').'</div>';
-                }
-                else{
-                    $nestedData['status'] = '<div class="badge badge-success">'.trans('file.Sent').'</div>';
+                if ($quotation->quotation_status == 1) {
+                    $nestedData['status'] = '<div class="badge badge-danger">' . trans('file.Pending') . '</div>';
+                } else {
+                    $nestedData['status'] = '<div class="badge badge-success">' . trans('file.Sent') . '</div>';
                 }
                 $data[] = $nestedData;
             }
@@ -5141,9 +5790,9 @@ class ReportController extends Controller
         $start_date = $data['start_date'];
         $end_date = $data['end_date'];
         $q = Sale::where('payment_status', '!=', 4)
-            ->whereDate('created_at', '>=' , $start_date)
-            ->whereDate('created_at', '<=' , $end_date);
-        if($request->customer_id)
+            ->whereDate('created_at', '>=', $start_date)
+            ->whereDate('created_at', '<=', $end_date);
+        if ($request->customer_id)
             $q = $q->where('customer_id', $request->customer_id);
         $lims_sale_data = $q->get();
         return view('backend.report.due_report', compact('lims_sale_data', 'start_date', 'end_date'));
@@ -5159,103 +5808,98 @@ class ReportController extends Controller
         $q = DB::table('sales')
             ->join('customers', 'sales.customer_id', '=', 'customers.id')
             ->where('payment_status', '!=', 4)
-            ->whereDate('sales.created_at', '>=' ,$request->input('start_date'))
-            ->whereDate('sales.created_at', '<=' ,$request->input('end_date'));
+            ->whereDate('sales.created_at', '>=', $request->input('start_date'))
+            ->whereDate('sales.created_at', '<=', $request->input('end_date'));
 
-            $totalData = $q->count();
-            $totalFiltered = $totalData;
+        $totalData = $q->count();
+        $totalFiltered = $totalData;
 
-            if($request->input('length') != -1)
-                $limit = $request->input('length');
-            else
-                $limit = $totalData;
-            $start = $request->input('start');
-            $order = 'sales.'.$columns[$request->input('order.0.column')];
-            $dir = $request->input('order.0.dir');
-            $q = $q->select('sales.id', 'sales.reference_no', 'sales.grand_total', 'sales.created_at', 'sales.paid_amount', 'customers.name as customer_name', 'customers.phone_number as customer_phone_number')
-                ->offset($start)
-                ->limit($limit)
-                ->orderBy($order, $dir);
+        if ($request->input('length') != -1)
+            $limit = $request->input('length');
+        else
+            $limit = $totalData;
+        $start = $request->input('start');
+        $order = 'sales.' . $columns[$request->input('order.0.column')];
+        $dir = $request->input('order.0.dir');
+        $q = $q->select('sales.id', 'sales.reference_no', 'sales.grand_total', 'sales.created_at', 'sales.paid_amount', 'customers.name as customer_name', 'customers.phone_number as customer_phone_number')
+            ->offset($start)
+            ->limit($limit)
+            ->orderBy($order, $dir);
 
-            if(empty($request->input('search.value'))) {
-                $sales = $q->get();
+        if (empty($request->input('search.value'))) {
+            $sales = $q->get();
+        } else {
+            $search = $request->input('search.value');
+            $q = $q->whereDate('sales.created_at', '=', date('Y-m-d', strtotime(str_replace('/', '-', $search))));
+            if (Auth::user()->role_id > 2 && config('staff_access') == 'own') {
+                $sales =  $q->orwhere([
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->orwhere([
+                        ['customers.name', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->orwhere([
+                        ['customers.phone_number', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->get();
+                $totalFiltered = $q->orwhere([
+                    ['sales.reference_no', 'LIKE', "%{$search}%"],
+                    ['sales.user_id', Auth::id()]
+                ])
+                    ->orwhere([
+                        ['sales.created_at', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->orwhere([
+                        ['customers.name', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->orwhere([
+                        ['customers.phone_number', 'LIKE', "%{$search}%"],
+                        ['sales.user_id', Auth::id()]
+                    ])
+                    ->count();
+            } else {
+                $sales =  $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->orwhere('customers.name', 'LIKE', "%{$search}%")->orwhere('customers.phone_number', 'LIKE', "%{$search}%")->get();
+
+                $totalFiltered = $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->orwhere('customers.name', 'LIKE', "%{$search}%")->orwhere('customers.phone_number', 'LIKE', "%{$search}%")->count();
             }
-            else
-            {
-                $search = $request->input('search.value');
-                $q = $q->whereDate('sales.created_at', '=' , date('Y-m-d', strtotime(str_replace('/', '-', $search))));
-                if(Auth::user()->role_id > 2 && config('staff_access') == 'own') {
-                    $sales =  $q->orwhere([
-                                    ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['sales.created_at', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['customers.name', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->orwhere([
-                                    ['customers.phone_number', 'LIKE', "%{$search}%"],
-                                    ['sales.user_id', Auth::id()]
-                                ])
-                                ->get();
-                    $totalFiltered = $q->orwhere([
-                                        ['sales.reference_no', 'LIKE', "%{$search}%"],
-                                        ['sales.user_id', Auth::id()]
-                                    ])
-                                    ->orwhere([
-                                        ['sales.created_at', 'LIKE', "%{$search}%"],
-                                        ['sales.user_id', Auth::id()]
-                                    ])
-                                    ->orwhere([
-                                        ['customers.name', 'LIKE', "%{$search}%"],
-                                        ['sales.user_id', Auth::id()]
-                                    ])
-                                    ->orwhere([
-                                        ['customers.phone_number', 'LIKE', "%{$search}%"],
-                                        ['sales.user_id', Auth::id()]
-                                    ])
-                                    ->count();
-                }
-                else {
-                    $sales =  $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->orwhere('customers.name', 'LIKE', "%{$search}%")->orwhere('customers.phone_number', 'LIKE', "%{$search}%")->get();
+        }
+        $data = array();
+        if (!empty($sales)) {
+            foreach ($sales as $key => $sale) {
+                $nestedData['id'] = $sale->id;
+                $nestedData['key'] = $key;
+                $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
+                $nestedData['reference_no'] = $sale->reference_no;
+                $nestedData['customer'] = $sale->customer_name . ' (' . $sale->customer_phone_number . ')';
+                $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
 
-                    $totalFiltered = $q->orwhere('sales.created_at', 'LIKE', "%{$search}%")->orwhere('sales.reference_no', 'LIKE', "%{$search}%")->orwhere('customers.name', 'LIKE', "%{$search}%")->orwhere('customers.phone_number', 'LIKE', "%{$search}%")->count();
-                }
+                $returned_amount = DB::table('returns')->where('sale_id', $sale->id)->sum('grand_total');
+
+                $nestedData['returned_amount'] = number_format($returned_amount, cache()->get('general_setting')->decimal);
+                if ($sale->paid_amount)
+                    $nestedData['paid'] = number_format($sale->paid_amount, cache()->get('general_setting')->decimal);
+                else
+                    $nestedData['paid'] = number_format(0, cache()->get('general_setting')->decimal);
+                $nestedData['due'] = number_format(($sale->grand_total - $returned_amount - $sale->paid_amount), cache()->get('general_setting')->decimal);
+
+                $data[] = $nestedData;
             }
-            $data = array();
-            if(!empty($sales))
-            {
-                foreach ($sales as $key => $sale)
-                {
-                    $nestedData['id'] = $sale->id;
-                    $nestedData['key'] = $key;
-                    $nestedData['date'] = date(config('date_format'), strtotime($sale->created_at));
-                    $nestedData['reference_no'] = $sale->reference_no;
-                    $nestedData['customer'] = $sale->customer_name.' ('.$sale->customer_phone_number.')';
-                    $nestedData['grand_total'] = number_format($sale->grand_total, cache()->get('general_setting')->decimal);
-
-                    $returned_amount = DB::table('returns')->where('sale_id', $sale->id)->sum('grand_total');
-
-                    $nestedData['returned_amount'] = number_format($returned_amount, cache()->get('general_setting')->decimal);
-                    if($sale->paid_amount)
-                        $nestedData['paid'] = number_format($sale->paid_amount, cache()->get('general_setting')->decimal);
-                    else
-                        $nestedData['paid'] = number_format(0, cache()->get('general_setting')->decimal);
-                    $nestedData['due'] = number_format(($sale->grand_total - $returned_amount - $sale->paid_amount), cache()->get('general_setting')->decimal);
-
-                    $data[] = $nestedData;
-                }
-            }
-            $json_data = array(
-                "draw"            => intval($request->input('draw')),
-                "recordsTotal"    => intval($totalData),
-                "recordsFiltered" => intval($totalFiltered),
-                "data"            => $data
-            );
+        }
+        $json_data = array(
+            "draw"            => intval($request->input('draw')),
+            "recordsTotal"    => intval($totalData),
+            "recordsFiltered" => intval($totalFiltered),
+            "data"            => $data
+        );
 
         echo json_encode($json_data);
     }
@@ -5266,9 +5910,9 @@ class ReportController extends Controller
         $start_date = $data['start_date'];
         $end_date = $data['end_date'];
         $q = Purchase::where('payment_status', 1)
-            ->whereDate('created_at', '>=' , $start_date)
-            ->whereDate('created_at', '<=' , $end_date);
-        if($request->supplier_id)
+            ->whereDate('created_at', '>=', $start_date)
+            ->whereDate('created_at', '<=', $end_date);
+        if ($request->supplier_id)
             $q = $q->where('supplier_id', $request->supplier_id);
         $lims_purchase_data = $q->get();
         return view('backend.report.supplier_due_report', compact('lims_purchase_data', 'start_date', 'end_date'));

@@ -1,4 +1,4 @@
-{{-- resources/views/report/all_reports.blade.php --}}
+{{-- resources/views/report/currency_sale_report.blade.php --}}
 @extends('backend.layout.main')
 @section('content')
 @if(session()->has('not_permitted'))
@@ -12,20 +12,19 @@
   <div class="container-fluid">
     <div class="card">
       <div class="card-header mt-2">
-        <h3 class="text-center">Forex Gain Lose Report</h3>
+        <h3 class="text-center">{{ trans('file.Currency Wise Forex : Curruncy wise Gain/Loss Report') }}</h3>
       </div>
 
       {!! Form::open(['route' => 'report.sale', 'method' => 'post']) !!}
       <div class="row mb-3 product-report-filter container-fluid">
-
         <div class="col-md-4 mt-3">
           <div class="form-group row">
             <label class="d-tc mt-2"><strong>{{ trans('file.Choose Your Date') }}</strong> &nbsp;</label>
             <div class="d-tc">
               <div class="input-group">
-                <input type="text" class="daterangepicker-field form-control" value="{{ $start_date }} To {{ $end_date }}" required />
-                <input type="hidden" name="start_date" value="{{ $start_date }}" />
-                <input type="hidden" name="end_date" value="{{ $end_date }}" />
+                <input type="text" class="daterangepicker-field form-control" value="{{ $start_date ?? '' }} To {{ $end_date ?? '' }}" required />
+                <input type="hidden" name="start_date" value="{{ $start_date ?? '' }}" />
+                <input type="hidden" name="end_date" value="{{ $end_date ?? '' }}" />
               </div>
             </div>
           </div>
@@ -36,28 +35,25 @@
             <button class="btn btn-primary" id="run_report" type="button">{{ trans('file.submit') }}</button>
           </div>
         </div>
-
       </div>
       {!! Form::close() !!}
     </div>
   </div>
 
   <div class="table-responsive">
-    <table id="product-report-table" class="table table-hover" style="width:100%">
+    <table id="currency-sale-report-table" class="table table-hover" style="width:100%">
       <thead>
         <tr>
-          <th class="not-exported"></th>
-          <th>Date</th>
-          <th>Invoice</th>
-          <th>Customer</th>
-          <th>Base (Code)</th>
-          <th>Base Amount</th>
-          <th>Invoice Curr</th>
-          <th>Invoice Rate</th>
-          <th>Invoice Local</th>
-          <th>Payments Local</th>
-          <th>Payment Currencies (code@rate)</th>
-          <th>Due</th>
+          <th class="not-exported">SN</th>
+          <th>Base Currency</th>
+          <th class="text-right">Total Sales (Base)</th>
+          <th>Invoice Currency</th>
+          <th class="text-right">Total Invoice Amount</th>
+          <th class="text-right">Avg Sales Exch. Rate</th>
+          <th class="text-right">Total Payments (Base)</th>
+          <th class="text-right">Total Payments (Local)</th>
+          <th class="text-right">Avg Payment Rate</th>
+          <th class="text-right">Due</th>
           <th class="text-right">Gain/Loss (numeric)</th>
           <th class="text-right">Gain/Loss</th>
         </tr>
@@ -65,8 +61,9 @@
 
       <tfoot class="tfoot active">
         <tr>
-          <th></th><th></th><th></th><th>{{ trans('file.Total') }}</th>
-          <th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>
+          <th></th><th>{{ trans('file.Total') }}</th>
+          <th></th><th></th><th></th><th></th>
+          <th></th><th></th><th></th><th></th><th></th><th></th>
         </tr>
       </tfoot>
     </table>
@@ -93,80 +90,65 @@
 
   var table = null;
 
-  // column indexes for summation
-  var colBaseAmount = 5;
-  var colInvoiceLocal = 8;
-  var colPaymentsLocal = 9;
-  var colDue = 11;
-  var colGainLossNumeric = 12;
-  var colGainLossHTML = 13;
+  // column indexes (0-based)
+  var colTotalSalesBase = 2;
+  var colTotalInvoiceAmount = 4;
+  var colTotalPaymentsLocal = 7;
+  var colTotalPaymentsBase = 6;
+  var colDue = 9;
+  var colGainLossNumeric = 10;
+  var colGainLossHTML = 11;
 
   function initTable() {
-    if ($.fn.DataTable.isDataTable('#product-report-table')) {
-      $('#product-report-table').DataTable().destroy();
-      $('#product-report-table tbody').empty();
+    if ($.fn.DataTable.isDataTable('#currency-sale-report-table')) {
+      $('#currency-sale-report-table').DataTable().destroy();
+      $('#currency-sale-report-table tbody').empty();
     }
 
-    table = $('#product-report-table').DataTable({
+    table = $('#currency-sale-report-table').DataTable({
       processing: true,
       serverSide: true,
       ajax: {
-        url: "sale_report_data",
+        url: "{{ route('report.sale_curruncy_report_data') }}",
+
         type: "POST",
         data: function(d) {
           d._token = '{{ csrf_token() }}';
           d.start_date = $('input[name="start_date"]').val();
           d.end_date = $('input[name="end_date"]').val();
-          d.report_type = 'invoice'; // fixed mode now
         }
       },
       columns: [
-        { data: null, defaultContent: '', orderable: false, searchable: false },
-        { data: 'date' },
-        { data: 'label' },
-        { data: 'customer' },
-        { data: 'base_currency_code' },
-        { data: 'base_amount', className: 'text-right' },
-        { data: 'invoice_currency_code' },
-        { data: 'invoice_exchange_rate', className: 'text-right' },
-        { data: 'invoice_local', className: 'text-right' },
-        { data: 'payments_local', className: 'text-right' },
-        { data: 'payments_currency_summary' },
-        { data: 'due_amount', className: 'text-right' },
-        { data: 'gain_loss', visible: false, searchable: false },
+        { data: 'sn' },
+        { data: 'base_currency' },
+        { data: 'total_sales_base', className: 'text-right' },
+        { data: 'invoice_currency' },
+        { data: 'total_invoice_amount', className: 'text-right' },
+        { data: 'avg_sales_exchange_rate', className: 'text-right' },
+        { data: 'total_payments_base', className: 'text-right' },
+        { data: 'total_payments_local', className: 'text-right' },
+        { data: 'avg_payment_exchange_rate', className: 'text-right' },
+        { data: 'total_due', className: 'text-right' },
+        { data: 'gain_loss_numeric', visible: false, searchable: false },
         { data: 'gain_loss_html', className: 'text-right', orderable: false }
       ],
-      order: [[1,'desc']],
+      order: [[1,'asc']],
       dom: '<"row"lfB>rtip',
       buttons: [
-        { extend: 'pdf', title: 'Sale Report', exportOptions: { columns: ':visible:not(.not-exported)' } },
-        { extend: 'csv', title: 'Sale Report', exportOptions: { columns: ':visible:not(.not-exported)' } },
-        { extend: 'excel', title: 'Sale Report', exportOptions: { columns: ':visible:not(.not-exported)' } },
-        { extend: 'print', title: 'Sale Report', exportOptions: { columns: ':visible:not(.not-exported)' } },
+        { extend: 'pdf', title: 'Currency Sale Report', exportOptions: { columns: ':visible:not(.not-exported)' } },
+        { extend: 'csv', title: 'Currency Sale Report', exportOptions: { columns: ':visible:not(.not-exported)' } },
+        { extend: 'excel', title: 'Currency Sale Report', exportOptions: { columns: ':visible:not(.not-exported)' } },
+        { extend: 'print', title: 'Currency Sale Report', exportOptions: { columns: ':visible:not(.not-exported)' } },
         { extend: 'colvis', text: '{{ trans("file.Column visibility") }}' }
       ],
-      createdRow: function(row, data) {
-        if (data.payments_html) {
-          $(row).addClass('has-child').attr('data-child', data.payments_html);
-        }
-      },
       drawCallback: function() { datatable_sum(table, false); },
       initComplete: function() { datatable_sum(table, false); }
     });
   }
 
-  // first load
   initTable();
 
-  // reload on click
   $('#run_report').on('click', function(){ table.ajax.reload(); });
-
-  // expand payment details on row click
-  $('#product-report-table tbody').on('click', 'tr.has-child', function() {
-    var tr = $(this), row = table.row(tr);
-    if (row.child.isShown()) { row.child.hide(); tr.removeClass('shown'); }
-    else { row.child(tr.data('child')).show(); tr.addClass('shown'); }
-  });
 
   function datatable_sum(dt, is_calling_first) {
     try {
@@ -176,9 +158,10 @@
         var total = 0; data.each(function(v){ total += parseFloat(String(v).replace(/,/g,'')) || 0; });
         return total;
       }
-      $(dt.column(colBaseAmount).footer()).html(sum(colBaseAmount).toFixed(2));
-      $(dt.column(colInvoiceLocal).footer()).html(sum(colInvoiceLocal).toFixed(2));
-      $(dt.column(colPaymentsLocal).footer()).html(sum(colPaymentsLocal).toFixed(2));
+      $(dt.column(colTotalSalesBase).footer()).html(sum(colTotalSalesBase).toFixed(2));
+      $(dt.column(colTotalInvoiceAmount).footer()).html(sum(colTotalInvoiceAmount).toFixed(2));
+      $(dt.column(colTotalPaymentsBase).footer()).html(sum(colTotalPaymentsBase).toFixed(2));
+      $(dt.column(colTotalPaymentsLocal).footer()).html(sum(colTotalPaymentsLocal).toFixed(2));
       $(dt.column(colDue).footer()).html(sum(colDue).toFixed(2));
       var gl = sum(colGainLossNumeric), html;
       if (gl > 0) html = '<span class="text-success">+' + gl.toFixed(2) + '</span>';

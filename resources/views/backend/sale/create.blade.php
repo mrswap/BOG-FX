@@ -42,7 +42,7 @@
                                         <div class="col-md-4">
                                             <div class="form-group">
                                                 <label>
-                                                    {{ trans('file.Reference No') }}
+                                                    {{ trans('file.Reference No') }} / INVOICE NUMBER
                                                 </label>
                                                 <input type="text" name="reference_no" class="form-control" />
                                             </div>
@@ -103,10 +103,11 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <input type="hidden" name="warehouse_id" id="warehouse_id" value="1" />
+
+                                        <input type='hidden' name="warehouse_id" id="warehouse_id" value="1" />
 
                                         @if (isset(auth()->user()->biller_id))
-                                            <input type="hidden" name="biller_id" id="biller_id"
+                                            <input type='text' name="biller_id" id="biller_id"
                                                 value="{{ auth()->user()->biller_id }}" />
                                         @else
                                             <div class="col-md-4">
@@ -138,7 +139,7 @@
                                                 </select>
                                             </div>
                                         </div>
-                                        <div class="col-md-2">
+                                        <div class="col-md-2" style="visibility: hidden;">
                                             <div class="form-group mb-0">
                                                 <label>{{ trans('file.Exchange Rate') }} *</label>
                                             </div>
@@ -152,267 +153,87 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <div class="form-group">
-                                            <label>Currency Exchange Rates</label>
-                                            <div class="currency-wrapper">
-                                                @foreach ($currency_list as $currency_data)
-                                                    <div class="input-group mb-2">
-                                                        <div class="input-group-prepend">
-                                                            <span class="input-group-text" style="min-width: 80px;">
-                                                                {{ $currency_data->code }}
-                                                            </span>
-                                                        </div>
-                                                        <input type="text" class="form-control currency-rate"
-                                                            name="detailed_currency_data[{{ $currency_data->id }}]"
-                                                            value="{{ $currency_data->exchange_rate }}"
-                                                            data-id="{{ $currency_data->id }}">
-                                                    </div>
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <!-- currency and exchange rate swap -->
 
-                                    <div class="row mt-3">
-                                        <div class="col-md-12">
-                                            <label>{{ trans('file.Select Product') }}</label>
-                                            <div class="search-box input-group">
-                                                <button type="button" class="btn btn-secondary btn-lg"><i
-                                                        class="fa fa-barcode"></i></button>
-                                                <input type="text" name="product_code_name"
-                                                    id="lims_productcodeSearch"
-                                                    placeholder="Please type product code and select..."
+
+                                    <div class="row">
+
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label>Invoice Amount *</label>
+                                                <input type="text" name="grand_total" id="grand_total"
                                                     class="form-control" />
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="row mt-5">
-                                        <div class="col-md-12">
-                                            <h5>{{ trans('file.Order Table') }} *</h5>
-                                            <div class="table-responsive mt-3">
-                                                <table id="myTable" class="table table-hover order-list">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>{{ trans('file.name') }}</th>
-                                                            <th>{{ trans('file.Code') }}</th>
-                                                            <th>{{ trans('file.Quantity') }}</th>
-                                                            <th>{{ trans('file.Batch No') }}</th>
-                                                            <th>{{ trans('file.Expired Date') }}</th>
-                                                            <th>{{ trans('file.Net Unit Price') }}</th>
-                                                            <th>{{ trans('file.Discount') }}</th>
-                                                            <th>{{ trans('file.Tax') }}</th>
-                                                            <th>{{ trans('file.Subtotal') }}</th>
-                                                            <th><i class="dripicons-trash"></i></th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                    </tbody>
-                                                    <tfoot class="tfoot active">
-                                                        <th colspan="2">{{ trans('file.Total') }}</th>
-                                                        <th id="total-qty">0</th>
-                                                        <th></th>
-                                                        <th></th>
-                                                        <th></th>
-                                                        <th id="total-discount">
-                                                            {{ number_format(0, $general_setting->decimal, '.', '') }}</th>
-                                                        <th id="total-tax">
-                                                            {{ number_format(0, $general_setting->decimal, '.', '') }}</th>
-                                                        <th id="total">
-                                                            {{ number_format(0, $general_setting->decimal, '.', '') }}</th>
-                                                        <th><i class="dripicons-trash"></i></th>
-                                                    </tfoot>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <input type="hidden" name="total_qty" />
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <input type="hidden" name="total_discount" />
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <input type="hidden" name="total_tax" />
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <input type="hidden" name="total_price" />
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <input type="hidden" name="item" />
-                                                <input type="hidden" name="order_tax" />
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <input type="hidden" name="grand_total" />
-                                                <input type="hidden" name="used_points" />
-                                                <input type="hidden" name="pos" value="0" />
-                                                <input type="hidden" name="coupon_active" value="0" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="row mt-3">
+
                                         <div class="col-md-4">
                                             <div class="form-group">
-                                                <label>{{ trans('file.Order Tax') }}</label>
-                                                <select class="form-control" name="order_tax_rate">
-                                                    <option value="0">No Tax</option>
-                                                    @foreach ($lims_tax_list as $tax)
-                                                        <option value="{{ $tax->rate }}">{{ $tax->name }}</option>
+                                                <label>Select Currency</label>
+                                                <select class="form-control" id="currency_select"
+                                                    name="detailed_currency_data[selected_currency]">
+                                                    <option value="">-- Select Currency --</option>
+                                                    @foreach ($currency_list as $currency_data)
+                                                        <option value="{{ $currency_data->id }}"
+                                                            data-rate="{{ $currency_data->exchange_rate }}">
+                                                            {{ $currency_data->code }}
+                                                        </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
+
                                         <div class="col-md-4">
-                                            <div class="form-group">
-                                                <label>{{ trans('file.Order Discount Type') }}</label>
-                                                <select id="order-discount-type" name="order_discount_type"
-                                                    class="form-control">
-                                                    <option value="Flat">{{ trans('file.Flat') }}</option>
-                                                    <option value="Percentage">{{ trans('file.Percentage') }}</option>
-                                                </select>
+                                            <div class="form-group mt-2">
+                                                <label>Exchange Rate</label>
+                                                <input type="text" class="form-control" id="exchange_rate_input"
+                                                    name="detailed_currency_data[exchange_rate]"
+                                                    placeholder="Enter exchange rate manually">
                                             </div>
                                         </div>
+
                                         <div class="col-md-4">
-                                            <div class="form-group">
-                                                <label>{{ trans('file.Value') }}</label>
-                                                <input type="text" name="order_discount_value"
-                                                    class="form-control numkey" id="order-discount-val">
-                                                <input type="hidden" name="order_discount" class="form-control"
-                                                    id="order-discount">
+                                            <div class="form-group mt-2">
+                                                <label>Exchanged Amount</label>
+                                                <input type="text" class="form-control" id="converted_amount"
+                                                    name="detailed_currency_data[converted_amount]" readonly>
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
+
+                                    </div>
+
+
+                                    <div class="row">
+                                        <div class="col-md-2">
                                             <div class="form-group">
-                                                <label>
-                                                    {{ trans('file.Shipping Cost') }}
-                                                </label>
-                                                <input type="number" name="shipping_cost" class="form-control"
-                                                    step="any" />
+                                                <input type='hidden' name="total_qty" value ="1" />
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-md-2">
                                             <div class="form-group">
-                                                <label>{{ trans('file.Attach Document') }}</label> <i
-                                                    class="dripicons-question" data-toggle="tooltip"
-                                                    title="Only jpg, jpeg, png, gif, pdf, csv, docx, xlsx and txt file is supported"></i>
-                                                <input type="file" name="document" class="form-control" />
-                                                @if ($errors->has('extension'))
-                                                    <span>
-                                                        <strong>{{ $errors->first('extension') }}</strong>
-                                                    </span>
-                                                @endif
+                                                <input type='hidden' name="total_discount" />
                                             </div>
                                         </div>
-                                        @foreach ($custom_fields as $field)
-                                            @if (!$field->is_admin || \Auth::user()->role_id == 1)
-                                                <div class="{{ 'col-md-' . $field->grid_value }}">
-                                                    <div class="form-group">
-                                                        <label>{{ $field->name }}</label>
-                                                        @if ($field->type == 'text')
-                                                            <input type="text"
-                                                                name="{{ str_replace(' ', '_', strtolower($field->name)) }}"
-                                                                value="{{ $field->default_value }}" class="form-control"
-                                                                @if ($field->is_required) {{ 'required' }} @endif>
-                                                        @elseif($field->type == 'number')
-                                                            <input type="number"
-                                                                name="{{ str_replace(' ', '_', strtolower($field->name)) }}"
-                                                                value="{{ $field->default_value }}" class="form-control"
-                                                                @if ($field->is_required) {{ 'required' }} @endif>
-                                                        @elseif($field->type == 'textarea')
-                                                            <textarea rows="5" name="{{ str_replace(' ', '_', strtolower($field->name)) }}"
-                                                                value="{{ $field->default_value }}" class="form-control"
-                                                                @if ($field->is_required) {{ 'required' }} @endif></textarea>
-                                                        @elseif($field->type == 'checkbox')
-                                                            <br>
-                                                            <?php $option_values = explode(',', $field->option_value); ?>
-                                                            @foreach ($option_values as $value)
-                                                                <label>
-                                                                    <input type="checkbox"
-                                                                        name="{{ str_replace(' ', '_', strtolower($field->name)) }}[]"
-                                                                        value="{{ $value }}"
-                                                                        @if ($value == $field->default_value) {{ 'checked' }} @endif
-                                                                        @if ($field->is_required) {{ 'required' }} @endif>
-                                                                    {{ $value }}
-                                                                </label>
-                                                                &nbsp;
-                                                            @endforeach
-                                                        @elseif($field->type == 'radio_button')
-                                                            <br>
-                                                            <?php $option_values = explode(',', $field->option_value); ?>
-                                                            @foreach ($option_values as $value)
-                                                                <label class="radio-inline">
-                                                                    <input type="radio"
-                                                                        name="{{ str_replace(' ', '_', strtolower($field->name)) }}"
-                                                                        value="{{ $value }}"
-                                                                        @if ($value == $field->default_value) {{ 'checked' }} @endif
-                                                                        @if ($field->is_required) {{ 'required' }} @endif>
-                                                                    {{ $value }}
-                                                                </label>
-                                                                &nbsp;
-                                                            @endforeach
-                                                        @elseif($field->type == 'select')
-                                                            <?php $option_values = explode(',', $field->option_value); ?>
-                                                            <select class="form-control"
-                                                                name="{{ str_replace(' ', '_', strtolower($field->name)) }}"
-                                                                @if ($field->is_required) {{ 'required' }} @endif>
-                                                                @foreach ($option_values as $value)
-                                                                    <option value="{{ $value }}"
-                                                                        @if ($value == $field->default_value) {{ 'selected' }} @endif>
-                                                                        {{ $value }}</option>
-                                                                @endforeach
-                                                            </select>
-                                                        @elseif($field->type == 'multi_select')
-                                                            <?php $option_values = explode(',', $field->option_value); ?>
-                                                            <select class="form-control"
-                                                                name="{{ str_replace(' ', '_', strtolower($field->name)) }}[]"
-                                                                @if ($field->is_required) {{ 'required' }} @endif
-                                                                multiple>
-                                                                @foreach ($option_values as $value)
-                                                                    <option value="{{ $value }}"
-                                                                        @if ($value == $field->default_value) {{ 'selected' }} @endif>
-                                                                        {{ $value }}</option>
-                                                                @endforeach
-                                                            </select>
-                                                        @elseif($field->type == 'date_picker')
-                                                            <input type="text"
-                                                                name="{{ str_replace(' ', '_', strtolower($field->name)) }}"
-                                                                value="{{ $field->default_value }}"
-                                                                class="form-control date"
-                                                                @if ($field->is_required) {{ 'required' }} @endif>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                            @endif
-                                        @endforeach
-                                        <div class="col-md-4">
+                                        <div class="col-md-2">
                                             <div class="form-group">
-                                                <label>{{ trans('file.Sale Status') }} *</label>
-                                                <select name="sale_status" class="form-control">
-                                                    <option value="1">{{ trans('file.Completed') }}</option>
-                                                    <option value="2">{{ trans('file.Pending') }}</option>
-                                                </select>
+                                                <input type='hidden' name="total_tax" />
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-md-2">
                                             <div class="form-group">
-                                                <label>{{ trans('file.Payment Status') }} *</label>
-                                                <select name="payment_status" class="form-control">
-                                                    <option value="1">{{ trans('file.Pending') }}</option>
-                                                    <option value="2">{{ trans('file.Due') }}</option>
-                                                    <option value="3">{{ trans('file.Partial') }}</option>
-                                                    <option value="4">{{ trans('file.Paid') }}</option>
-                                                </select>
+                                                <input type='hidden' name="total_price" />
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="form-group">
+                                                <input type='hidden' name="item" value ="1" />
+                                                <input type='hidden' name="order_tax" />
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="form-group">
+                                                <input type='hidden' name="used_points" />
+                                                <input type='hidden' name="pos" value="0" />
+                                                <input type='hidden' name="coupon_active" value="0" />
                                             </div>
                                         </div>
                                     </div>
@@ -466,6 +287,10 @@
                                                     </select>
                                                 </div>
                                             </div>
+
+
+
+
                                             <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label>{{ trans('file.Recieved Amount') }} *</label>
@@ -501,17 +326,6 @@
                                                     <div class="card-element" class="form-control">
                                                     </div>
                                                     <div class="card-errors" role="alert"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row" id="gift-card">
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label> {{ trans('file.Gift Card') }} *</label>
-                                                    <select id="gift_card_id" name="gift_card_id"
-                                                        class="selectpicker form-control" data-live-search="true"
-                                                        data-live-search-style="begins"
-                                                        title="Select Gift Card..."></select>
                                                 </div>
                                             </div>
                                         </div>
@@ -698,7 +512,7 @@
                             <input type="text" name="city" class="form-control">
                         </div>
                         <div class="form-group">
-                            <input type="hidden" name="pos" value="1">
+                            <input type='hidden' name="pos" value="1">
                             <button type="button"
                                 class="btn btn-primary customer-submit-btn">{{ trans('file.submit') }}</button>
                         </div>
@@ -747,12 +561,38 @@
         </div>
     </section>
 
-    <section id="print-layout">
-    </section>
-
 @endsection
 
 @push('scripts')
+    <script>
+        function calculateConvertedAmount() {
+            let amount = parseFloat($('#grand_total').val()) || 0;
+            let rate = parseFloat($('#exchange_rate_input').val()) || 0;
+            let converted = amount * rate;
+            $('#converted_amount').val(converted.toFixed(2));
+        }
+
+        // When exchange rate CHANGES (manual typing)
+        $('#exchange_rate_input').on('input', function() {
+            console.log('Exchange rate changed by typing');
+            calculateConvertedAmount();
+        });
+
+        // When invoice amount CHANGES
+        $('#grand_total').on('input', function() {
+            console.log('Invoice amount changed');
+            calculateConvertedAmount();
+        });
+
+        // When currency is selected from dropdown
+        $('#currency_select').change(function() {
+            let rate = $(this).find(':selected').data('rate');
+            $('#exchange_rate_input').val(rate).trigger('input'); // force calculation + log
+            console.log('Exchange rate set from dropdown');
+        });
+    </script>
+
+
     <script type="text/javascript">
         $("ul#sale").siblings('a').attr('aria-expanded', 'true');
         $("ul#sale").addClass("show");
@@ -1123,156 +963,6 @@
             });
         }
 
-        function productSearch(data) {
-            var product_info = data.split("|");
-            var code = product_info[0];
-            var pre_qty = 0;
-            var flag = true;
-
-            $(".product-code").each(function(i) {
-                if ($(this).val() == code) {
-                    rowindex = i;
-                    if (product_info[2] != 'null') {
-                        imeiNumbers = $('table.order-list tbody tr:nth-child(' + (rowindex + 1) + ') .imei-number')
-                            .val();
-                        imeiNumbersArray = imeiNumbers.split(",");
-                        // console.log('arra '+ rowindex);
-
-                        if (imeiNumbersArray.includes(product_info[2])) {
-                            alert('Same imei or serial number is not allowed!');
-                            flag = false;
-                            $('#lims_productcodeSearch').val('');
-                        }
-                    }
-                    pre_qty = $('table.order-list tbody tr:nth-child(' + (rowindex + 1) + ') .qty').val();
-                }
-            });
-            if (flag) {
-                data += '?' + $('#customer_id').val() + '?' + (parseFloat(pre_qty) + 1);
-                $.ajax({
-                    type: 'GET',
-                    url: 'lims_product_search',
-                    data: {
-                        data: data
-                    },
-                    success: function(data) {
-                        var flag = 1;
-                        if (pre_qty > 0) {
-                            var qty = data[15];
-                            $('table.order-list tbody tr:nth-child(' + (rowindex + 1) + ') .qty').val(qty);
-                            pos = product_code.indexOf(data[1]);
-                            if (!data[11] && product_warehouse_price[pos]) {
-                                product_price[rowindex] = parseFloat(product_warehouse_price[pos] * currency[
-                                    'exchange_rate']) + parseFloat(product_warehouse_price[pos] * currency[
-                                    'exchange_rate'] * customer_group_rate);
-                            } else {
-                                product_price[rowindex] = parseFloat(data[2] * currency['exchange_rate']) +
-                                    parseFloat(data[2] * currency['exchange_rate'] * customer_group_rate);
-                            }
-                            flag = 0;
-                            checkQuantity(String(qty), true);
-                            flag = 0;
-                        }
-                        $("input[name='product_code_name']").val('');
-                        if (flag) {
-                            var newRow = $("<tr>");
-                            var cols = '';
-                            pos = product_code.indexOf(data[1]);
-                            temp_unit_name = (data[6]).split(',');
-                            cols += '<td>' + data[0] +
-                                '<button type="button" class="edit-product btn btn-link" data-toggle="modal" data-target="#editModal"> <i class="dripicons-document-edit"></i></button></td>';
-                            cols += '<td>' + data[1] + '</td>';
-                            cols += '<td><input type="text" class="form-control qty" name="qty[]" value="' +
-                                data[15] + '" required/></td>';
-                            if (data[12]) {
-                                cols += '<td><input type="text" class="form-control batch-no" value="' +
-                                    batch_no[pos] +
-                                    '" required/> <input type="hidden" class="product-batch-id" name="product_batch_id[]" value="' +
-                                    product_batch_id[pos] + '"/> </td>';
-                                cols += '<td class="expired-date">' + expired_date[pos] + '</td>';
-                            } else {
-                                cols +=
-                                    '<td><input type="text" class="form-control batch-no" disabled/> <input type="hidden" class="product-batch-id" name="product_batch_id[]"/> </td>';
-                                cols += '<td class="expired-date">N/A</td>';
-                            }
-
-                            cols += '<td class="net_unit_price"></td>';
-                            cols +=
-                                '<td class="discount">{{ number_format(0, $general_setting->decimal, '.', '') }}</td>';
-                            cols += '<td class="tax"></td>';
-                            cols += '<td class="sub-total"></td>';
-                            cols +=
-                                '<td><button type="button" class="ibtnDel btn btn-md btn-danger">{{ trans('file.delete') }}</button></td>';
-                            cols += '<input type="hidden" class="product-code" name="product_code[]" value="' +
-                                data[1] + '"/>';
-                            cols += '<input type="hidden" class="product-id" name="product_id[]" value="' +
-                                data[9] + '"/>';
-                            cols += '<input type="hidden" class="sale-unit" name="sale_unit[]" value="' +
-                                temp_unit_name[0] + '"/>';
-                            cols += '<input type="hidden" class="net_unit_price" name="net_unit_price[]" />';
-                            cols += '<input type="hidden" class="discount-value" name="discount[]" />';
-                            cols += '<input type="hidden" class="tax-rate" name="tax_rate[]" value="' + data[
-                                3] + '"/>';
-                            cols += '<input type="hidden" class="tax-value" name="tax[]" />';
-                            cols += '<input type="hidden" class="subtotal-value" name="subtotal[]" />';
-                            if (data[18])
-                                cols +=
-                                '<input type="hidden" class="imei-number" name="imei_number[]" value="' + data[
-                                    18] + '" />';
-                            else
-                                cols +=
-                                '<input type="hidden" class="imei-number" name="imei_number[]" value="" />';
-
-                            newRow.append(cols);
-                            $("table.order-list tbody").prepend(newRow);
-                            rowindex = newRow.index();
-
-                            if (!data[11] && product_warehouse_price[pos]) {
-                                product_price.splice(rowindex, 0, parseFloat(product_warehouse_price[pos] *
-                                    currency['exchange_rate']) + parseFloat(product_warehouse_price[
-                                    pos] * currency['exchange_rate'] * customer_group_rate));
-                            } else {
-                                product_price.splice(rowindex, 0, parseFloat(data[2] * currency[
-                                    'exchange_rate']) + parseFloat(data[2] * currency['exchange_rate'] *
-                                    customer_group_rate));
-                            }
-                            if (data[16])
-                                wholesale_price.splice(rowindex, 0, parseFloat(data[16] * currency[
-                                    'exchange_rate']) + parseFloat(data[16] * currency['exchange_rate'] *
-                                    customer_group_rate));
-                            else
-                                wholesale_price.splice(rowindex, 0,
-                                    '{{ number_format(0, $general_setting->decimal, '.', '') }}');
-                            cost.splice(rowindex, 0, parseFloat(data[17] * currency['exchange_rate']));
-                            product_discount.splice(rowindex, 0,
-                                '{{ number_format(0, $general_setting->decimal, '.', '') }}');
-                            tax_rate.splice(rowindex, 0, parseFloat(data[3]));
-                            tax_name.splice(rowindex, 0, data[4]);
-                            tax_method.splice(rowindex, 0, data[5]);
-                            unit_name.splice(rowindex, 0, data[6]);
-                            unit_operator.splice(rowindex, 0, data[7]);
-                            unit_operation_value.splice(rowindex, 0, data[8]);
-                            is_imei.splice(rowindex, 0, data[13]);
-                            is_variant.splice(rowindex, 0, data[14]);
-                            checkQuantity(data[15], true);
-                            // if(data[13]) {
-                            //     populatePriceOption();
-                            //     $('table.order-list tbody tr:nth-child(' + (rowindex + 1) + ')').find('.edit-product').click();
-                            // }
-                        } else if (data[18]) {
-                            var imeiNumbers = $('table.order-list tbody tr:nth-child(' + (rowindex + 1) + ')')
-                                .find('.imei-number').val();
-                            if (imeiNumbers)
-                                imeiNumbers += ',' + data[18];
-                            else
-                                imeiNumbers = data[18];
-                            $('table.order-list tbody tr:nth-child(' + (rowindex + 1) + ')').find(
-                                '.imei-number').val(imeiNumbers);
-                        }
-                    }
-                });
-            }
-        }
 
         function populatePriceOption() {
             $('#editModal select[name=price_option]').empty();
@@ -1779,20 +1469,7 @@
                     e.preventDefault();
                 }
             });
-            if (rownumber < 0) {
-                alert("Please insert product to order table!")
-                e.preventDefault();
-            } else if (parseFloat($('input[name="total_qty"]').val()) <= 0) {
-                alert('Product quantity is 0');
-                e.preventDefault();
-            } else if (parseFloat($("#paying-amount").val()) < parseFloat($("#paid-amount").val())) {
-                alert('Paying amount cannot be bigger than recieved amount');
-                e.preventDefault();
-            } else if ($('select[name="payment_status"]').val() == 3 && parseFloat($("#paid-amount").val()) ==
-                parseFloat($('input[name="grand_total"]').val())) {
-                alert('Paying amount equals to grand total! Please change payment status.');
-                e.preventDefault();
-            } else if (!$('#biller_id').val()) {
+            if (!$('#biller_id').val()) {
                 alert('Please select a biller');
                 e.preventDefault();
             } else {

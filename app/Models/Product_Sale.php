@@ -10,4 +10,5 @@ class Product_Sale extends Model
     protected $fillable =[
         "sale_id", "product_id", "product_batch_id", "variant_id", 'imei_number', "qty", "return_qty", "sale_unit_id", "net_unit_price", "discount", "tax_rate", "tax", "total", "is_packing", "is_delivered","detailed_currency_data"
     ];
+    
 }

@@ -73,13 +73,24 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::get('migrate', function() {
-	Artisan::call('migrate');
+Route::get('migrate', function () {
+    Artisan::call('migrate');
     //Artisan::call('db:seed');
-	dd('migrated');
+    dd('migrated');
 });
 
-Route::get('clear',function() {
+
+Route::get('/get-sale-currency/{sale_id}', [SaleController::class, 'getSaleCurrency'])
+    ->name('get.sale.currency');
+Route::get('get-payment-currency-curruncy/{id}', [SaleController::class, 'getPaymentCurrency'])->name('get.payment.currency.edit');
+// Currency-wise forex gain/loss report (POST)
+Route::post('sale_curruncy_report_data', [App\Http\Controllers\ReportController::class, 'saleCurrencyReportData'])->name('report.sale_curruncy_report_data');
+Route::post('sale_customer_report_data', [App\Http\Controllers\ReportController::class, 'saleCustomerReportData'])->name('report.sale_customer_report_data');
+
+
+Route::post('sale_due_report_data', [App\Http\Controllers\ReportController::class, 'saleDueReportData'])->name('report.sale_due_report_data');
+
+Route::get('clear', function () {
     Artisan::call('optimize:clear');
     cache()->forget('biller_list');
     cache()->forget('brand_list');
@@ -113,7 +124,7 @@ Route::group(['prefix' => 'developer-section'], function () {
         Route::post('/', 'submit')->name('developer-section.submit');
         Route::post('/bug-update-setting', 'bugUpdateSetting')->name('bug-update-setting.submit');
         Route::post('/version-upgrade-setting', 'versionUpgradeSetting')->name('version-upgrade-setting.submit');
-     });
+    });
 });
 
 Route::controller(ClientAutoUpdateController::class)->group(function () {
@@ -131,13 +142,13 @@ Route::get('/ecommerce-documentation', [HomeController::class, 'ecomDocumentatio
 
 Route::post('/session-renew', [HomeController::class, 'sessionRenew'])->name('session');
 
-Route::group(['middleware' => 'auth'], function() {
+Route::group(['middleware' => 'auth'], function () {
     Route::controller(HomeController::class)->group(function () {
         Route::get('home', 'home');
     });
 });
 
-Route::group(['middleware' => ['common', 'auth', 'active']], function() {
+Route::group(['middleware' => ['common', 'auth', 'active']], function () {
 
     // Languages Section
     Route::prefix('languages')->group(function () {
@@ -178,7 +189,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
     });
 
     // Need to check again
-    Route::resource('products',ProductController::class)->except([ 'show']);
+    Route::resource('products', ProductController::class)->except(['show']);
     Route::controller(ProductController::class)->group(function () {
         Route::post('products/product-data', 'productData');
         Route::get('products/gencode', 'generateCode');
@@ -186,11 +197,11 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
         Route::get('products/saleunit/{id}', 'saleUnit');
         Route::get('products/getdata/{id}/{variant_id}', 'getData');
         Route::get('products/product_warehouse/{id}', 'productWarehouseData');
-        Route::get('products/print_barcode','printBarcode')->name('product.printBarcode');
+        Route::get('products/print_barcode', 'printBarcode')->name('product.printBarcode');
         Route::get('products/lims_product_search', 'limsProductSearch')->name('product.search');
         Route::post('products/deletebyselection', 'deleteBySelection');
         Route::post('products/update', 'updateProduct');
-        Route::get('products/variant-data/{id}','variantData');
+        Route::get('products/variant-data/{id}', 'variantData');
         Route::get('products/history', 'history')->name('products.history');
         Route::post('products/sale-history-data', 'saleHistoryData');
         Route::post('products/purchase-history-data', 'purchaseHistoryData');
@@ -202,32 +213,32 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
         Route::get('products/all-product-in-stock', 'allProductInStock')->name('product.allProductInStock');
         Route::get('products/show-all-product-online', 'showAllProductOnline')->name('product.showAllProductOnline');
         Route::get('check-batch-availability/{product_id}/{batch_no}/{warehouse_id}', 'checkBatchAvailability');
-     });
+    });
 
 
     Route::get('language_switch/{locale}', [LanguageController::class, 'switchLanguage']);
 
-    Route::resource('role',RoleController::class);
+    Route::resource('role', RoleController::class);
     Route::controller(RoleController::class)->group(function () {
         Route::get('role/permission/{id}', 'permission')->name('role.permission');
         Route::post('role/set_permission', 'setPermission')->name('role.setPermission');
     });
 
     //Sms Template
-    Route::resource('smstemplates',SmsTemplateController::class);
+    Route::resource('smstemplates', SmsTemplateController::class);
     Route::resource('unit', UnitController::class);
     Route::controller(UnitController::class)->group(function () {
         Route::post('importunit', 'importUnit')->name('unit.import');
         Route::post('unit/deletebyselection', 'deleteBySelection');
         Route::get('unit/lims_unit_search', 'limsUnitSearch')->name('unit.search');
-     });
+    });
 
     Route::resource('unit', UnitController::class);
     Route::controller(UnitController::class)->group(function () {
         Route::post('importunit', 'importUnit')->name('unit.import');
         Route::post('unit/deletebyselection', 'deleteBySelection');
         Route::get('unit/lims_unit_search', 'limsUnitSearch')->name('unit.search');
-     });
+    });
 
 
     Route::controller(CategoryController::class)->group(function () {
@@ -286,7 +297,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
 
     Route::resource('discount-plans', DiscountPlanController::class);
     Route::resource('discounts', DiscountController::class);
-    Route::get('discounts/product-search/{code}', [DiscountController::class,'productSearch']);
+    Route::get('discounts/product-search/{code}', [DiscountController::class, 'productSearch']);
 
 
     Route::controller(CustomerController::class)->group(function () {
@@ -373,8 +384,8 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
     Route::controller(DeliveryController::class)->group(function () {
         Route::prefix('delivery')->group(function () {
             Route::get('/', 'index')->name('delivery.index');
-            Route::get('delivery_list_data','deliveryListData');
-            Route::get('product_delivery/{id}','productDeliveryData');
+            Route::get('delivery_list_data', 'deliveryListData');
+            Route::get('product_delivery/{id}', 'productDeliveryData');
             Route::get('create/{id}', 'create');
             Route::post('store', 'store')->name('delivery.store');
             Route::post('sendmail', 'sendMail')->name('delivery.sendMail');
@@ -383,13 +394,13 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::post('deletebyselection', 'deleteBySelection');
             Route::post('delete/{id}', 'delete')->name('delivery.delete');
         });
-     });
+    });
 
 
     Route::controller(QuotationController::class)->group(function () {
         Route::prefix('quotations')->group(function () {
             Route::post('quotation-data', 'quotationData')->name('quotations.data');
-            Route::get('product_quotation/{id}','productQuotationData');
+            Route::get('product_quotation/{id}', 'productQuotationData');
             Route::get('lims_product_search', 'limsProductSearch')->name('product_quotation.search');
             Route::get('getcustomergroup/{id}', 'getCustomerGroup')->name('quotation.getcustomergroup');
             Route::get('getproduct/{id}', 'getProduct')->name('quotation.getproduct');
@@ -398,7 +409,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::post('sendmail', 'sendMail')->name('quotation.sendmail');
             Route::post('deletebyselection', 'deleteBySelection');
         });
-     });
+    });
     Route::resource('quotations', QuotationController::class);
 
 
@@ -429,7 +440,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::get('getproduct/{id}', 'getProduct')->name('transfer.getproduct');
             Route::get('lims_product_search', 'limsProductSearch')->name('product_transfer.search');
             Route::post('deletebyselection', 'deleteBySelection');
-         });
+        });
         Route::post('importtransfer', 'importTransfer')->name('transfer.import');
     });
     Route::resource('transfers', TransferController::class);
@@ -453,7 +464,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::get('lims_product_search', 'limsProductSearch')->name('product_return-sale.search');
             Route::get('product_return/{id}', 'productReturnData');
             Route::post('deletebyselection', 'deleteBySelection');
-         });
+        });
     });
     Route::resource('return-sale', ReturnController::class);
 
@@ -467,7 +478,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::get('lims_product_search', 'limsProductSearch')->name('product_return-purchase.search');
             Route::get('product_return/{id}', 'productReturnData');
             Route::post('deletebyselection', 'deleteBySelection');
-         });
+        });
     });
     Route::resource('return-purchase', ReturnPurchaseController::class);
 
@@ -494,7 +505,11 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::post('product_report_data', 'productReportData');
             Route::post('purchase', 'purchaseReport')->name('report.purchase');
             Route::post('purchase_report_data', 'purchaseReportData');
+
             Route::post('sale_report', 'saleReport')->name('report.sale');
+            Route::post('currency_report', 'currencyReport')->name('report.currency');
+            Route::post('customer_report', 'customerReport')->name('report.customer');
+            Route::post('due_payment_report', 'duePaymentReport')->name('report.due');
             Route::post('sale_report_data', 'saleReportData');
             Route::get('challan-report', 'challanReport')->name('report.challan');
             Route::post('sale-report-chart', 'saleReportChart')->name('report.saleChart');
@@ -514,9 +529,9 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::post('user-transfer-data', 'userTransferData');
             Route::post('user-payroll-data', 'userPayrollData');
             Route::post('biller_report', 'billerReport')->name('report.biller');
-            Route::post('biller-sale-data','billerSaleData');
-            Route::post('biller-quotation-data','billerQuotationData');
-            Route::post('biller-payment-data','billerPaymentData');
+            Route::post('biller-sale-data', 'billerSaleData');
+            Route::post('biller-quotation-data', 'billerQuotationData');
+            Route::post('biller-payment-data', 'billerPaymentData');
             Route::post('customer_report', 'customerReport')->name('report.customer');
             Route::post('customer-sale-data', 'customerSaleData');
             Route::post('customer-payment-data', 'customerPaymentData');
@@ -566,7 +581,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::get('createsms', 'createSms')->name('setting.createSms');
             Route::post('sendsms', 'sendSMS')->name('setting.sendSms');
             Route::get('payment-gateways/list', 'gateway')->name('setting.gateway');
-            Route::post('payment-gateways/update','gatewayUpdate')->name('setting.gateway.update');
+            Route::post('payment-gateways/update', 'gatewayUpdate')->name('setting.gateway.update');
             Route::get('hrm_setting', 'hrmSetting')->name('setting.hrm');
             Route::post('hrm_setting_store', 'hrmSettingStore')->name('setting.hrmStore');
             Route::post('mail_setting_store', 'mailSettingStore')->name('setting.mailStore');
@@ -574,7 +589,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
             Route::get('pos_setting', 'posSetting')->name('setting.pos');
             Route::post('pos_setting_store', 'posSettingStore')->name('setting.posStore');
             Route::get('empty-database', 'emptyDatabase')->name('setting.emptyDatabase');
-         });
+        });
         Route::get('backup', 'backup')->name('setting.backup');
     });
 
@@ -655,7 +670,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
 
 
     //HRM routes
-    Route::post('departments/deletebyselection', [DepartmentController::class,'deleteBySelection']);
+    Route::post('departments/deletebyselection', [DepartmentController::class, 'deleteBySelection']);
     Route::resource('departments', DepartmentController::class);
 
 
@@ -714,8 +729,7 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function() {
 
     Route::resource('custom-fields', CustomFieldController::class);
 
-    Route::post('woocommerce-install', [AddonInstallController::class,'woocommerceInstall'])->name('woocommerce.install');
+    Route::post('woocommerce-install', [AddonInstallController::class, 'woocommerceInstall'])->name('woocommerce.install');
 
-    Route::post('ecommerce-install', [AddonInstallController::class,'ecommerceInstall'])->name('ecommerce.install');
+    Route::post('ecommerce-install', [AddonInstallController::class, 'ecommerceInstall'])->name('ecommerce.install');
 });
-
