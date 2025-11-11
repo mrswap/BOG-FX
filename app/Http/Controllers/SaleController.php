@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ForexRemittance;
+use App\Models\ForexRate;
+use App\Models\ForexGainLoss;
+use App\Models\Supplier;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
 use App\Models\Customer;
@@ -554,46 +559,60 @@ class SaleController extends Controller
             ]
         ]);
     }
-
-
     public function create()
     {
         $role = Role::find(Auth::user()->role_id);
-        if ($role->hasPermissionTo('sales-add')) {
-            //$lims_customer_list = Customer::where('is_active', true)->get();
-            $lims_customer_list = Customer::with('currency')->where('is_active', true)->get();
-
-
-            if (Auth::user()->role_id > 2) {
-                $lims_warehouse_list = Warehouse::where([
-                    ['is_active', true],
-                    ['id', Auth::user()->warehouse_id]
-                ])->get();
-                $lims_biller_list = Biller::where([
-                    ['is_active', true],
-                    ['id', Auth::user()->biller_id]
-                ])->get();
-            } else {
-                $lims_warehouse_list = Warehouse::where('is_active', true)->get();
-                $lims_biller_list = Biller::where('is_active', true)->get();
-            }
-
-            $lims_tax_list = Tax::where('is_active', true)->get();
-            $lims_pos_setting_data = PosSetting::latest()->first();
-            $lims_reward_point_setting_data = RewardPointSetting::latest()->first();
-            if ($lims_pos_setting_data)
-                $options = explode(',', $lims_pos_setting_data->payment_options);
-            else
-                $options = [];
-
-            $currency_list = Currency::where('is_active', true)->get();
-            $numberOfInvoice = Sale::count();
-            $custom_fields = CustomField::where('belongs_to', 'sale')->get();
-            $lims_customer_group_all = CustomerGroup::where('is_active', true)->get();
-            return view('backend.sale.create', compact('currency_list', 'lims_customer_list', 'lims_warehouse_list', 'lims_biller_list', 'lims_pos_setting_data', 'lims_tax_list', 'lims_reward_point_setting_data', 'options', 'numberOfInvoice', 'custom_fields', 'lims_customer_group_all'));
-        } else
+        if (!$role->hasPermissionTo('sales-add')) {
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
+        }
+
+        // 🔹 Reuse existing Sales variables
+        $lims_customer_list = Customer::with('currency')->where('is_active', true)->get();
+
+        if (Auth::user()->role_id > 2) {
+            $lims_warehouse_list = Warehouse::where([
+                ['is_active', true],
+                ['id', Auth::user()->warehouse_id]
+            ])->get();
+            $lims_biller_list = Biller::where([
+                ['is_active', true],
+                ['id', Auth::user()->biller_id]
+            ])->get();
+        } else {
+            $lims_warehouse_list = Warehouse::where('is_active', true)->get();
+            $lims_biller_list = Biller::where('is_active', true)->get();
+        }
+
+        $lims_tax_list = Tax::where('is_active', true)->get();
+        $lims_pos_setting_data = PosSetting::latest()->first();
+        $lims_reward_point_setting_data = RewardPointSetting::latest()->first();
+        $options = $lims_pos_setting_data ? explode(',', $lims_pos_setting_data->payment_options) : [];
+
+        $currency_list = Currency::where('is_active', true)->get();
+        $numberOfInvoice = Sale::count();
+        $custom_fields = CustomField::where('belongs_to', 'sale')->get();
+        $lims_customer_group_all = CustomerGroup::where('is_active', true)->get();
+
+        // 🔹 Forex Remittance specific additions
+        $forex_suppliers = Supplier::where('is_active', true)->get();
+
+        // 🔹 Pass all to view
+        return view('backend.forex.remittance.create', compact(
+            'currency_list',
+            'lims_customer_list',
+            'lims_warehouse_list',
+            'lims_biller_list',
+            'lims_pos_setting_data',
+            'lims_tax_list',
+            'lims_reward_point_setting_data',
+            'options',
+            'numberOfInvoice',
+            'custom_fields',
+            'lims_customer_group_all',
+            'forex_suppliers'  // new addition
+        ));
     }
+
 
     public function store(Request $request)
     {

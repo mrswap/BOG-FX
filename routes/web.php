@@ -73,6 +73,21 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
+
+
+
+
+
+// Forex Remittance Routes
+Route::prefix('forex/remittance')->group(function () {
+    Route::get('/', [App\Http\Controllers\ForexRemittanceController::class, 'index'])->name('forex.remittance.index');
+    Route::get('/create', [App\Http\Controllers\ForexRemittanceController::class, 'create'])->name('forex.remittance.create');
+    Route::post('/store', [App\Http\Controllers\ForexRemittanceController::class, 'store'])->name('forex.remittance.store');
+    Route::get('/{id}/show', [App\Http\Controllers\ForexRemittanceController::class, 'show'])->name('forex.remittance.show');
+    Route::delete('/{id}', [App\Http\Controllers\ForexRemittanceController::class, 'destroy'])->name('forex.remittance.destroy');
+});
+
+
 Route::get('migrate', function () {
     Artisan::call('migrate');
     //Artisan::call('db:seed');

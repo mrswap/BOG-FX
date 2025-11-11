@@ -6,16 +6,37 @@ use Illuminate\Database\Eloquent\Model;
 
 class Supplier extends Model
 {
-    protected $fillable =[
+    protected $fillable = [
 
-        "name", "image", "company_name", "vat_number",
-        "email", "phone_number", "address", "city",
-        "state", "postal_code", "country", "is_active"
+        "name",
+        "image",
+        "company_name",
+        "vat_number",
+        "email",
+        "phone_number",
+        "address",
+        "city",
+        "state",
+        "postal_code",
+        "country",
+        "is_active"
 
     ];
 
     public function product()
     {
-    	return $this->hasMany('App\Models\Product');
+        return $this->hasMany('App\Models\Product');
+    }
+
+
+    public function forexRemittances()
+    {
+        return $this->hasMany(ForexRemittance::class, 'party_id')
+            ->where('party_type', 'supplier');
+    }
+
+    public function partyPayments()
+    {
+        return $this->hasMany(PartyPayment::class, 'party_id')->where('party_type', 'supplier');
     }
 }

@@ -2847,7 +2847,7 @@ class ReportController extends Controller
         $sql = "
         SELECT
             c.id AS customer_id,
-            IFNULL(c.company_name, c.name) AS customer_name,
+            c.name AS customer_name,
             s.currency_id AS base_currency_id,
             COALESCE(SUM(s.grand_total),0) AS total_sales_base,
             COALESCE(SUM(pgs.payments_base),0) AS total_payments_base,

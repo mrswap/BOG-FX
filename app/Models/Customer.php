@@ -46,4 +46,14 @@ class Customer extends Model
     {
         return $this->belongsTo(Currency::class, 'base_currency_id');
     }
+
+    public function forexRemittances()
+    {
+        return $this->hasMany(ForexRemittance::class, 'party_id')
+            ->where('party_type', 'customer');
+    }
+    public function partyPayments()
+    {
+        return $this->hasMany(PartyPayment::class, 'party_id')->where('party_type', 'customer');
+    }
 }
