@@ -9,14 +9,23 @@ class ForexRemittance extends Model
     protected $fillable = [
         'party_type',
         'party_id',
+        'base_currency_id',
         'currency_id',
-        'reference_no',
+        'voucher_no',             // previously reference_no
         'transaction_date',
         'exch_rate',
-        'usd_amount',
-        'local_amount',
+        'base_amount',            // amount in base currency
+        'local_amount',           // converted amount
+        'invoice_amount',         // original invoice amount if exists
+        'closing_rate',           // optional, calculated later
+        'realised_gain_loss',     // calculated via ForexService
+        'unrealised_gain_loss',   // calculated via ForexService
+        'applied_local_amount',   // applied local amount to invoice
+        'linked_invoice_type',    // 'sale' or 'purchase'
+        'linked_invoice_id',      // invoice id
         'remarks',
-        'type',
+        'type',                   // receipt/payment
+        'status',                 // 'pending', 'partial', 'realised'
         'created_by',
     ];
 
@@ -27,26 +36,39 @@ class ForexRemittance extends Model
         'exch_rate' => 'decimal:6',
     ];
 
-    // 🔗 Relationships
+    // Relations
     public function currency()
     {
-        return $this->belongsTo(Currency::class);
+        return $this->belongsTo(Currency::class, 'currency_id');
+    }
+
+    public function baseCurrency()
+    {
+        return $this->belongsTo(Currency::class, 'base_currency_id');
     }
 
     public function customer()
     {
-        return $this->belongsTo(Customer::class, 'party_id')
-                    ->where('party_type', 'customer');
+        return $this->belongsTo(Customer::class, 'party_id');
     }
 
     public function supplier()
     {
-        return $this->belongsTo(Supplier::class, 'party_id')
-                    ->where('party_type', 'supplier');
+        return $this->belongsTo(Supplier::class, 'party_id');
     }
 
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(PartyPayment::class, 'remittance_id');
+    }
+
+    public function gainLoss()
+    {
+        return $this->hasMany(ForexGainLoss::class, 'remittance_id');
     }
 }

@@ -7,11 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class ForexRate extends Model
 {
     protected $fillable = [
-        'currency_id',
-        'date',
-        'buy_rate',
-        'sell_rate',
-        'source',
+        'currency_id', 'date', 'buy_rate', 'sell_rate', 'source',
     ];
 
     protected $casts = [

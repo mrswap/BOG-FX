@@ -81,6 +81,7 @@ use Illuminate\Support\Facades\Route;
 // Forex Remittance Routes
 Route::prefix('forex/remittance')->group(function () {
     Route::get('/', [App\Http\Controllers\ForexRemittanceController::class, 'index'])->name('forex.remittance.index');
+    Route::post('/get-forex-data', [App\Http\Controllers\ForexRemittanceController::class, 'forexRemittanceData'])->name('get.forex.remittance.data')->middleware('auth'); 
     Route::get('/create', [App\Http\Controllers\ForexRemittanceController::class, 'create'])->name('forex.remittance.create');
     Route::post('/store', [App\Http\Controllers\ForexRemittanceController::class, 'store'])->name('forex.remittance.store');
     Route::get('/{id}/show', [App\Http\Controllers\ForexRemittanceController::class, 'show'])->name('forex.remittance.show');

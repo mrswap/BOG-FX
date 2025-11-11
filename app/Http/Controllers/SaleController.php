@@ -597,7 +597,7 @@ class SaleController extends Controller
         $forex_suppliers = Supplier::where('is_active', true)->get();
 
         // 🔹 Pass all to view
-        return view('backend.forex.remittance.create', compact(
+        return view('backend.sale.create', compact(
             'currency_list',
             'lims_customer_list',
             'lims_warehouse_list',
