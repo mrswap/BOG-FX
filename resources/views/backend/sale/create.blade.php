@@ -75,20 +75,12 @@
                                     <select name="party_id" id="party_id_option" class="form-control selectpicker"
                                         data-live-search="true" required>
                                         <option value="">Select Party</option>
-
-                                        {{-- Customers --}}
-                                        @foreach ($lims_customer_list as $c)
+                                        @foreach ($party as $c)
                                             <option value="{{ $c->id }}" data-type="customer">
-                                                {{ $c->name }} (Customer - {{ $c->currency->code ?? 'N/A' }})
+                                                {{ $c->name }} 
                                             </option>
                                         @endforeach
 
-                                        {{-- Suppliers --}}
-                                        @foreach ($forex_suppliers as $s)
-                                            <option value="{{ $s->id }}" data-type="supplier">
-                                                {{ $s->name }} (Supplier)
-                                            </option>
-                                        @endforeach
                                     </select>
                                 </div>
                             </div>
@@ -110,8 +102,7 @@
                                     <label>Base Currency *</label>
                                     <select name="base_currency_id" id="base_currency_id" class="form-control" required>
                                         @foreach ($currency_list as $currency)
-                                            <option value="{{ $currency->id }}"
-                                                data-rate="{{ $currency->exchange_rate }}">
+                                            <option value="{{ $currency->id }}" data-rate="{{ $currency->exchange_rate }}">
                                                 {{ $currency->code }}
                                             </option>
                                         @endforeach

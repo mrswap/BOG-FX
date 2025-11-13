@@ -64,6 +64,7 @@ use Srmklive\PayPal\Services\AdaptivePayments;
 use GeniusTS\HijriDate\Date;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Currency;
+use App\Models\Party;
 use App\Models\SmsTemplate;
 use App\Services\SmsService;
 use App\SMSProviders\TonkraSms;
@@ -629,6 +630,7 @@ class SaleController extends Controller
         $numberOfInvoice = Sale::count();
         $custom_fields = CustomField::where('belongs_to', 'sale')->get();
         $lims_customer_group_all = CustomerGroup::where('is_active', true)->get();
+        $party = Party::where('is_active', true)->get();
 
         // 🔹 Forex Remittance specific additions
         $forex_suppliers = Supplier::where('is_active', true)->get();
@@ -636,6 +638,7 @@ class SaleController extends Controller
         // 🔹 Pass all to view
         return view('backend.sale.create', compact(
             'currency_list',
+            'party',
             'lims_customer_list',
             'lims_warehouse_list',
             'lims_biller_list',

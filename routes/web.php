@@ -81,7 +81,7 @@ use Illuminate\Support\Facades\Route;
 // Forex Remittance Routes
 Route::prefix('forex/remittance')->group(function () {
     Route::get('/', [App\Http\Controllers\ForexRemittanceController::class, 'index'])->name('forex.remittance.index');
-    Route::post('/get-forex-data', [App\Http\Controllers\ForexRemittanceController::class, 'forexRemittanceData'])->name('get.forex.remittance.data')->middleware('auth'); 
+    Route::post('/get-forex-data', [App\Http\Controllers\ForexRemittanceController::class, 'forexRemittanceData'])->name('get.forex.remittance.data')->middleware('auth');
     Route::get('/create', [App\Http\Controllers\ForexRemittanceController::class, 'create'])->name('forex.remittance.create');
     Route::post('/store', [App\Http\Controllers\ForexRemittanceController::class, 'store'])->name('forex.remittance.store');
     Route::get('/{id}/show', [App\Http\Controllers\ForexRemittanceController::class, 'show'])->name('forex.remittance.show');
@@ -272,14 +272,24 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function () {
     });
     Route::resource('brand', BrandController::class);
 
-
     Route::controller(SupplierController::class)->group(function () {
-        Route::post('importsupplier', 'importSupplier')->name('supplier.import');
-        Route::post('supplier/deletebyselection', 'deleteBySelection');
-        Route::post('suppliers/clear-due', 'clearDue')->name('supplier.clearDue');
-        Route::get('suppliers/all', 'suppliersAll')->name('supplier.all');
+        Route::post('party/import', 'importSupplier')->name('supplier.import');
+        Route::post('party/deletebyselection', 'deleteBySelection')->name('supplier.deleteBySelection');
+        Route::post('party/clear-due', 'clearDue')->name('supplier.clearDue');
+        Route::get('party/all', 'suppliersAll')->name('supplier.all');
     });
-    Route::resource('supplier', SupplierController::class)->except('show');
+
+    Route::resource('party', SupplierController::class)
+        ->except('show')
+        ->parameters(['party' => 'supplier'])
+        ->names([
+            'index'   => 'supplier.index',
+            'create'  => 'supplier.create',
+            'store'   => 'supplier.store',
+            'edit'    => 'supplier.edit',
+            'update'  => 'supplier.update',
+            'destroy' => 'supplier.destroy',
+        ]);
 
 
     Route::controller(WarehouseController::class)->group(function () {

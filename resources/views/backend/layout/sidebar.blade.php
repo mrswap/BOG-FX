@@ -21,14 +21,8 @@
             <i class="dripicons-user"></i><span>{{ trans('file.People') }}</span>
         </a>
         <ul id="people" class="collapse list-unstyled">
-            <li id="user-list-menu"><a href="{{ route('user.index') }}">{{ trans('file.User List') }}</a></li>
-            <li id="user-create-menu"><a href="{{ route('user.create') }}">{{ trans('file.Add User') }}</a></li>
-            <li id="customer-list-menu"><a href="{{ route('customer.index') }}">{{ trans('file.Customer List') }}</a></li>
-            <li id="customer-create-menu"><a href="{{ route('customer.create') }}">{{ trans('file.Add Customer') }}</a></li>
-            <li id="biller-list-menu"><a href="{{ route('biller.index') }}">{{ trans('file.Biller List') }}</a></li>
-            <li id="biller-create-menu"><a href="{{ route('biller.create') }}">{{ trans('file.Add Biller') }}</a></li>
-            <li id="supplier-list-menu"><a href="{{ route('supplier.index') }}">{{ trans('file.Supplier List') }}</a></li>
-            <li id="supplier-create-menu"><a href="{{ route('supplier.create') }}">{{ trans('file.Add Supplier') }}</a></li>
+            <li id="supplier-list-menu"><a href="{{ route('supplier.index') }}">Party List</a></li>
+            <li id="supplier-create-menu"><a href="{{ route('supplier.create') }}">Add Party</a></li>
         </ul>
     </li>
 
@@ -79,7 +73,6 @@
             <i class="dripicons-gear"></i><span>{{ trans('file.settings') }}</span>
         </a>
         <ul id="setting" class="collapse list-unstyled">
-            <li id="customer-group-menu"><a href="{{ route('customer_group.index') }}">{{ trans('file.Customer Group') }}</a></li>
             <li id="currency-menu"><a href="{{ route('currency.index') }}">{{ trans('file.Currency') }}</a></li>
         </ul>
     </li>
