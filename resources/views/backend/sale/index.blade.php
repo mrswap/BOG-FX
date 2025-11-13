@@ -1,4 +1,5 @@
 @extends('backend.layout.main')
+
 @section('content')
     @if (session()->has('message'))
         <div class="alert alert-success alert-dismissible text-center">
@@ -30,7 +31,7 @@
                             <div class="form-group">
                                 <label><strong>Date</strong></label>
                                 <input type="text" class="daterangepicker-field form-control"
-                                       value="{{ $starting_date }} To {{ $ending_date }}" required />
+                                    value="{{ $starting_date }} To {{ $ending_date }}" required />
                                 <input type="hidden" name="starting_date" value="{{ $starting_date }}" />
                                 <input type="hidden" name="ending_date" value="{{ $ending_date }}" />
                             </div>
@@ -68,41 +69,39 @@
                 </div>
             </div>
         </div>
-
         <div class="table-responsive mt-3">
             <table id="forex-table" class="table table-bordered" style="width:100%">
-                <thead>
-                <tr>
-                    <th class="not-exported"></th>
-                    <th>Date</th>
-                    <th>Reference</th>
-                    <th>Party</th>
-                    <th>Currency</th>
-                    <th>USD Amount</th>
-                    <th>Local Amount</th>
-                    <th>Exchange Rate</th>
-                    <th>Gain/Loss</th>
-                    <th>Remarks</th>
-                    <th class="not-exported">Action</th>
-                </tr>
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Sn.</th>
+                        <th>Date</th>
+                        <th>Particulars</th>
+                        <th>Vch Type</th>
+                        <th>Vch No.</th>
+                        <th>Exch Rate</th>
+                        <th>Base Currency<br><small>(Debit)</small></th>
+                        <th>Base Currency<br><small>(Credit)</small></th>
+                        <th>Local Currency<br><small>(Debit)</small></th>
+                        <th>Local Currency<br><small>(Credit)</small></th>
+                        <th>Avg Rate</th>
+                        <th>Diff</th>
+                        <th>Realised / Unrealised<br>Gain/Loss</th>
+                        <th>Remarks</th>
+                    </tr>
                 </thead>
                 <tfoot>
-                <tr>
-                    <th></th>
-                    <th>Total</th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                </tr>
+                    <tr>
+                        <th colspan="6" class="text-right">Total</th>
+                        <th id="total-base-debit"></th>
+                        <th id="total-base-credit"></th>
+                        <th id="total-local-debit"></th>
+                        <th id="total-local-credit"></th>
+                        <th colspan="4"></th>
+                    </tr>
                 </tfoot>
             </table>
         </div>
+
     </section>
 
     <!-- Details Modal -->
@@ -121,94 +120,147 @@
 @endsection
 
 @push('scripts')
-<script>
-    $("ul#forex").siblings('a').attr('aria-expanded', 'true');
-    $("ul#forex").addClass("show");
+    <script>
+        var forexTable = $('#forex-table').DataTable({
+            processing: true,
+            serverSide: true,
+            ajax: {
+                url: "{{ route('get.forex.remittance.data') }}",
+                type: "POST",
+                data: function(d) {
+                    d.party_type = $('select[name=party_type]').val();
+                    d.currency_id = $('select[name=currency_id]').val();
+                    d.starting_date = $('input[name=starting_date]').val();
+                    d.ending_date = $('input[name=ending_date]').val();
+                    d._token = "{{ csrf_token() }}";
+                }
+            },
+            columns: [{
+                    data: 'sn',
+                    name: 'sn',
+                    className: 'text-center'
+                },
+                {
+                    data: 'date',
+                    name: 'date'
+                },
+                {
+                    data: 'particulars',
+                    name: 'particulars'
+                },
+                {
+                    data: 'vch_type',
+                    name: 'vch_type'
+                },
+                {
+                    data: 'vch_no',
+                    name: 'vch_no',
+                    className: 'text-center'
+                },
+                {
+                    data: 'exch_rate',
+                    name: 'exch_rate',
+                    className: 'text-center'
+                },
+                {
+                    data: 'base_debit',
+                    name: 'base_debit',
+                    className: 'text-right'
+                },
+                {
+                    data: 'base_credit',
+                    name: 'base_credit',
+                    className: 'text-right'
+                },
+                {
+                    data: 'local_debit',
+                    name: 'local_debit',
+                    className: 'text-right'
+                },
+                {
+                    data: 'local_credit',
+                    name: 'local_credit',
+                    className: 'text-right'
+                },
+                {
+                    data: 'avg_rate',
+                    name: 'avg_rate',
+                    className: 'text-center'
+                },
+                {
+                    data: 'diff',
+                    name: 'diff',
+                    className: 'text-center'
+                },
+                {
+                    data: 'gain_loss',
+                    name: 'gain_loss',
+                    className: 'text-center',
+                    orderable: false,
+                    searchable: false,
+                    render: function(data) {
+                        return data || '<span class="badge badge-secondary">-</span>';
+                    }
+                },
 
-    var all_permission = <?php echo json_encode($all_permission); ?>;
-    var starting_date = <?php echo json_encode($starting_date); ?>;
-    var ending_date = <?php echo json_encode($ending_date); ?>;
+                {
+                    data: 'remarks',
+                    name: 'remarks'
+                }
+            ],
+            columnDefs: [{
+                    targets: [12],
+                    render: function(data) {
+                        return data;
+                    }
+                } // render HTML badges for Gain/Loss
+            ],
+            order: [
+                [1, 'asc']
+            ],
+            dom: '<"row mb-3"lfB>rtip',
+            buttons: [{
+                    extend: 'excel',
+                    footer: true,
+                    title: 'Forex Remittance Ledger'
+                },
+                {
+                    extend: 'csv',
+                    footer: true,
+                    title: 'Forex Remittance Ledger'
+                },
+                {
+                    extend: 'print',
+                    footer: true,
+                    title: 'Forex Remittance Ledger'
+                },
+                {
+                    extend: 'colvis',
+                    footer: false
+                }
+            ],
+            drawCallback: function() {
+                var api = this.api();
 
-    $.ajaxSetup({
-        headers: {
-            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-        }
-    });
+                function colSum(index) {
+                    return api.column(index, {
+                        page: 'current'
+                    }).data().reduce((a, b) => {
+                        let val = parseFloat((b || '').replace(/[^0-9.-]+/g, ""));
+                        return a + (isNaN(val) ? 0 : val);
+                    }, 0);
+                }
 
-    $(".daterangepicker-field").daterangepicker({
-        callback: function(startDate, endDate, period) {
-            var start = startDate.format('YYYY-MM-DD');
-            var end = endDate.format('YYYY-MM-DD');
-            $(this).val(start + ' To ' + end);
-            $('input[name="starting_date"]').val(start);
-            $('input[name="ending_date"]').val(end);
-        }
-    });
-
-    // Initialize DataTable
-    var forexTable = $('#forex-table').DataTable({
-        processing: true,
-        serverSide: true,
-        ajax: {
-            url: "{{ route('get.forex.remittance.data') }}",
-            type: "POST",
-            data: function(d) {
-                d.party_type = $('select[name=party_type]').val();
-                d.currency_id = $('select[name=currency_id]').val();
-                d.starting_date = $('input[name=starting_date]').val();
-                d.ending_date = $('input[name=ending_date]').val();
+                $('#total-base-debit').html(colSum(6).toFixed(2));
+                $('#total-base-credit').html(colSum(7).toFixed(2));
+                $('#total-local-debit').html(colSum(8).toFixed(2));
+                $('#total-local-credit').html(colSum(9).toFixed(2));
             }
-        },
-        columns: [
-            {data: null, defaultContent: '', orderable: false},
-            {data: 'transaction_date'},
-            {data: 'reference_no'},
-            {data: 'party'},
-            {data: 'currency'},
-            {data: 'usd_amount'},
-            {data: 'local_amount'},
-            {data: 'exchange_rate'},
-            {data: 'gain_loss'},
-            {data: 'remarks'},
-            {data: 'options', orderable: false, searchable: false}
-        ],
-        order: [[1, 'desc']],
-        dom: '<"row"lfB>rtip',
-        buttons: [
-            {extend: 'pdf', footer: true},
-            {extend: 'excel', footer: true},
-            {extend: 'csv', footer: true},
-            {extend: 'print', footer: true},
-            {extend: 'colvis'}
-        ],
-        rowId: 'id',
-        drawCallback: function() {
-            var api = this.api();
-            $(api.column(5).footer()).html(api.column(5, {page:'current'}).data().sum().toFixed(2));
-            $(api.column(6).footer()).html(api.column(6, {page:'current'}).data().sum().toFixed(2));
-        }
-    });
+        });
 
-    // Filter button reload
-    $('#filter-btn').on('click', function(e) {
-        e.preventDefault();
-        forexTable.ajax.reload();
-    });
-
-    // Show details modal
-    function forexDetails(data) {
-        var html = '<p><strong>Date:</strong> ' + data.date + '</p>';
-        html += '<p><strong>Reference:</strong> ' + data.reference + '</p>';
-        html += '<p><strong>Party:</strong> ' + data.party + '</p>';
-        html += '<p><strong>Currency:</strong> ' + data.currency + '</p>';
-        html += '<p><strong>USD Amount:</strong> ' + data.usd_amount + '</p>';
-        html += '<p><strong>Local Amount:</strong> ' + data.local_amount + '</p>';
-        html += '<p><strong>Exchange Rate:</strong> ' + data.exchange_rate + '</p>';
-        html += '<p><strong>Gain/Loss:</strong> ' + data.gain_loss + '</p>';
-        html += '<p><strong>Remarks:</strong> ' + data.remarks + '</p>';
-
-        $('#forex-content').html(html);
-        $('#forex-details').modal('show');
-    }
-</script>
+        $('#filter-btn').on('click', function(e) {
+            e.preventDefault();
+            forexTable.ajax.reload();
+        });
+    </script>
 @endpush

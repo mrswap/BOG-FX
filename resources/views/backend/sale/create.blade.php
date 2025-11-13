@@ -55,25 +55,40 @@
                         @csrf
 
                         <div class="row">
-                            {{-- Party Type --}}
+                            {{-- Party Type (optional) --}}
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Party Type *</label>
-                                    <select name="party_type" id="party_type" class="form-control" required>
-                                        <option value="">Select Type</option>
+                                    <label>Party Type (optional)</label>
+                                    <select name="party_type" id="party_type" class="form-control">
+                                        <option value="">-- Any --</option>
                                         <option value="customer">Customer</option>
                                         <option value="supplier">Supplier</option>
+                                        <option value="both">Both</option>
                                     </select>
                                 </div>
                             </div>
 
-                            {{-- Party Name --}}
+                            {{-- Party Name (merged customers + suppliers) --}}
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Party Name *</label>
-                                    <select name="party_id" id="party_id_option" class="party_id form-control selectpicker"
+                                    <select name="party_id" id="party_id_option" class="form-control selectpicker"
                                         data-live-search="true" required>
-                                        {{-- Dynamic append via JS --}}
+                                        <option value="">Select Party</option>
+
+                                        {{-- Customers --}}
+                                        @foreach ($lims_customer_list as $c)
+                                            <option value="{{ $c->id }}" data-type="customer">
+                                                {{ $c->name }} (Customer - {{ $c->currency->code ?? 'N/A' }})
+                                            </option>
+                                        @endforeach
+
+                                        {{-- Suppliers --}}
+                                        @foreach ($forex_suppliers as $s)
+                                            <option value="{{ $s->id }}" data-type="supplier">
+                                                {{ $s->name }} (Supplier)
+                                            </option>
+                                        @endforeach
                                     </select>
                                 </div>
                             </div>
@@ -95,7 +110,8 @@
                                     <label>Base Currency *</label>
                                     <select name="base_currency_id" id="base_currency_id" class="form-control" required>
                                         @foreach ($currency_list as $currency)
-                                            <option value="{{ $currency->id }}" data-rate="{{ $currency->exchange_rate }}">
+                                            <option value="{{ $currency->id }}"
+                                                data-rate="{{ $currency->exchange_rate }}">
                                                 {{ $currency->code }}
                                             </option>
                                         @endforeach
@@ -103,11 +119,11 @@
                                 </div>
                             </div>
 
-                            {{-- Invoice Amount (Base) --}}
+                            {{-- Base Amount --}}
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Invoice Base Amount *</label>
-                                    <input type="number" step="0.01" name="invoice_amount" id="invoice_amount"
+                                    <label>Base Amount *</label>
+                                    <input type="number" step="0.01" name="base_amount" id="base_amount"
                                         class="form-control" required>
                                 </div>
                             </div>
@@ -117,7 +133,7 @@
                                 <div class="form-group">
                                     <label>Closing Rate (Optional)</label>
                                     <input type="number" step="0.0001" name="closing_rate" id="closing_rate"
-                                        class="form-control" placeholder="Optional for unrealised gain/loss">
+                                        class="form-control" placeholder="Optional for unrealised forex gain/loss">
                                 </div>
                             </div>
                         </div>
@@ -129,7 +145,8 @@
                                     <label>Local Currency *</label>
                                     <select name="currency_id" id="currency_id" class="form-control" required>
                                         @foreach ($currency_list as $currency)
-                                            <option value="{{ $currency->id }}" data-rate="{{ $currency->exchange_rate }}">
+                                            <option value="{{ $currency->id }}"
+                                                data-rate="{{ $currency->exchange_rate }}">
                                                 {{ $currency->code }}
                                             </option>
                                         @endforeach
@@ -142,11 +159,11 @@
                                 <div class="form-group">
                                     <label>Exchange Rate</label>
                                     <input type="number" step="0.0001" name="exchange_rate" id="exchange_rate"
-                                        class="form-control" placeholder="Enter manually or use backend default">
+                                        class="form-control" placeholder="Enter manually or auto">
                                 </div>
                             </div>
 
-                            {{-- Converted Amount (Base → Local) --}}
+                            {{-- Converted Amount --}}
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Converted Amount (Local Currency)</label>
@@ -157,41 +174,33 @@
                         </div>
 
                         <div class="row">
-                            {{-- Type (Receipt/Payment) --}}
+                            {{-- Voucher Type (renamed and expanded) --}}
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Type *</label>
-                                    <select name="type" id="type" class="form-control" required>
+                                    <label>Voucher Type *</label>
+                                    <select name="linked_invoice_type" id="voucher_type" class="form-control" required>
                                         <option value="receipt">Receipt</option>
                                         <option value="payment">Payment</option>
+                                        <option value="sale">Sale</option>
+                                        <option value="purchase">Purchase</option>
                                     </select>
                                 </div>
                             </div>
 
-                            {{-- Reference / Voucher No --}}
+                            {{-- Voucher No --}}
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Voucher / Reference No</label>
-                                    <input type="text" name="voucher_no" class="form-control">
+                                    <label>Voucher / Reference No *</label>
+                                    <input type="text" name="voucher_no" class="form-control" required>
                                 </div>
                             </div>
+
+                            {{-- Average Rate --}}
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Average Exchange Rate (optional)</label>
                                     <input type="number" step="0.0001" name="avg_rate" id="avg_rate"
-                                        class="form-control" placeholder="Leave empty to auto-calculate">
-                                </div>
-                            </div>
-
-                            {{-- Status --}}
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label>Status</label>
-                                    <select name="status" class="form-control">
-                                        <option value="pending" selected>Pending</option>
-                                        <option value="partial">Partial</option>
-                                        <option value="realised">Realised</option>
-                                    </select>
+                                        class="form-control" placeholder="Leave empty to auto-calc">
                                 </div>
                             </div>
                         </div>
@@ -204,6 +213,7 @@
 
                         <button type="submit" class="btn btn-primary">Save Remittance</button>
                     </form>
+
                 </div>
 
             </div>
@@ -213,36 +223,22 @@
 
 @push('scripts')
     <script>
-        // Prepare data
-        const customers = @json($lims_customer_list);
-        const suppliers = @json($forex_suppliers);
-
-        function populatePartyList(type) {
-            console.log(type);
-            let html = '<option value="">Select Party</option>';
-            if (type == 'customer') {
-                customers.forEach(c => html += `<option value="${c.id}">${c.name} (${c.currency.code})</option>`);
-            } else if (type == 'supplier') {
-                suppliers.forEach(s => html += `<option value="${s.id}">${s.name}</option>`);
-            }
-            console.log(html);
-            $('#party_id_option').html(html).selectpicker('refresh');
-
-        }
-
-        $('#party_type').on('change', function() {
-            populatePartyList($(this).val());
-        });
-
+        // Auto-calc Converted Amount
         function calculateConverted() {
-            const amount = parseFloat($('#invoice_amount').val()) || 0;
+            const amount = parseFloat($('#base_amount').val()) || 0;
             const rate = parseFloat($('#exchange_rate').val()) ||
                 parseFloat($('#currency_id option:selected').data('rate')) ||
                 1;
-            $('#local_amount').val((amount * rate).toFixed(2)); // updated ID
+            $('#local_amount').val((amount * rate).toFixed(2));
         }
 
-        $('#invoice_amount, #exchange_rate').on('input', calculateConverted);
+        $('#base_amount, #exchange_rate').on('input', calculateConverted);
         $('#currency_id').on('change', calculateConverted);
+
+        // Auto-fill party_type when a party is selected
+        $('#party_id_option').on('change', function() {
+            const partyType = $(this).find('option:selected').data('type') || '';
+            $('#party_type').val(partyType);
+        });
     </script>
 @endpush

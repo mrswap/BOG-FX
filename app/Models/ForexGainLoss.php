@@ -3,21 +3,26 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class ForexGainLoss extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'remittance_id',
+        'invoice_id',
+        'invoice_type',
         'party_type',
         'party_id',
         'currency_id',
         'transaction_date',
-        'amount',          // USD-equivalent amount
-        'base_amount',     // local currency amount
-        'book_rate',       // invoice rate
-        'current_rate',    // remittance rate
+        'amount',
+        'base_amount',
+        'book_rate',
+        'current_rate',
         'gain_loss_amount',
-        'type',            // realised/unrealised
+        'type',
         'status',
         'remarks',
         'created_by',
@@ -32,8 +37,19 @@ class ForexGainLoss extends Model
         'gain_loss_amount' => 'decimal:4',
     ];
 
+    // 🔗 Relationships
     public function remittance()
     {
         return $this->belongsTo(ForexRemittance::class, 'remittance_id');
+    }
+
+    public function party()
+    {
+        return $this->morphTo(null, 'party_type', 'party_id');
+    }
+
+    public function scopeType($query, $type)
+    {
+        return $query->where('type', $type);
     }
 }

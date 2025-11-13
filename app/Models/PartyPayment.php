@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class PartyPayment extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'party_type',
         'party_id',
@@ -29,34 +32,35 @@ class PartyPayment extends Model
         'exchange_rate' => 'decimal:6',
     ];
 
-    // 🔗 Relationships
+    // 🔗 Relations
+    public function party()
+    {
+        return $this->morphTo(null, 'party_type', 'party_id');
+    }
+
     public function currency()
     {
         return $this->belongsTo(Currency::class);
     }
 
-    public function customer()
+    public function remittance()
     {
-        return $this->belongsTo(Customer::class, 'party_id')->where('party_type', 'customer');
-    }
-
-    public function supplier()
-    {
-        return $this->belongsTo(Supplier::class, 'party_id')->where('party_type', 'supplier');
-    }
-
-    public function createdBy()
-    {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(ForexRemittance::class, 'payment_reference', 'voucher_no');
     }
 
     public function relatedInvoice()
     {
         if ($this->related_invoice_type === 'sale') {
             return $this->belongsTo(Sale::class, 'related_invoice_id');
-        } elseif ($this->related_invoice_type === 'purchase') {
+        }
+        if ($this->related_invoice_type === 'purchase') {
             return $this->belongsTo(Purchase::class, 'related_invoice_id');
         }
         return null;
+    }
+
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

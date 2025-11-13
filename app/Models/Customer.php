@@ -56,4 +56,19 @@ class Customer extends Model
     {
         return $this->hasMany(PartyPayment::class, 'party_id')->where('party_type', 'customer');
     }
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'party_id')->where('party_type', 'customer');
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class, 'party_id')->where('party_type', 'supplier');
+    }
+
+
+    public function baseCurrency()
+    {
+        return $this->belongsTo(Currency::class, 'base_currency_id');
+    }
 }

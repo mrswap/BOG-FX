@@ -55,6 +55,8 @@ use App\Models\ExternalService;
 use Cache;
 use App\Models\GeneralSetting;
 use App\Models\MailSetting;
+use Illuminate\Support\Facades\Log;
+
 use Stripe\Stripe;
 use NumberToWords\NumberToWords;
 use Spatie\Permission\Models\Role;
@@ -155,196 +157,149 @@ class ForexRemittanceController extends Controller
         return view('backend.forex.remittance.create', $data);
     }
 
+
     public function store(Request $request)
     {
         $request->validate([
-            'party_type'       => 'required|in:customer,supplier',
-            'party_id'         => 'required|integer|exists:' . ($request->party_type === 'customer' ? 'customers' : 'suppliers') . ',id',
-            'currency_id'      => 'required|integer|exists:currencies,id',
-            'base_currency_id' => 'required|integer|exists:currencies,id',
-            'voucher_no'       => 'required|string|max:50|unique:forex_remittances,voucher_no',
+            'party_type' => 'nullable|in:customer,supplier,both',
+            'party_id' => 'required|integer',
+            'currency_id' => 'required|integer',
+            'base_currency_id' => 'required|integer',
+            'voucher_no' => 'required|string|max:50',
             'transaction_date' => 'required|date',
-            'exchange_rate'    => 'required|numeric|min:0',
-            'invoice_amount'   => 'required|numeric|min:0',
-            'type'             => 'required|in:receipt,payment',
-            'status'           => 'nullable|string|max:50',
-            'remarks'          => 'nullable|string|max:255',
+            'exchange_rate' => 'required|numeric|min:0',
+            'base_amount' => 'required|numeric|min:0',
+            'linked_invoice_type' => 'required|in:receipt,payment,sale,purchase', // coming from form
+            'closing_rate' => 'nullable|numeric|min:0',
+            'avg_rate' => 'nullable|numeric|min:0',
+            'remarks' => 'nullable|string|max:255',
         ]);
 
+
+        \Log::info('Storing Forex Remittance', [
+            'party_id' => $request->party_id,
+            'type' => $request->linked_invoice_type,
+            'base_amount' => $request->base_amount,
+            'rate' => $request->exchange_rate
+        ]);
+
+
         DB::beginTransaction();
-
         try {
-            $baseAmount   = $request->invoice_amount;
-            $exchangeRate = $request->exchange_rate;
-            $localAmount  = round($baseAmount * $exchangeRate, 4);
+            $partyType = $request->party_type;
+            $partyId = $request->party_id;
+            $invoiceType = $request->linked_invoice_type; // ✅ map to backend field
 
-            // 1️⃣ Create Forex Remittance
-            $remittance = ForexRemittance::create([
-                'party_type'           => $request->party_type,
-                'party_id'             => $request->party_id,
-                'currency_id'          => $request->currency_id,
-                'base_currency_id'     => $request->base_currency_id,
-                'voucher_no'           => $request->voucher_no,
-                'transaction_date'     => $request->transaction_date,
-                'exch_rate'            => $exchangeRate,
-                'base_amount'          => $baseAmount,
-                'local_amount'         => $localAmount,
-                'invoice_amount'       => $baseAmount,
-                'closing_rate'         => null,
-                'realised_gain_loss'   => 0,
-                'unrealised_gain_loss' => 0,
-                'applied_base'         => 0,
-                'linked_invoice_type'  => null,
-                'linked_invoice_id'    => null,
-                'remarks'              => $request->remarks,
-                'type'                 => $request->type,
-                'status'               => $request->status ?? 'pending',
-                'created_by'           => auth()->id(),
-            ]);
+            // 1️⃣ Prevent exact duplicate voucher for same party & invoice_type
+            $exists = ForexRemittance::where('party_id', $partyId)
+                ->where('voucher_no', $request->voucher_no)
+                ->where('linked_invoice_type', $invoiceType)
+                ->when($partyType, fn($q) => $q->where('party_type', $partyType))
+                ->exists();
 
-            // 2️⃣ Create Party Payment
-            $payment = PartyPayment::create([
-                'party_type'          => $request->party_type,
-                'party_id'            => $request->party_id,
-                'payment_reference'   => $request->voucher_no,
-                'related_invoice_id'  => null,
-                'related_invoice_type' => null,
-                'currency_id'         => $request->currency_id,
-                'exchange_rate'       => $exchangeRate,
-                'paid_usd'            => $baseAmount,
-                'paid_local'          => $localAmount,
-                'payment_mode'        => 'forex',
-                'remarks'             => $request->remarks,
-                'payment_date'        => $request->transaction_date,
-                'created_by'          => auth()->id(),
-            ]);
-
-            // 3️⃣ Initialize unrealised gain/loss
-            $forexService = app(\App\Services\ForexService::class);
-            $forexService->initializeRemittance($remittance);
-
-            // 4️⃣ Auto-apply to existing invoices (prepayment scenario)
-            $remainingBase = $baseAmount;
-
-            $invoices = \App\Models\Invoice::where('party_id', $request->party_id)
-                ->where('status', '!=', 'paid')
-                ->orderBy('transaction_date', 'asc')
-                ->get();
-
-            foreach ($invoices as $invoice) {
-                if ($remainingBase <= 0) break;
-
-                $toApply = min($remainingBase, $invoice->due_amount);
-
-                // Call internal method to apply remittance to invoice
-                $applyResult = $forexService->linkRemittanceToParty(
-                    $remittance,
-                    $invoice->id,
-                    $invoice->type,
-                    $toApply,
-                    $exchangeRate,
-                    auth()->id()
-                );
-
-                $remainingBase -= $toApply;
+            if ($exists) {
+                return back()->withInput()->with('error', 'Voucher already exists for this party and type.');
             }
 
-            // 5️⃣ Update remittance with applied payment
-            $remittance->update([
-                'party_payment_id' => $payment->id,
-                'status'           => $remainingBase <= 0 ? 'realised' : 'partial',
+            $baseAmount = $request->base_amount;
+            $exchangeRate = $request->exchange_rate;
+            $localAmount = round($baseAmount * $exchangeRate, 4);
+
+            // 2️⃣ Create Forex Remittance entry
+            $remittance = ForexRemittance::create([
+                'party_type' => $partyType,
+                'party_id' => $partyId,
+                'currency_id' => $request->currency_id,
+                'base_currency_id' => $request->base_currency_id,
+                'voucher_no' => $request->voucher_no,
+                'transaction_date' => $request->transaction_date,
+                'exch_rate' => $exchangeRate,
+                'base_amount' => $baseAmount,
+                'local_amount' => $localAmount,
+                'applied_base' => 0,
+                'applied_local_amount' => 0,
+                'realised_gain_loss' => 0,
+                'unrealised_gain_loss' => 0,
+                'linked_invoice_type' => $invoiceType, // ✅ renamed field
+                'remarks' => $request->remarks,
+                'created_by' => auth()->id(),
             ]);
+
+            // 3️⃣ Create Party Payment record only for payment/receipt types
+            if (in_array($invoiceType, ['receipt', 'payment'])) {
+                PartyPayment::create([
+                    'party_type' => $partyType,
+                    'party_id' => $partyId,
+                    'payment_reference' => $request->voucher_no,
+                    'currency_id' => $request->currency_id,
+                    'exchange_rate' => $exchangeRate,
+                    'paid_usd' => $baseAmount,
+                    'paid_local' => $localAmount,
+                    'payment_mode' => 'forex',
+                    'payment_date' => $request->transaction_date,
+                    'created_by' => auth()->id(),
+                ]);
+            }
+
+            // 4️⃣ Initialize unrealised forex gain/loss
+            $forexService = app(ForexService::class);
+            $forexService->initializeRemittance($remittance);
+
+            // 5️⃣ If closing_rate provided, compute unrealised immediately
+            if ($request->filled('closing_rate')) {
+                $forexService->computeUnrealisedForRemittance($remittance, (float) $request->closing_rate, auth()->id());
+            }
 
             DB::commit();
 
-            return redirect()
-                ->route('sales.create')
-                ->with('success', 'Forex remittance, payment, and gain/loss recorded successfully.');
+            // 6️⃣ FIFO / Ledger reconcile
+            app(ForexService::class)->autoMatchRemittancesForParty($partyId, auth()->id());
+            \Log::info('AutoMatch summary', app(ForexService::class)->autoMatchRemittancesForParty($partyId, auth()->id()));
+
+
+            return redirect()->back()->with('success', 'Forex remittance recorded successfully.');
         } catch (\Throwable $e) {
             DB::rollBack();
+
             Log::error('Forex Remittance Store Failed', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'Error creating remittance: ' . $e->getMessage());
+            print_r($e->getMessage());
+            die;
+            return redirect()->back()->withInput()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
 
+
+
+    // 6️⃣ Manual apply (if invoice applied later)
     public function applyRemittanceToInvoice(Request $request)
     {
         $request->validate([
-            'remittance_id'  => 'required|exists:forex_remittances,id',
-            'invoice_id'     => 'required|integer',
-            'invoice_type'   => 'required|in:sale,purchase',
+            'remittance_id' => 'required|exists:forex_remittances,id',
+            'invoice_id' => 'required|integer',
+            'invoice_type' => 'required|in:sale,purchase',
             'invoice_amount' => 'required|numeric|min:0.01',
-            'exchange_rate'  => 'required|numeric|min:0.01',
+            'exchange_rate' => 'required|numeric|min:0.01',
         ]);
 
         DB::beginTransaction();
-
         try {
             $remittance = ForexRemittance::lockForUpdate()->findOrFail($request->remittance_id);
-            $forexService = app(\App\Services\ForexService::class);
+            $forexService = app(ForexService::class);
 
-            $invoiceAmount = $request->invoice_amount;
-            $remBase = $remittance->remaining_base ?? $remittance->base_amount;
-
-            // 🔹 Amount to apply
-            $appliedBase = min($invoiceAmount, $remBase);
-
-            // ⚙️ Apply to invoice
-            $result = $forexService->linkRemittanceToParty(
+            $forexService->applyInvoiceToRemittance(
                 $remittance,
-                $request->invoice_id,
-                $request->invoice_type,
-                $appliedBase,
+                $request->invoice_amount,
                 $request->exchange_rate,
-                auth()->id()
+                auth()->id(),
+                $request->invoice_id,
+                $request->invoice_type
             );
 
-            // ⚙️ Update remittance applied/remaining
-            $remittance->update([
-                'applied_base'   => $remittance->applied_base + $appliedBase,
-                'remaining_base' => max(0, $remBase - $appliedBase),
-                'realised_gain_loss' => DB::raw("realised_gain_loss + {$result['realised_gain_loss']}")
-            ]);
-
-            // 🔹 Handle extra payment as new remittance
-            $extraAmount = $invoiceAmount - $appliedBase;
-            if ($extraAmount > 0) {
-                $extraRemittance = ForexRemittance::create([
-                    'party_type' => $remittance->party_type,
-                    'party_id'   => $remittance->party_id,
-                    'currency_id' => $remittance->currency_id,
-                    'base_currency_id' => $remittance->base_currency_id,
-                    'voucher_no' => $remittance->voucher_no . '-EXTRA-' . now()->format('YmdHis'),
-                    'transaction_date' => now()->toDateString(),
-                    'exch_rate' => $request->exchange_rate,
-                    'base_amount' => $extraAmount,
-                    'local_amount' => round($extraAmount * $request->exchange_rate, 4),
-                    'invoice_amount' => $extraAmount,
-                    'closing_rate' => null,
-                    'realised_gain_loss' => 0,
-                    'unrealised_gain_loss' => 0,
-                    'applied_local_amount' => 0,
-                    'linked_invoice_type' => null,
-                    'linked_invoice_id'   => null,
-                    'remarks' => 'Extra payment from invoice #' . $request->invoice_id,
-                    'type' => $remittance->type,
-                    'status' => 'pending',
-                    'created_by' => auth()->id(),
-                ]);
-
-                // Initialize unrealised gain/loss
-                $forexService->initializeRemittance($extraRemittance);
-            }
-
             DB::commit();
-
             return back()->with('success', 'Remittance applied successfully. Gain/Loss recorded.');
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -352,29 +307,27 @@ class ForexRemittanceController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            return back()->with('error', 'Error applying remittance: ' . $e->getMessage());
+            return back()->with('error', $e->getMessage());
         }
     }
-
-
-
 
     public function forexRemittanceData(Request $request)
     {
         $columns = [
             1 => 'transaction_date',
-            2 => 'reference_no',
-            3 => 'usd_amount',
-            4 => 'local_amount',
+            2 => 'voucher_no',
+            3 => 'exch_rate',
+            4 => 'base_amount',
+            5 => 'local_amount',
         ];
 
-        $party_type = $request->input('party_type', 'customer'); // customer or supplier
+        $party_type = $request->input('party_type', 'customer');
         $party_id = $request->input('party_id');
         $currency_id = $request->input('currency_id');
         $starting_date = $request->input('starting_date', now()->subYear()->toDateString());
         $ending_date = $request->input('ending_date', now()->toDateString());
 
-        $q = ForexRemittance::with(['currency', 'customer', 'supplier'])
+        $q = ForexRemittance::with(['currency', 'baseCurrency', 'gainLoss'])
             ->where('party_type', $party_type)
             ->whereDate('transaction_date', '>=', $starting_date)
             ->whereDate('transaction_date', '<=', $ending_date);
@@ -388,58 +341,101 @@ class ForexRemittanceController extends Controller
         $start = $request->input('start', 0);
         $limit = $request->input('length', $totalData);
         $order = 'transaction_date';
-        $dir = 'desc';
+        $dir = 'asc';
 
         if ($request->input('order.0.column')) {
             $colIndex = $request->input('order.0.column');
             $order = $columns[$colIndex] ?? 'transaction_date';
-            $dir = $request->input('order.0.dir', 'desc');
+            $dir = $request->input('order.0.dir', 'asc');
         }
 
         $remittances = $q->offset($start)->limit($limit)->orderBy($order, $dir)->get();
         $data = [];
 
-        foreach ($remittances as $key => $rem) {
-            // Party name dynamically
-            $partyName = $party_type === 'customer'
-                ? ($rem->customer ? $rem->customer->name : 'N/A')
-                : ($rem->supplier ? $rem->supplier->name : 'N/A');
+        $sn = $start + 1;
 
-            // Base currency
-            $baseCurrency = $rem->baseCurrency;
-            $baseCode = $baseCurrency ? $baseCurrency->code : 'N/A';
+        foreach ($remittances as $rem) {
+            $baseCode = optional($rem->baseCurrency)->code ?? 'USD';
+            $localCode = optional($rem->currency)->code ?? 'ZMW';
+            $date = $rem->transaction_date
+                ? \Carbon\Carbon::parse($rem->transaction_date)->format('Y-m-d')
+                : \Carbon\Carbon::parse($rem->created_at)->format('Y-m-d');
 
-            // Remittance currency
-            $curCode = $rem->currency ? $rem->currency->code : 'N/A';
+            // --- Voucher Type Logic ---
+            $vchType = ucfirst($rem->linked_invoice_type ?? $rem->type ?? 'N/A');
+            $particulars = match ($vchType) {
+                'Sale' => 'To Sale Invoice',
+                'Purchase' => 'By Purchase Invoice',
+                'Receipt' => 'By Customer Receipt',
+                'Payment' => 'To Supplier Payment',
+                default => 'Transaction'
+            };
+            // --- Base / Local Debit & Credit Logic ---
+            // Direction is determined solely by voucher type, not party_type
+            $baseDebit = $baseCredit = $localDebit = $localCredit = 0;
 
-            // Realised / Unrealised gain/loss
-            $gainLoss = $rem->gainLoss()->sum('gain_loss_amount');
+            switch (strtolower($vchType)) {
+                case 'sale':
+                case 'purchase':
+                    // Invoice entries always on debit side (asset/liability)
+                    $baseDebit = $rem->base_amount;
+                    $localDebit = $rem->local_amount;
+                    break;
 
-            $nestedData = [
-                'id' => $rem->id,
-                'key' => $key,
-                'transaction_date' => $rem->transaction_date
-                    ? $rem->transaction_date->format('Y-m-d') // or use config('date_format')
-                    : $rem->created_at->format('Y-m-d'),
+                case 'receipt':
+                case 'payment':
+                    // Payment/Receipt entries always on credit side (settlement)
+                    $baseCredit = $rem->base_amount;
+                    $localCredit = $rem->local_amount;
+                    break;
 
-                'reference_no' => $rem->reference_no,
-                'party' => $partyName,
-                'currency' => $curCode,
-                'usd_amount' => number_format($rem->usd_amount, config('decimal')) . ' ' . $curCode,
-                'local_amount' => number_format($rem->local_amount, config('decimal')) . ' ' . $baseCode,
-                'exchange_rate' => number_format($rem->exch_rate, 4),
-                'gain_loss' => number_format($gainLoss, config('decimal')),
-                'remarks' => $rem->remarks ?? '-',
-                'options' => '<div class="btn-group">
-                <a href="' . route('sales.edit', $rem->id) . '" class="btn btn-sm btn-primary">Edit</a>
-                <form action="' . route('sales.destroy', $rem->id) . '" method="POST" style="display:inline-block;">' .
-                    csrf_field() . method_field('DELETE') .
-                    '<button type="submit" class="btn btn-sm btn-danger" onclick="return confirm(\'Are you sure?\')">Delete</button>
-                </form>
-            </div>',
+                default:
+                    break;
+            }
+
+            // --- Gain/Loss ---
+            $realised = $rem->gainLoss->where('type', 'realised')->sum('gain_loss_amount');
+            $unrealised = $rem->gainLoss->where('type', 'unrealised')->sum('gain_loss_amount');
+
+            $gainLoss = 0;
+            $remarks = '-';
+            $glLabel = '<span class="badge badge-secondary">-</span>';
+
+            if ($realised != 0) {
+                $gainLoss = $realised;
+                $remarks = $realised > 0 ? 'Realised Gain' : 'Realised Loss';
+                $color = $realised > 0 ? 'success' : 'danger';
+                $sign = $realised > 0 ? '+' : '-';
+                $glLabel = '<span class="badge badge-' . $color . '">' . $sign . number_format(abs($realised), 2) . '</span>';
+            } elseif ($unrealised != 0) {
+                $gainLoss = $unrealised;
+                $remarks = $unrealised > 0 ? 'Unrealised Gain' : 'Unrealised Loss';
+                $color = $unrealised > 0 ? 'info' : 'warning';
+                $sign = $unrealised > 0 ? '+' : '-';
+                $glLabel = '<span class="badge badge-' . $color . '">' . $sign . number_format(abs($unrealised), 2) . '</span>';
+            }
+
+            // --- Weighted Avg Rate ---
+            $avgRate = $rem->closing_rate ?? $rem->exch_rate;
+            $diff = round(($rem->exch_rate - $avgRate), 4);
+
+            $data[] = [
+                'sn' => $sn++,
+                'date' => $date,
+                'particulars' => $rem->party?->name ?? '-',
+
+                'vch_type' => $vchType,
+                'vch_no' => $rem->voucher_no ?? 'N/A',
+                'exch_rate' => number_format($rem->exch_rate, 4),
+                'base_debit' => $baseDebit ? number_format($baseDebit, 2) . ' ' . $baseCode : '',
+                'base_credit' => $baseCredit ? number_format($baseCredit, 2) . ' ' . $baseCode : '',
+                'local_debit' => $localDebit ? number_format($localDebit, 2) . ' ' . $localCode : '',
+                'local_credit' => $localCredit ? number_format($localCredit, 2) . ' ' . $localCode : '',
+                'avg_rate' => number_format($avgRate, 4),
+                'diff' => number_format($diff, 4),
+                'gain_loss' => $glLabel,
+                'remarks' => $remarks,
             ];
-
-            $data[] = $nestedData;
         }
 
         return response()->json([
