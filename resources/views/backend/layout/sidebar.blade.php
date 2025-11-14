@@ -1,8 +1,8 @@
 <ul id="side-main-menu" class="side-menu list-unstyled d-print-none">
     <!-- Dashboard -->
-    <li><a href="{{ url('/dashboard') }}"> 
-        <i class="dripicons-meter"></i><span>{{ __('file.dashboard') }}</span>
-    </a></li>
+    <li><a href="{{ url('/dashboard') }}">
+            <i class="dripicons-meter"></i><span>{{ __('file.dashboard') }}</span>
+        </a></li>
 
     <!-- Sales Menu -->
     <li>
@@ -10,8 +10,8 @@
             <i class="dripicons-cart"></i><span>{{ trans('file.Sale') }}</span>
         </a>
         <ul id="sale" class="collapse list-unstyled">
-            <li id="sale-list-menu"><a href="{{ route('sales.index') }}">{{ trans('file.Sale List') }}</a></li>
-            <li id="sale-create-menu"><a href="{{ route('sales.create') }}">{{ trans('file.Add Sale') }}</a></li>
+            <li id="sale-list-menu"><a href="{{ route('sales.index') }}">Remitance List</a></li>
+            <li id="sale-create-menu"><a href="{{ route('sales.create') }}">Create Remitance </a></li>
         </ul>
     </li>
 
@@ -27,43 +27,51 @@
     </li>
 
     <!-- Reports Menu -->
+    <!-- Forex Reports Menu -->
     <li>
-        <a href="#report" aria-expanded="false" data-toggle="collapse">
-            <i class="dripicons-document-remove"></i><span>{{ trans('file.Reports') }}</span>
+        <a href="#forexReportMenu" aria-expanded="false" data-toggle="collapse">
+            <i class="dripicons-document"></i>
+            <span>Forex Reports</span>
         </a>
-        <ul id="report" class="collapse list-unstyled">
-            <li id="sale-report-menu">
-                @include('backend.report._report_form', [
-                    'routeName' => 'report.sale',
-                    'linkId' => 'sale-report-link',
-                    'text' => trans('file.Sale Report'),
-                    'params' => ['start_date' => date('Y-m') . '-01', 'end_date' => date('Y-m-d'), 'warehouse_id' => 0],
-                ])
+
+        <ul id="forexReportMenu" class="collapse list-unstyled">
+
+            <li>
+                <a href="{{ route('forex.report', 'invoice') }}">
+                    <i class="dripicons-document-edit"></i> Invoice Wise Report
+                </a>
             </li>
-            <li id="currency-report-menu">
-                @include('backend.report._report_form', [
-                    'routeName' => 'report.currency',
-                    'linkId' => 'currency-report-link',
-                    'text' => 'Currency Wise Report',
-                    'params' => [],
-                ])
+
+            <li>
+                <a href="{{ route('forex.report', 'party') }}">
+                    <i class="dripicons-user"></i> Party Wise Report
+                </a>
             </li>
-            <li id="customer-report-menu">
-                @include('backend.report._report_form', [
-                    'routeName' => 'report.customer',
-                    'linkId' => 'customer-report-link',
-                    'text' => 'Customer Wise Report',
-                    'params' => [],
-                ])
+
+            <li>
+                <a href="{{ route('forex.report', 'base') }}">
+                    <i class="dripicons-gear"></i> Base Currency Wise Report
+                </a>
             </li>
-            <li id="due-report-menu">
-                @include('backend.report._report_form', [
-                    'routeName' => 'report.due',
-                    'linkId' => 'due-report-link',
-                    'text' => 'Due Payments Report',
-                    'params' => [],
-                ])
+
+            <li>
+                <a href="{{ route('forex.report', 'local') }}">
+                    <i class="dripicons-flag"></i> Local Currency Wise Report
+                </a>
             </li>
+
+            <li>
+                <a href="{{ route('forex.report', 'realised') }}">
+                    <i class="dripicons-checkmark"></i> Realised Gain/Loss
+                </a>
+            </li>
+
+            <li>
+                <a href="{{ route('forex.report', 'unrealised') }}">
+                    <i class="dripicons-warning"></i> Unrealised Gain/Loss
+                </a>
+            </li>
+
         </ul>
     </li>
 

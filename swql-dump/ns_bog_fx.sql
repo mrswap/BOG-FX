@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 31, 2025 at 12:23 PM
+-- Generation Time: Nov 14, 2025 at 11:08 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -18,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `ns_bog_fx`
+-- Database: `ns_bog_fx_new`
 --
 
 -- --------------------------------------------------------
@@ -340,7 +340,7 @@ CREATE TABLE `currencies` (
 
 INSERT INTO `currencies` (`id`, `name`, `code`, `exchange_rate`, `is_active`, `created_at`, `updated_at`) VALUES
 (1, 'US Dollar', 'USD', 1, 1, '2020-10-31 18:52:58', '2023-04-02 04:21:28'),
-(2, 'INR  ₹', 'INR  ₹', 88.7, 1, '2020-10-31 19:59:12', '2025-10-30 21:48:15'),
+(2, 'INR', 'INR', 88.7, 1, '2020-10-31 19:59:12', '2025-11-04 20:21:40'),
 (3, 'Bangladeshi Taka', 'BDT', 110, 0, '2023-09-06 01:35:29', '2023-09-06 01:35:46'),
 (4, 'EUR', 'EUR', 1.16, 1, '2025-10-30 21:49:12', '2025-10-30 21:49:12'),
 (5, 'SAR', 'SAR', 500, 1, '2025-10-31 07:15:09', '2025-10-31 07:15:09');
@@ -367,6 +367,7 @@ CREATE TABLE `customers` (
   `country` varchar(191) DEFAULT NULL,
   `points` double DEFAULT NULL,
   `deposit` double DEFAULT NULL,
+  `base_currency_id` int(11) DEFAULT 1,
   `expense` double DEFAULT NULL,
   `is_active` tinyint(1) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -387,10 +388,11 @@ CREATE TABLE `customers` (
 -- Dumping data for table `customers`
 --
 
-INSERT INTO `customers` (`id`, `customer_group_id`, `user_id`, `name`, `company_name`, `email`, `phone_number`, `tax_no`, `address`, `city`, `state`, `postal_code`, `country`, `points`, `deposit`, `expense`, `is_active`, `created_at`, `updated_at`, `ecom`, `dsf`, `arabic_name`, `admin`, `franchise_location`, `customer_type`, `customer_assigned_to`, `assigned`, `aaaaaaaa`, `district`) VALUES
-(1, 1, 44, 'James Bond', 'MI6', NULL, '313131', NULL, '221 Baker Street', 'London', NULL, NULL, 'England', 40, 20, 0, 1, '2024-01-19 07:53:29', '2025-10-31 10:54:36', NULL, 'df', NULL, NULL, NULL, 'Same as Customer', 'Advocate', 'Advocate', 'aa', NULL),
-(2, 1, NULL, 'Walk in Customer', NULL, NULL, '231313', NULL, 'Halishahar', 'chittagong', NULL, NULL, 'Bangladesh', 286, NULL, NULL, 1, '2024-01-19 08:01:51', '2025-10-30 23:05:36', NULL, 'df', NULL, NULL, NULL, 'Same as Customer', 'Advocate', 'Advocate', 'aa', NULL),
-(4, 1, 46, 'bkk', NULL, 'bkk@bkk.com', '87897', NULL, 'jhkjh', 'gjhgh', NULL, NULL, NULL, NULL, NULL, NULL, 1, '2024-06-10 05:10:15', '2024-06-10 05:10:15', NULL, 'df', NULL, NULL, NULL, 'Same as Customer', 'Advocate', 'Advocate', 'aa', NULL);
+INSERT INTO `customers` (`id`, `customer_group_id`, `user_id`, `name`, `company_name`, `email`, `phone_number`, `tax_no`, `address`, `city`, `state`, `postal_code`, `country`, `points`, `deposit`, `base_currency_id`, `expense`, `is_active`, `created_at`, `updated_at`, `ecom`, `dsf`, `arabic_name`, `admin`, `franchise_location`, `customer_type`, `customer_assigned_to`, `assigned`, `aaaaaaaa`, `district`) VALUES
+(1, 1, 44, 'James Bond', 'MI6', NULL, '313131', NULL, '221 Baker Street', 'London', NULL, NULL, 'England', 43, 20, 1, 0, 1, '2024-01-19 07:53:29', '2025-11-04 09:20:43', NULL, 'df', NULL, NULL, NULL, 'Same as Customer', 'Advocate', 'Advocate', 'aa', NULL),
+(2, 1, NULL, 'Walk in Customer', NULL, NULL, '231313', NULL, 'Halishahar', 'chittagong', NULL, NULL, 'Bangladesh', 306, NULL, 1, NULL, 1, '2024-01-19 08:01:51', '2025-11-01 11:22:12', NULL, 'df', NULL, NULL, NULL, 'Same as Customer', 'Advocate', 'Advocate', 'aa', NULL),
+(4, 1, 46, 'bkk', NULL, 'bkk@bkk.com', '87897', NULL, 'jhkjh', 'gjhgh', NULL, NULL, NULL, NULL, NULL, 1, NULL, 1, '2024-06-10 05:10:15', '2024-06-10 05:10:15', NULL, 'df', NULL, NULL, NULL, 'Same as Customer', 'Advocate', 'Advocate', 'aa', NULL),
+(5, 1, NULL, 'TEST', 'TEST', 'test@test.com', '9752248875', '7797979887', 'sfsdf', 'sfsdf', 'sfs', 'sfs', 'sf', NULL, NULL, 2, NULL, 1, '2025-11-01 10:25:57', '2025-11-01 10:29:41', NULL, 'df', NULL, NULL, NULL, 'Same as Customer', 'Advocate', 'Advocate', 'aa', NULL);
 
 -- --------------------------------------------------------
 
@@ -703,6 +705,52 @@ CREATE TABLE `failed_jobs` (
   `payload` longtext NOT NULL,
   `exception` longtext NOT NULL,
   `failed_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `forex_adjustments`
+--
+
+CREATE TABLE `forex_adjustments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `party_id` bigint(20) UNSIGNED NOT NULL,
+  `invoice_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `payment_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `adjusted_base_amount` decimal(18,4) NOT NULL,
+  `adjusted_local_amount` decimal(18,4) NOT NULL,
+  `realised_gain_loss` decimal(18,4) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `forex_remittances`
+--
+
+CREATE TABLE `forex_remittances` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `party_id` bigint(20) UNSIGNED NOT NULL,
+  `party_type` enum('customer','supplier','both') DEFAULT NULL,
+  `transaction_date` date NOT NULL,
+  `voucher_type` enum('sale','purchase','receipt','payment') NOT NULL,
+  `voucher_no` varchar(100) NOT NULL,
+  `base_currency_id` bigint(20) UNSIGNED NOT NULL,
+  `local_currency_id` bigint(20) UNSIGNED NOT NULL,
+  `base_amount` decimal(18,4) NOT NULL,
+  `exchange_rate` decimal(18,6) NOT NULL,
+  `local_amount` decimal(18,4) NOT NULL,
+  `avg_rate` decimal(18,6) DEFAULT NULL,
+  `closing_rate` decimal(18,6) DEFAULT NULL,
+  `diff` decimal(18,6) DEFAULT NULL,
+  `gain_loss_type` enum('realised','unrealised') DEFAULT NULL,
+  `gain_loss_value` decimal(18,4) DEFAULT NULL,
+  `remarks` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -1204,6 +1252,37 @@ CREATE TABLE `packing_slip_products` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `parties`
+--
+
+CREATE TABLE `parties` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `company_name` varchar(255) DEFAULT NULL,
+  `vat_number` varchar(255) DEFAULT NULL,
+  `type` enum('customer','supplier','both') DEFAULT 'both',
+  `email` varchar(255) DEFAULT NULL,
+  `phone` varchar(50) DEFAULT NULL,
+  `address` text DEFAULT NULL,
+  `city` varchar(255) DEFAULT NULL,
+  `state` varchar(255) DEFAULT NULL,
+  `postal_code` varchar(20) DEFAULT NULL,
+  `country` varchar(100) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `parties`
+--
+
+INSERT INTO `parties` (`id`, `name`, `company_name`, `vat_number`, `type`, `email`, `phone`, `address`, `city`, `state`, `postal_code`, `country`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'Swapnil', 'NST21', 'csipk8490e', 'both', 'swap@swap.com', '9752248875', 'indore', 'ac', 'mp', '452001', 'india', 1, '2025-11-13 20:57:13', '2025-11-13 21:00:42');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `password_resets`
 --
 
@@ -1239,6 +1318,9 @@ CREATE TABLE `payments` (
   `used_points` double DEFAULT NULL,
   `change` double DEFAULT NULL,
   `paying_method` varchar(191) NOT NULL,
+  `currency_id` int(11) DEFAULT NULL,
+  `exchange_rate` decimal(15,8) DEFAULT NULL,
+  `converted_amount` decimal(15,2) DEFAULT NULL,
   `payment_note` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
@@ -1248,9 +1330,11 @@ CREATE TABLE `payments` (
 -- Dumping data for table `payments`
 --
 
-INSERT INTO `payments` (`id`, `payment_reference`, `user_id`, `purchase_id`, `sale_id`, `cash_register_id`, `account_id`, `payment_receiver`, `amount`, `used_points`, `change`, `paying_method`, `payment_note`, `created_at`, `updated_at`) VALUES
-(1, 'ppr-20251031-042247', 1, 1, NULL, NULL, 1, NULL, 10000, NULL, 0, 'Cash', NULL, '2025-10-31 10:52:47', '2025-10-31 10:52:47'),
-(2, 'spr-20251031-042436', 1, NULL, 1, 1, 1, 'Mai', 2100, NULL, 0, 'Cash', NULL, '2025-10-31 10:54:36', '2025-10-31 10:54:36');
+INSERT INTO `payments` (`id`, `payment_reference`, `user_id`, `purchase_id`, `sale_id`, `cash_register_id`, `account_id`, `payment_receiver`, `amount`, `used_points`, `change`, `paying_method`, `currency_id`, `exchange_rate`, `converted_amount`, `payment_note`, `created_at`, `updated_at`) VALUES
+(6, 'spr-20251104-025931', 1, NULL, 3, 1, 1, 'ABC', 150, NULL, 0, 'Cash', 2, 89.00000000, 13350.00, 'ANC', '2025-11-04 18:30:00', '2025-11-04 12:17:02'),
+(7, 'spr-20251104-025958', 1, NULL, 3, 1, 1, 'shs', 350, NULL, 0, 'Cash', 2, 88.50000000, 30975.00, NULL, '2025-11-04 09:29:58', '2025-11-04 09:29:58'),
+(8, 'spr-20251104-042134', 1, NULL, 3, 1, 1, NULL, 500, NULL, 0, 'Cash', 2, 90.00000000, 45000.00, NULL, '2025-11-04 10:51:34', '2025-11-04 10:51:34'),
+(9, 'spr-20251104-054908', 1, NULL, 4, 1, 1, 'swap', 500, NULL, 200, 'Cash', 2, 82.00000000, 57400.00, NULL, '2025-11-04 18:30:00', '2025-11-05 11:51:40');
 
 -- --------------------------------------------------------
 
@@ -1597,7 +1681,7 @@ INSERT INTO `products` (`id`, `name`, `code`, `type`, `barcode_symbology`, `bran
 (1, 'Iphone', 'IP001', 'standard', 'C128', 1, 1, 1, 1, 1, 1000, 1000, 1000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, '202510310246211.jpg', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '<p>HELLO</p>', NULL, NULL, 1, NULL, NULL, NULL, '2025-10-30 21:16:21', '2025-10-30 21:20:05'),
 (2, 'SAMSUNG', 'SAM001', 'standard', 'C128', 1, 1, 1, 1, 1, 1000, 1000, 1000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, '202510310246211.jpg', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '<p>HELLO</p>', NULL, NULL, 1, NULL, NULL, NULL, '2025-10-30 21:16:21', '2025-10-30 21:20:05'),
 (3, 'LG-LAPTOP', 'LG001', 'standard', 'C128', 1, 1, 1, 1, 1, 1000, 1000, 1000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, '202510310246211.jpg', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '<p>HELLO</p>', NULL, NULL, 1, NULL, NULL, NULL, '2025-10-30 21:16:21', '2025-10-30 21:20:05'),
-(4, 'DELL LAPTO', 'DELL002', 'standard', 'C128', 1, 1, 1, 1, 1, 1000, 1050, 1000, 8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, '202510310246211.jpg', NULL, 0, NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, NULL, '<p>HELLO</p>', NULL, NULL, 1, NULL, NULL, NULL, '2025-10-30 21:16:21', '2025-10-31 10:54:36');
+(4, 'DELL LAPTO', 'DELL002', 'standard', 'C128', 1, 1, 1, 1, 1, 1000, 1050, 1000, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, '202510310246211.jpg', NULL, 0, NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, NULL, '<p>HELLO</p>', NULL, NULL, 1, NULL, NULL, NULL, '2025-10-30 21:16:21', '2025-11-01 11:22:12');
 
 -- --------------------------------------------------------
 
@@ -1681,13 +1765,6 @@ CREATE TABLE `product_purchases` (
   `detailed_currency_data` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `product_purchases`
---
-
-INSERT INTO `product_purchases` (`id`, `purchase_id`, `product_id`, `product_batch_id`, `variant_id`, `imei_number`, `qty`, `recieved`, `return_qty`, `purchase_unit_id`, `net_unit_cost`, `discount`, `tax_rate`, `tax`, `total`, `created_at`, `updated_at`, `detailed_currency_data`) VALUES
-(1, 1, 4, NULL, NULL, NULL, 10, 10, 0, 1, 1000, 0, 0, 0, 10000, '2025-10-31 10:50:01', '2025-10-31 10:50:01', '{\"1\":\"1\",\"2\":\"85\",\"4\":\"1.20\",\"5\":\"100\"}');
-
 -- --------------------------------------------------------
 
 --
@@ -1768,7 +1845,8 @@ CREATE TABLE `product_sales` (
 --
 
 INSERT INTO `product_sales` (`id`, `sale_id`, `product_id`, `product_batch_id`, `variant_id`, `imei_number`, `qty`, `return_qty`, `sale_unit_id`, `net_unit_price`, `discount`, `tax_rate`, `tax`, `total`, `created_at`, `updated_at`, `is_delivered`, `is_packing`, `detailed_currency_data`) VALUES
-(1, 1, 4, NULL, NULL, 'null', 2, 0, 1, 1050, 0, 0, 0, 2100, '2025-10-31 10:54:36', '2025-10-31 10:54:36', NULL, NULL, '{\"1\":\"1\",\"2\":\"90\",\"4\":\"3\",\"5\":\"150\"}');
+(3, 3, 1, 1, NULL, '', 1, 0, 0, 1000, 0, 0, 0, 1000, '2025-11-04 09:20:43', '2025-11-04 09:47:15', NULL, NULL, '{\"selected_currency\":\"2\",\"exchange_rate\":\"88.7\",\"converted_amount\":\"88700.00\"}'),
+(4, 4, 1, NULL, NULL, NULL, 1, 0, 0, 7, 0, 0, 0, 7, '2025-11-04 11:31:11', '2025-11-04 11:31:11', NULL, NULL, '{\"selected_currency\":\"2\",\"exchange_rate\":\"86.95\",\"converted_amount\":\"60865.00\"}');
 
 -- --------------------------------------------------------
 
@@ -1831,13 +1909,6 @@ CREATE TABLE `product_warehouse` (
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `product_warehouse`
---
-
-INSERT INTO `product_warehouse` (`id`, `product_id`, `product_batch_id`, `variant_id`, `imei_number`, `warehouse_id`, `qty`, `price`, `created_at`, `updated_at`) VALUES
-(1, '4', NULL, NULL, NULL, 1, 8, 1050, '2025-10-31 10:50:01', '2025-10-31 10:54:36');
-
 -- --------------------------------------------------------
 
 --
@@ -1870,13 +1941,6 @@ CREATE TABLE `purchases` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `purchases`
---
-
-INSERT INTO `purchases` (`id`, `reference_no`, `user_id`, `warehouse_id`, `supplier_id`, `currency_id`, `exchange_rate`, `item`, `total_qty`, `total_discount`, `total_tax`, `total_cost`, `order_tax_rate`, `order_tax`, `order_discount`, `shipping_cost`, `grand_total`, `paid_amount`, `status`, `payment_status`, `document`, `note`, `created_at`, `updated_at`) VALUES
-(1, 'PUR123', 1, 1, 3, 1, 1, 1, 10, 0, 0, 10000, 0, 0, 0, 0, 10000, 10000, 1, 2, NULL, NULL, '2025-10-30 18:30:00', '2025-10-31 10:52:47');
 
 -- --------------------------------------------------------
 
@@ -1932,6 +1996,13 @@ CREATE TABLE `quotations` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `quotations`
+--
+
+INSERT INTO `quotations` (`id`, `reference_no`, `user_id`, `biller_id`, `supplier_id`, `customer_id`, `warehouse_id`, `item`, `total_qty`, `total_discount`, `total_tax`, `total_price`, `order_tax_rate`, `order_tax`, `order_discount`, `shipping_cost`, `grand_total`, `quotation_status`, `document`, `note`, `created_at`, `updated_at`) VALUES
+(1, 'qr-20251101-044636', 1, 1, 3, 2, 1, 1, 5, 0, 0, 5250, 0, 0, 0, 0, 5250, 2, NULL, NULL, '2025-11-01 11:16:36', '2025-11-01 11:21:40');
 
 -- --------------------------------------------------------
 
@@ -2334,9 +2405,9 @@ CREATE TABLE `sales` (
   `biller_id` int(11) DEFAULT NULL,
   `item` int(11) NOT NULL,
   `total_qty` double NOT NULL,
-  `total_discount` double NOT NULL,
-  `total_tax` double NOT NULL,
-  `total_price` double NOT NULL,
+  `total_discount` double DEFAULT 0,
+  `total_tax` double DEFAULT 0,
+  `total_price` double DEFAULT NULL,
   `grand_total` double NOT NULL,
   `currency_id` int(11) DEFAULT NULL,
   `exchange_rate` double DEFAULT NULL,
@@ -2348,8 +2419,8 @@ CREATE TABLE `sales` (
   `coupon_id` int(11) DEFAULT NULL,
   `coupon_discount` double DEFAULT NULL,
   `shipping_cost` double DEFAULT NULL,
-  `sale_status` int(11) NOT NULL,
-  `payment_status` int(11) NOT NULL,
+  `sale_status` int(11) NOT NULL DEFAULT 1,
+  `payment_status` int(11) NOT NULL DEFAULT 1,
   `document` varchar(191) DEFAULT NULL,
   `paid_amount` double DEFAULT NULL,
   `sale_note` text DEFAULT NULL,
@@ -2364,7 +2435,8 @@ CREATE TABLE `sales` (
 --
 
 INSERT INTO `sales` (`id`, `reference_no`, `user_id`, `cash_register_id`, `table_id`, `queue`, `customer_id`, `warehouse_id`, `biller_id`, `item`, `total_qty`, `total_discount`, `total_tax`, `total_price`, `grand_total`, `currency_id`, `exchange_rate`, `order_tax_rate`, `order_tax`, `order_discount_type`, `order_discount_value`, `order_discount`, `coupon_id`, `coupon_discount`, `shipping_cost`, `sale_status`, `payment_status`, `document`, `paid_amount`, `sale_note`, `staff_note`, `woocommerce_order_id`, `created_at`, `updated_at`) VALUES
-(1, 'SALE', 1, 1, NULL, NULL, 1, 1, 1, 1, 2, 0, 0, 2100, 2100, 1, 1, 0, 0, 'Flat', NULL, 0, NULL, NULL, 0, 1, 4, NULL, 2100, NULL, NULL, NULL, '2025-10-31 10:54:36', '2025-10-31 10:54:36');
+(3, 'BOG/2526/1024', 1, 1, NULL, NULL, 1, 1, 1, 1, 1, NULL, NULL, NULL, 1000, 1, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 4, NULL, 1000, 'ABC', 'ABC', NULL, '2025-11-04 09:47:15', '2025-11-04 10:51:34'),
+(4, 'BOG/1245', 1, 1, NULL, NULL, 1, 1, 1, 1, 1, NULL, NULL, NULL, 700, 1, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 2, NULL, 500, NULL, NULL, NULL, '2025-11-04 11:31:11', '2025-11-05 11:51:40');
 
 -- --------------------------------------------------------
 
@@ -2584,7 +2656,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `password`, `remember_token`, `phone`, `company_name`, `role_id`, `biller_id`, `warehouse_id`, `is_active`, `is_deleted`, `created_at`, `updated_at`) VALUES
-(1, 'admin', 'swapnilkarma@gmail.com', '$2y$10$xAf2XJMWggfn0urBs2ukAun1COYgKgQLaGCw/y8O1q9GU9P58sC6S', 'cYJmu9OE8HQIZZuvg0sURkn9cGZDRwmIOF3yhuBKtZRJ0N26kHeRXsf2jc8F', '12112', 'NerSwap Technologies\'', 1, NULL, NULL, 1, 0, '2018-06-01 21:54:15', '2025-10-30 12:31:57'),
+(1, 'admin', 'swapnilkarma@gmail.com', '$2y$10$xAf2XJMWggfn0urBs2ukAun1COYgKgQLaGCw/y8O1q9GU9P58sC6S', 'yvT98KeZL3lJ9PxZXlQnycw4Mo9hzmCXS0P0RHKFhOjm8N1IwSy1GOFdjv3z', '12112', 'NerSwap Technologies\'', 1, NULL, NULL, 1, 0, '2018-06-01 21:54:15', '2025-10-30 12:31:57'),
 (3, 'dhiman da', 'dhiman@gmail.com', '$2y$10$Fef6vu5E67nm11hX7V5a2u1ThNCQ6n9DRCvRF9TD7stk.Pmt2R6O.', '5ehQM6JIfiQfROgTbB5let0Z93vjLHS7rd9QD5RPNgOxli3xdo7fykU7vtTt', '212', 'lioncoders', 1, NULL, NULL, 0, 1, '2018-06-13 16:30:31', '2020-11-05 01:36:51'),
 (6, 'test', 'test@gmail.com', '$2y$10$TDAeHcVqHyCmurki0wjLZeIl1SngKX3WLOhyTiCoZG3souQfqv.LS', 'KpW1gYYlOFacumklO2IcRfSsbC3KcWUZzOI37gqoqM388Xie6KdhaOHIFEYm', '1234', '212312', 4, NULL, NULL, 0, 1, '2018-06-22 21:35:33', '2018-06-22 21:43:45'),
 (8, 'test', 'test@yahoo.com', '$2y$10$hlMigidZV0j2/IPkgE/xsOSb8WM2IRlsMv.1hg1NM7kfyd6bGX3hC', NULL, '31231', NULL, 4, NULL, NULL, 0, 1, '2018-06-24 17:05:49', '2018-07-01 19:37:39'),
@@ -2813,6 +2885,24 @@ ALTER TABLE `failed_jobs`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `forex_adjustments`
+--
+ALTER TABLE `forex_adjustments`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_party` (`party_id`),
+  ADD KEY `idx_invoice` (`invoice_id`),
+  ADD KEY `idx_payment` (`payment_id`);
+
+--
+-- Indexes for table `forex_remittances`
+--
+ALTER TABLE `forex_remittances`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_party` (`party_id`),
+  ADD KEY `idx_currency` (`base_currency_id`,`local_currency_id`),
+  ADD KEY `fk_forex_local_currency` (`local_currency_id`);
+
+--
 -- Indexes for table `general_settings`
 --
 ALTER TABLE `general_settings`
@@ -2895,6 +2985,12 @@ ALTER TABLE `packing_slips`
 -- Indexes for table `packing_slip_products`
 --
 ALTER TABLE `packing_slip_products`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `parties`
+--
+ALTER TABLE `parties`
   ADD PRIMARY KEY (`id`);
 
 --
@@ -3218,7 +3314,7 @@ ALTER TABLE `currencies`
 -- AUTO_INCREMENT for table `customers`
 --
 ALTER TABLE `customers`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `customer_groups`
@@ -3311,6 +3407,18 @@ ALTER TABLE `failed_jobs`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `forex_adjustments`
+--
+ALTER TABLE `forex_adjustments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `forex_remittances`
+--
+ALTER TABLE `forex_remittances`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `general_settings`
 --
 ALTER TABLE `general_settings`
@@ -3389,10 +3497,16 @@ ALTER TABLE `packing_slip_products`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `parties`
+--
+ALTER TABLE `parties`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
 -- AUTO_INCREMENT for table `payments`
 --
 ALTER TABLE `payments`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `payment_with_cheque`
@@ -3470,7 +3584,7 @@ ALTER TABLE `product_productions`
 -- AUTO_INCREMENT for table `product_purchases`
 --
 ALTER TABLE `product_purchases`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `product_quotation`
@@ -3488,7 +3602,7 @@ ALTER TABLE `product_returns`
 -- AUTO_INCREMENT for table `product_sales`
 --
 ALTER TABLE `product_sales`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `product_transfer`
@@ -3506,13 +3620,13 @@ ALTER TABLE `product_variants`
 -- AUTO_INCREMENT for table `product_warehouse`
 --
 ALTER TABLE `product_warehouse`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `purchase_product_return`
@@ -3524,7 +3638,7 @@ ALTER TABLE `purchase_product_return`
 -- AUTO_INCREMENT for table `quotations`
 --
 ALTER TABLE `quotations`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `returns`
@@ -3554,7 +3668,7 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT for table `sales`
 --
 ALTER TABLE `sales`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `sms_templates`
@@ -3615,6 +3729,26 @@ ALTER TABLE `variants`
 --
 ALTER TABLE `warehouses`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `forex_adjustments`
+--
+ALTER TABLE `forex_adjustments`
+  ADD CONSTRAINT `fk_adj_invoice` FOREIGN KEY (`invoice_id`) REFERENCES `forex_remittances` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_adj_party` FOREIGN KEY (`party_id`) REFERENCES `parties` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_adj_payment` FOREIGN KEY (`payment_id`) REFERENCES `forex_remittances` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `forex_remittances`
+--
+ALTER TABLE `forex_remittances`
+  ADD CONSTRAINT `fk_forex_base_currency` FOREIGN KEY (`base_currency_id`) REFERENCES `currencies` (`id`),
+  ADD CONSTRAINT `fk_forex_local_currency` FOREIGN KEY (`local_currency_id`) REFERENCES `currencies` (`id`),
+  ADD CONSTRAINT `fk_forex_party` FOREIGN KEY (`party_id`) REFERENCES `parties` (`id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

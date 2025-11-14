@@ -89,6 +89,15 @@ Route::prefix('forex/remittance')->group(function () {
 });
 
 
+Route::match(
+    ['GET', 'POST'],
+    '/forex-report/{type}',
+    [App\Http\Controllers\ForexRemittanceController::class, 'report']
+)
+->middleware(['common', 'auth', 'active'])
+->name('forex.report');
+
+
 Route::get('migrate', function () {
     Artisan::call('migrate');
     //Artisan::call('db:seed');
