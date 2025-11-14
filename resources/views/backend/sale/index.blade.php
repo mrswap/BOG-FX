@@ -85,20 +85,29 @@
                         <th>Local Currency<br><small>(Credit)</small></th>
                         <th>Avg Rate</th>
                         <th>Diff</th>
-                        <th>Realised / Unrealised<br>Gain/Loss</th>
+                        <th>Realised Gain/Loss</th>
+                        <th>Unrealised Gain/Loss</th>
                         <th>Remarks</th>
+
                     </tr>
                 </thead>
                 <tfoot>
                     <tr>
-                        <th colspan="6" class="text-right">Total</th>
+                        <th colspan="6" class="text-right">Totals</th>
                         <th id="total-base-debit"></th>
                         <th id="total-base-credit"></th>
                         <th id="total-local-debit"></th>
                         <th id="total-local-credit"></th>
-                        <th colspan="4"></th>
+
+                        <th colspan="1"></th> <!-- avg rate -->
+                        <th colspan="1"></th> <!-- diff -->
+
+                        <th id="total-realised"></th>
+                        <th id="total-unrealised"></th>
+                        <th id="final-gain-loss"></th>
                     </tr>
                 </tfoot>
+
             </table>
         </div>
 
@@ -162,6 +171,7 @@
                     name: 'exch_rate',
                     className: 'text-center'
                 },
+
                 {
                     data: 'base_debit',
                     name: 'base_debit',
@@ -182,6 +192,7 @@
                     name: 'local_credit',
                     className: 'text-right'
                 },
+
                 {
                     data: 'avg_rate',
                     name: 'avg_rate',
@@ -192,14 +203,36 @@
                     name: 'diff',
                     className: 'text-center'
                 },
+
+                // -------- REALISED (Gain/Loss) --------
                 {
-                    data: 'gain_loss',
-                    name: 'gain_loss',
+                    data: 'realised',
+                    name: 'realised',
                     className: 'text-center',
-                    orderable: false,
-                    searchable: false,
-                    render: function(data) {
-                        return data || '<span class="badge badge-secondary">-</span>';
+                    render: function(val) {
+                        if (!val || val == 0) return '<span class="badge badge-secondary">-</span>';
+
+                        let num = parseFloat(val);
+                        let color = num > 0 ? 'success' : 'danger';
+                        let sign = num > 0 ? '+' : '-';
+
+                        return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
+                    }
+                },
+
+                // -------- UNREALISED (Gain/Loss) --------
+                {
+                    data: 'unrealised',
+                    name: 'unrealised',
+                    className: 'text-center',
+                    render: function(val) {
+                        if (!val || val == 0) return '<span class="badge badge-secondary">-</span>';
+
+                        let num = parseFloat(val);
+                        let color = num > 0 ? 'info' : 'warning';
+                        let sign = num > 0 ? '+' : '-';
+
+                        return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
                     }
                 },
 
@@ -208,17 +241,9 @@
                     name: 'remarks'
                 }
             ],
-            columnDefs: [{
-                    targets: [12],
-                    render: function(data) {
-                        return data;
-                    }
-                } // render HTML badges for Gain/Loss
-            ],
-            order: [
-                [1, 'asc']
-            ],
+
             dom: '<"row mb-3"lfB>rtip',
+
             buttons: [{
                     extend: 'excel',
                     footer: true,
@@ -239,25 +264,54 @@
                     footer: false
                 }
             ],
-            drawCallback: function() {
+
+            drawCallback: function(settings) {
                 var api = this.api();
+                var json = api.ajax.json();
 
-                function colSum(index) {
-                    return api.column(index, {
-                        page: 'current'
-                    }).data().reduce((a, b) => {
-                        let val = parseFloat((b || '').replace(/[^0-9.-]+/g, ""));
-                        return a + (isNaN(val) ? 0 : val);
-                    }, 0);
+                // ===== TOTALS FROM CONTROLLER =====
+                if (json && json.totals) {
+
+                    // TOTAL BASE/LOCAL
+                    function colSum(index) {
+                        return api.column(index, {
+                            page: 'current'
+                        }).data().reduce((a, b) => {
+                            let val = parseFloat((b || '').replace(/[^0-9.-]+/g, ""));
+                            return a + (isNaN(val) ? 0 : val);
+                        }, 0);
+                    }
+
+                    $('#total-base-debit').html(colSum(6).toFixed(2));
+                    $('#total-base-credit').html(colSum(7).toFixed(2));
+                    $('#total-local-debit').html(colSum(8).toFixed(2));
+                    $('#total-local-credit').html(colSum(9).toFixed(2));
+
+
+                    // ====== REALISED TOTAL ======
+                    let rGain = json.totals.realised_gain;
+                    let rLoss = json.totals.realised_loss;
+                    let uGain = json.totals.unrealised_gain;
+                    let uLoss = json.totals.unrealised_loss;
+                    let final = json.totals.final_gain_loss;
+
+                    // Apply badges
+                    function badge(val) {
+                        if (val == 0) return '<span class="badge badge-secondary">-</span>';
+                        let num = parseFloat(val);
+                        let color = num > 0 ? 'success' : 'danger';
+                        let sign = num > 0 ? '+' : '-';
+                        return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
+                    }
+
+                    $('#total-realised').html(badge(rGain - rLoss));
+                    $('#total-unrealised').html(badge(uGain - uLoss));
+                    $('#final-gain-loss').html(badge(final));
                 }
-
-                $('#total-base-debit').html(colSum(6).toFixed(2));
-                $('#total-base-credit').html(colSum(7).toFixed(2));
-                $('#total-local-debit').html(colSum(8).toFixed(2));
-                $('#total-local-credit').html(colSum(9).toFixed(2));
             }
         });
 
+        // Filter reload
         $('#filter-btn').on('click', function(e) {
             e.preventDefault();
             forexTable.ajax.reload();

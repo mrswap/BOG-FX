@@ -159,36 +159,8 @@ class SaleController extends Controller
             $starting_date = $request->input('starting_date', now()->subMonth()->toDateString());
             $ending_date = $request->input('ending_date', now()->toDateString());
 
-            $remittances = ForexRemittance::with(['baseCurrency', 'currency', 'customer', 'supplier'])
-                ->where('party_type', $party_type)
-                ->whereDate('transaction_date', '>=', $starting_date)
-                ->whereDate('transaction_date', '<=', $ending_date)
-                ->orderBy('party_id')
-                ->orderBy('transaction_date')
-                ->get();
 
             $reportData = [];
-            foreach ($remittances as $rem) {
-                $partyName = $party_type === 'customer' ? ($rem->customer->name ?? 'N/A') : ($rem->supplier->name ?? 'N/A');
-                $baseCode = $rem->baseCurrency ? $rem->baseCurrency->code : 'Base';
-                $localCode = $rem->currency ? $rem->currency->code : 'Local';
-
-                $reportData[$partyName][] = [
-                    'date' => $rem->transaction_date->format('d-M-Y'),
-                    'particulars' => $rem->remarks ?? '-',
-                    'vch_type' => ucfirst($rem->type),
-                    'vch_no' => $rem->voucher_no ?? '-',
-                    'exchange_rate' => number_format($rem->exch_rate, 4),
-                    'base_debit' => $rem->type === 'receipt' ? $rem->usd_amount : 0,
-                    'base_credit' => $rem->type === 'payment' ? $rem->usd_amount : 0,
-                    'local_debit' => $rem->type === 'receipt' ? $rem->local_amount : 0,
-                    'local_credit' => $rem->type === 'payment' ? $rem->local_amount : 0,
-                    'avg_rate' => $rem->avg_rate ?? $rem->exch_rate,
-                    'diff' => $rem->local_amount - ($rem->usd_amount * $rem->avg_rate),
-                    'realised_gain_loss' => $rem->gainLoss()->sum('gain_loss_amount'),
-                ];
-            }
-
 
 
             return view('backend.sale.index', compact('starting_date', 'ending_date', 'warehouse_id', 'sale_status', 'payment_status', 'sale_type', 'payment_method', 'lims_gift_card_list', 'lims_pos_setting_data', 'lims_reward_point_setting_data', 'lims_account_list', 'lims_warehouse_list', 'all_permission', 'options', 'numberOfInvoice', 'custom_fields', 'field_name', 'lims_courier_list', 'smsTemplates', 'currency_list','reportData'));
