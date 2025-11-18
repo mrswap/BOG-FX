@@ -63,7 +63,6 @@
                                         <option value="">-- Any --</option>
                                         <option value="customer">Customer</option>
                                         <option value="supplier">Supplier</option>
-                                        <option value="both">Both</option>
                                     </select>
                                 </div>
                             </div>
@@ -134,7 +133,7 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Local Currency *</label>
-                                    <select name="currency_id" id="currency_id" class="form-control" required>
+                                    <select name="local_currency_id" id="local_currency_id" class="form-control" required>
                                         @foreach ($currency_list as $currency)
                                             <option value="{{ $currency->id }}"
                                                 data-rate="{{ $currency->exchange_rate }}">
@@ -169,7 +168,7 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Voucher Type *</label>
-                                    <select name="linked_invoice_type" id="voucher_type" class="form-control" required>
+                                    <select name="voucher_type" id="voucher_type" class="form-control" required>
                                         <option value="receipt">Receipt</option>
                                         <option value="payment">Payment</option>
                                         <option value="sale">Sale</option>
@@ -218,13 +217,13 @@
         function calculateConverted() {
             const amount = parseFloat($('#base_amount').val()) || 0;
             const rate = parseFloat($('#exchange_rate').val()) ||
-                parseFloat($('#currency_id option:selected').data('rate')) ||
+                parseFloat($('#local_currency_id option:selected').data('rate')) ||
                 1;
             $('#local_amount').val((amount * rate).toFixed(2));
         }
 
         $('#base_amount, #exchange_rate').on('input', calculateConverted);
-        $('#currency_id').on('change', calculateConverted);
+        $('#local_currency_id').on('change', calculateConverted);
 
         // Auto-fill party_type when a party is selected
         $('#party_id_option').on('change', function() {

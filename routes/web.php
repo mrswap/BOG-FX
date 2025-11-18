@@ -96,6 +96,9 @@ Route::match(
 )
 ->middleware(['common', 'auth', 'active'])
 ->name('forex.report');
+Route::post('/get-forex-report-data', 
+[App\Http\Controllers\ForexRemittanceController::class, 'reportData'])
+->name('forex.report.data');
 
 
 Route::get('migrate', function () {

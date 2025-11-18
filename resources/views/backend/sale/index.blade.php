@@ -130,6 +130,16 @@
 
 @push('scripts')
     <script>
+        $(".daterangepicker-field").daterangepicker({
+            callback: function(startDate, endDate, period) {
+                var starting_date = startDate.format('YYYY-MM-DD');
+                var ending_date = endDate.format('YYYY-MM-DD');
+                var title = starting_date + ' To ' + ending_date;
+                $(this).val(title);
+                $('input[name="starting_date"]').val(starting_date);
+                $('input[name="ending_date"]').val(ending_date);
+            }
+        });
         var forexTable = $('#forex-table').DataTable({
             processing: true,
             serverSide: true,
@@ -137,7 +147,9 @@
                 url: "{{ route('get.forex.remittance.data') }}",
                 type: "POST",
                 data: function(d) {
-                    d.party_type = $('select[name=party_type]').val();
+                    //d.party_type = $('select[name=party_type]').val();
+                    d.party_type = "";
+
                     d.currency_id = $('select[name=currency_id]').val();
                     d.starting_date = $('input[name=starting_date]').val();
                     d.ending_date = $('input[name=ending_date]').val();

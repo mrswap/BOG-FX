@@ -3,229 +3,317 @@
 namespace App\Http\Controllers;
 
 use App\Models\ForexRemittance;
-use App\Models\Party;
-use App\Models\Currency;
 use App\Services\ForexFifoService;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
-use DB;
 
 class ForexRemittanceController extends Controller
 {
-    protected $fifo;
-
-    public function __construct(ForexFifoService $fifo)
+    public function store(Request $request, ForexFifoService $fifo)
     {
-        $this->fifo = $fifo;
-    }
-
-    /**
-     * STORE REMITTANCE (Creates remittance + creates chunk + runs FIFO)
-     */
-    public function store(Request $request)
-    {
-        $data = $request->validate([
-            'party_id'          => 'required|exists:parties,id',
-            'transaction_date'  => 'required|date',
-            'base_currency_id'  => 'required|exists:currencies,id',
-            'currency_id'       => 'required|exists:currencies,id',
-            'base_amount'       => 'required|numeric|min:0.0001',
-            'exchange_rate'     => 'required|numeric|min:0.0001',
-            'voucher_no'        => 'required|string',
-            'linked_invoice_type' => 'required|in:purchase,sale,payment,receipt',
-            'avg_rate'          => 'nullable|numeric',
-            'closing_rate'      => 'nullable|numeric',
-            'remarks'           => 'nullable|string',
+        $validated = $request->validate([
+            'party_id'         => 'required|integer',
+            'transaction_date' => 'required|date',
+            'voucher_type'     => 'required|string',
+            'voucher_no'       => 'required|string',
+            'base_currency_id' => 'required|integer',
+            'local_currency_id' => 'required|integer',
+            'base_amount'      => 'required|numeric',
+            'exchange_rate'    => 'required|numeric',
+            'avg_rate'         => 'nullable|numeric',
+            'closing_rate'     => 'nullable|numeric',
+            'remarks'          => 'nullable|string',
         ]);
 
-        DB::beginTransaction();
-        try {
+        // 1. Auto ledger_type
+        $validated['ledger_type'] = match ($validated['voucher_type']) {
+            'sale', 'receipt'      => 'customer',
+            'purchase', 'payment'  => 'supplier',
+        };
 
-            $rem = ForexRemittance::create([
-                'party_id'          => $data['party_id'],
-                'transaction_date'  => $data['transaction_date'],
-                'voucher_type'      => $data['linked_invoice_type'],
-                'voucher_no'        => $data['voucher_no'],
-                'base_currency_id'  => $data['base_currency_id'],
-                'local_currency_id' => $data['currency_id'],
-                'exchange_rate'     => $data['exchange_rate'],
-                'base_amount'       => $data['base_amount'],
-                'local_amount'      => round($data['base_amount'] * $data['exchange_rate'], 4),
-                'avg_rate'          => $data['avg_rate'] ?? null,
-                'closing_rate'      => $data['closing_rate'] ?? null,
-                'remarks'           => $data['remarks'] ?? null,
-            ]);
+        // 2. Auto direction
+        $validated['direction'] = match ($validated['voucher_type']) {
+            'sale', 'purchase' => 'debit',
+            'payment', 'receipt' => 'credit',
+        };
 
-            // ⬇️ CREATE FIFO CHUNK + MATCH
-            $this->fifo->processRemittance($rem);
+        // 3. Compute local amount
+        $validated['local_amount'] = round($validated['base_amount'] * $validated['exchange_rate'], 4);
 
-            DB::commit();
-            return back()->with('success', 'Remittance saved + FIFO applied.');
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return back()->with('error', $e->getMessage());
-        }
+        // 4. FIFO fields
+        $validated['remaining_base_amount'] = $validated['base_amount'];
+        $validated['settled_base_amount']   = 0;
+
+        // 5. Save remittance
+        $rem = ForexRemittance::create($validated);
+
+        // 6. Apply FIFO after saving
+        $fifo->applyFifoFor(
+            $rem->party_id,
+            $rem->ledger_type,
+            $rem->base_currency_id
+        );
+
+        return redirect()->back()->with('success', 'Forex Remittance Added Successfully');
     }
 
 
-    /**
-     * LEDGER FOR DATATABLES
-     */
+
     public function forexRemittanceData(Request $request)
     {
-        $party_id = $request->party_id;
-        $currency_id = $request->currency_id ?? 0;
-        $starting_date = $request->starting_date ?: '2000-01-01';
-        $ending_date = $request->ending_date ?: now()->toDateString();
-        $globalClosingRate = $request->input('closing_rate') ?? null;
+        $columns = [
+            0 => 'id',
+            1 => 'transaction_date',
+            2 => 'party_id',
+            3 => 'voucher_type',
+            4 => 'voucher_no',
+            5 => 'exchange_rate',
+        ];
 
-        $q = ForexRemittance::with(['party', 'baseCurrency', 'localCurrency'])
-            ->whereBetween('transaction_date', [$starting_date, $ending_date]);
+        $partyType  = $request->party_type;      // customer / supplier
+        $currencyId = $request->currency_id;     // base_currency_id
+        $startDate  = $request->starting_date;
+        $endDate    = $request->ending_date;
 
-        if ($party_id) $q->where('party_id', $party_id);
-        if ($currency_id && $currency_id != 0) {
-            $q->where(function ($sub) use ($currency_id) {
-                $sub->where('base_currency_id', $currency_id)
-                    ->orWhere('local_currency_id', $currency_id);
-            });
+        // ============================================================
+        // 🔥 1. QUERY (with all filters)
+        // ============================================================
+
+        $query = ForexRemittance::with('party', 'baseCurrency', 'localCurrency')
+            ->when($partyType, function ($q) use ($partyType) {
+                $q->where('ledger_type', $partyType);
+            })
+            ->when($currencyId && $currencyId != 0, function ($q) use ($currencyId) {
+                $q->where('base_currency_id', $currencyId);
+            })
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->orderBy('transaction_date', 'asc');
+
+        $totalData = $query->count();
+
+        // Paging
+        $limit = $request->length;
+        $start = $request->start;
+
+        // ============================================================
+        // 🔥 2. Fetch Paginated Rows
+        // ============================================================
+
+        $remittances = $query
+            ->offset($start)
+            ->limit($limit)
+            ->get();
+
+        $data = [];
+        $sn = $start + 1;
+
+        // SUM TOTALS
+        $totalRealisedGain = 0;
+        $totalRealisedLoss = 0;
+        $totalUnrealisedGain = 0;
+        $totalUnrealisedLoss = 0;
+
+        foreach ($remittances as $fx) {
+
+            // Base Debit / Credit
+            $baseDebit  = $fx->direction == 'debit'  ? $fx->base_amount  : 0;
+            $baseCredit = $fx->direction == 'credit' ? $fx->base_amount  : 0;
+
+            // Local Debit / Credit
+            $localDebit  = $fx->direction == 'debit'  ? $fx->local_amount : 0;
+            $localCredit = $fx->direction == 'credit' ? $fx->local_amount : 0;
+
+            // Diff column (avg_rate - exchange_rate)
+            $diff = null;
+            if ($fx->avg_rate) {
+                $diff = round(($fx->avg_rate - $fx->exchange_rate), 4);
+            }
+
+            // Realised (net)
+            $realised = ($fx->realised_gain - $fx->realised_loss);
+
+            // Unrealised (net)
+            $unrealised = ($fx->unrealised_gain - $fx->unrealised_loss);
+
+            // Add to SUMMARY TOTALS
+            $totalRealisedGain     += $fx->realised_gain;
+            $totalRealisedLoss     += $fx->realised_loss;
+            $totalUnrealisedGain   += $fx->unrealised_gain;
+            $totalUnrealisedLoss   += $fx->unrealised_loss;
+
+            // ================================
+            // 🔥 FORMAT ROW FOR DATATABLE
+            // ================================
+
+            $nestedData = [
+                'sn'          => $sn++,
+                'date'        => $fx->transaction_date->format('d-m-Y'),
+                'particulars' => $fx->party->name,
+                'vch_type'    => strtoupper($fx->voucher_type),
+                'vch_no'      => $fx->voucher_no,
+                'exch_rate'   => $fx->exchange_rate,
+
+                'base_debit'  => $baseDebit,
+                'base_credit' => $baseCredit,
+
+                'local_debit'  => $localDebit,
+                'local_credit' => $localCredit,
+
+                'avg_rate'    => $fx->avg_rate,
+                'diff'        => $diff,
+
+                'realised'    => $realised,
+                'unrealised'  => $unrealised,
+
+                'remarks'     => $fx->remarks,
+            ];
+
+            $data[] = $nestedData;
         }
 
-        $remittances = $q->orderBy('transaction_date', 'asc')->orderBy('id', 'asc')->get();
+        // FINAL GAIN LOSS = realised + unrealised
+        $finalNet = ($totalRealisedGain - $totalRealisedLoss)
+            + ($totalUnrealisedGain - $totalUnrealisedLoss);
 
-        $ledger = $this->buildLedgerData($remittances, $globalClosingRate);
+        // ============================================================
+        // 🔥 3. DATATABLE JSON OUTPUT
+        // ============================================================
 
-        // ensure totals keys exist for your UI
-        $totals = $ledger['totals'];
-        $response = [
-            "draw" => intval($request->draw),
-            "recordsTotal" => $remittances->count(),
-            "recordsFiltered" => $remittances->count(),
-            "data" => $ledger['data'],
+        $json_data = [
+            "draw"            => intval($request->draw),
+            "recordsTotal"    => intval($totalData),
+            "recordsFiltered" => intval($totalData),
+            "data"            => $data,
+
             "totals" => [
-                'realised_gain' => $totals['realised_gain'] ?? 0,
-                'realised_loss' => $totals['realised_loss'] ?? 0,
-                'unrealised_gain' => $totals['unrealised_gain'] ?? 0,
-                'unrealised_loss' => $totals['unrealised_loss'] ?? 0,
-                'final_gain_loss' => $totals['final_gain_loss'] ?? 0,
-                'total_local_debit' => $totals['total_local_debit'] ?? 0,
-                'total_local_credit' => $totals['total_local_credit'] ?? 0,
+                "realised_gain"      => $totalRealisedGain,
+                "realised_loss"      => $totalRealisedLoss,
+                "unrealised_gain"    => $totalUnrealisedGain,
+                "unrealised_loss"    => $totalUnrealisedLoss,
+                "final_gain_loss"    => $finalNet,
             ]
         ];
 
-        return response()->json($response);
+        return response()->json($json_data);
     }
 
 
-    /**
-     * BUILD LEDGER DATA ROWS FROM FIFO CHUNK + ADJUSTMENTS
-     */
-
-    protected function buildLedgerData($rows, ?float $closingRate = null)
+    public function report(Request $request, $type)
     {
-        $data = [];
-        $sn = 1;
+        $valid = ['invoice', 'party', 'base', 'local', 'realised', 'unrealised'];
 
-        $prevRate = null;
+        if (!in_array($type, $valid)) {
+            abort(404);
+        }
 
-        $totalRealised = 0;
-        $totalUnreal = 0;
+        // currency list for filters
+        $currency_list = \App\Models\Currency::active()->get();
 
-        foreach ($rows as $rem) {
+        return view('backend.forex_reports.unified', compact('type', 'currency_list'));
+    }
 
-            $baseCode  = $rem->baseCurrency?->code ?? '';
-            $localCode = $rem->localCurrency?->code ?? '';
+    public function reportData(Request $request)
+    {
+        $type = $request->type;     // invoice, party, base, local, realised, unrealised
+        $start = $request->starting_date;
+        $end   = $request->ending_date;
+        $currency = $request->currency_id;
 
-            //----------------------------------------------------
-            // 1) DEBIT / CREDIT AMOUNTS
-            //----------------------------------------------------
-            $baseDebit = $baseCredit = $localDebit = $localCredit = 0;
+        // base query
+        $q = ForexRemittance::with('party', 'baseCurrency', 'localCurrency')
+            ->whereBetween('transaction_date', [$start, $end]);
 
-            if (in_array($rem->voucher_type, ['payment', 'receipt'])) {
-                // admin paid OR admin received = base_debit
-                $baseDebit  = $rem->base_amount;
-                $localDebit = $rem->local_amount;
-            } else {
-                // purchase / sale = base_credit
-                $baseCredit  = $rem->base_amount;
-                $localCredit = $rem->local_amount;
-            }
+        if ($currency && $currency != 0) {
+            $q->where('base_currency_id', $currency);
+        }
 
-            //----------------------------------------------------
-            // 2) DIFF (Excel logic)
-            //----------------------------------------------------
-            if ($prevRate === null) {
-                // first row → exchange - closingRate
-                $rowDiff = $closingRate ? ($rem->exchange_rate - $closingRate) : 0;
-            } else {
-                // next rows → exchange - previous exchange
-                $rowDiff = $rem->exchange_rate - $prevRate;
-            }
+        // ==================================
+        // 🔥 REPORT BASED QUERY FILTERS
+        // ==================================
 
-            $prevRate = $rem->exchange_rate;
+        switch ($type) {
+            case 'invoice':
+                $q->whereIn('voucher_type', ['sale', 'purchase']);
+                break;
 
-            //----------------------------------------------------
-            // 3) REALISED gain/loss (sum of adjustments mapped to this voucher)
-            //----------------------------------------------------
-            $realised = DB::table('forex_adjustments')
-                ->where('party_id', $rem->party_id)
-                ->where(function ($q) use ($rem) {
-                    $q->where('invoice_id', $rem->id)
-                        ->orWhere('payment_id', $rem->id);
-                })
-                ->sum('realised_gain_loss');
+            case 'party':
+                // no additional filter, display party grouping
+                break;
 
-            //----------------------------------------------------
-            // 4) UNREALISED (from open chunks)
-            //----------------------------------------------------
-            $unreal = app(\App\Services\ForexFifoService::class)
-                ->computeOpenUnrealised($rem, $closingRate);
+            case 'base':
+                // group by base currency
+                break;
 
-            $displayRealised = floatval($realised);
-            $totalRealised += $displayRealised;
-            $totalUnreal    += floatval($unreal);
+            case 'local':
+                // group by local currency
+                break;
 
-            //----------------------------------------------------
-            // 5) Push to table
-            //----------------------------------------------------
-            $data[] = [
+            case 'realised':
+                $q->where(function ($z) {
+                    $z->where('realised_gain', '>', 0)
+                        ->orWhere('realised_loss', '>', 0);
+                });
+                break;
+
+            case 'unrealised':
+                $q->where(function ($z) {
+                    $z->where('unrealised_gain', '>', 0)
+                        ->orWhere('unrealised_loss', '>', 0);
+                });
+                break;
+        }
+
+        $recordsTotal = $q->count();
+
+        // paginate
+        $data = $q->orderBy('transaction_date')
+            ->offset($request->start)
+            ->limit($request->length)
+            ->get();
+
+        // ==================================
+        // 🔥 FORMAT OUTPUT BASED ON REPORT TYPE
+        // ==================================
+
+        $rows = [];
+        $sn = $request->start + 1;
+
+        foreach ($data as $fx) {
+
+            $baseDebit  = $fx->direction == 'debit' ? $fx->base_amount : 0;
+            $baseCredit = $fx->direction == 'credit' ? $fx->base_amount : 0;
+            $localDebit = $fx->direction == 'debit' ? $fx->local_amount : 0;
+            $localCredit = $fx->direction == 'credit' ? $fx->local_amount : 0;
+
+            $diff = $fx->avg_rate ? ($fx->avg_rate - $fx->exchange_rate) : null;
+
+            $realised = $fx->realised_gain - $fx->realised_loss;
+            $unrealised = $fx->unrealised_gain - $fx->unrealised_loss;
+
+            $rows[] = [
                 'sn'         => $sn++,
-                'date'       => $rem->transaction_date,
-                'particulars' => $rem->party?->name ?? '-',
+                'date'       => $fx->transaction_date->format('d-m-Y'),
+                'party'      => $fx->party->name,
+                'voucher'    => strtoupper($fx->voucher_type),
+                'voucher_no' => $fx->voucher_no,
+                'exchange'   => $fx->exchange_rate,
 
-                'vch_type'   => ucfirst($rem->voucher_type),
-                'vch_no'     => $rem->voucher_no,
-                'exch_rate'  => number_format($rem->exchange_rate, 4),
+                'base_debit' => $baseDebit,
+                'base_credit' => $baseCredit,
+                'local_debit' => $localDebit,
+                'local_credit' => $localCredit,
 
-                'base_debit'  => $baseDebit  ? number_format($baseDebit, 2) . " $baseCode"  : '',
-                'base_credit' => $baseCredit ? number_format($baseCredit, 2) . " $baseCode"  : '',
-
-                'local_debit'  => $localDebit  ? number_format($localDebit, 2) . " $localCode" : '',
-                'local_credit' => $localCredit ? number_format($localCredit, 2) . " $localCode" : '',
-
-                'avg_rate' => number_format($rem->avg_rate ?? 0, 4),
-                'diff'     => number_format($rowDiff, 4),
-
-                'realised'   => round($displayRealised, 4),
-                'unrealised' => round($unreal, 4),
-
-                'remarks' => $rem->remarks ?? '',
+                'avg_rate'   => $fx->avg_rate,
+                'diff'       => $diff,
+                'realised'   => $realised,
+                'unrealised' => $unrealised,
             ];
         }
 
-        //----------------------------------------------------
-        // 6) FINAL TOTALS LIKE YOUR REPORT
-        //----------------------------------------------------
-        return [
-            'data' => $data,
-            'totals' => [
-                'realised_gain'   => $totalRealised > 0 ? $totalRealised : 0,
-                'realised_loss'   => $totalRealised < 0 ? abs($totalRealised) : 0,
-
-                'unrealised_gain' => $totalUnreal > 0 ? $totalUnreal : 0,
-                'unrealised_loss' => $totalUnreal < 0 ? abs($totalUnreal) : 0,
-
-                'final_gain_loss' => round($totalRealised + $totalUnreal, 4),
-            ]
-        ];
+        return response()->json([
+            'draw' => intval($request->draw),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsTotal,
+            'data' => $rows,
+        ]);
     }
 }
