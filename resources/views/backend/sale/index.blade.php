@@ -97,21 +97,28 @@
                 </thead>
                 <tfoot>
                     <tr>
-                        <th colspan="6" class="text-right">Totals</th>
+                        <th></th> <!-- sn -->
+                        <th></th> <!-- date -->
+                        <th></th> <!-- particulars -->
+                        <th></th> <!-- vch type -->
+                        <th></th> <!-- vch no -->
+                        <th></th> <!-- exch rate -->
+
                         <th id="total-base-debit"></th>
                         <th id="total-base-credit"></th>
                         <th id="total-local-debit"></th>
                         <th id="total-local-credit"></th>
 
-                        <th colspan="1"></th> <!-- avg rate -->
-                        <th colspan="1"></th> <!-- diff -->
-                        <th colspan="1"></th> <!-- diff -->
+                        <th></th> <!-- avg rate -->
+                        <th></th> <!-- closing rate -->
+                        <th></th> <!-- diff -->
 
                         <th id="total-realised"></th>
                         <th id="total-unrealised"></th>
                         <th id="final-gain-loss"></th>
                     </tr>
                 </tfoot>
+
 
             </table>
         </div>
