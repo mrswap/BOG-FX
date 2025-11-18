@@ -1,4 +1,5 @@
-<?php 
+<?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -15,8 +16,9 @@ class ForexMatch extends Model
         'debit_rate',
         'credit_rate',
         'realised_gain',
-        'realised_loss',
+        'realised_loss'
     ];
+
 
     public function debit()
     {

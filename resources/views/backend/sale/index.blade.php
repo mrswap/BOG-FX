@@ -41,6 +41,8 @@
                             <div class="form-group">
                                 <label><strong>Party Type</strong></label>
                                 <select name="party_type" class="form-control">
+                                    <option value="">Both</option>
+
                                     <option value="customer">Customer</option>
                                     <option value="supplier">Supplier</option>
                                 </select>
@@ -84,6 +86,8 @@
                         <th>Local Currency<br><small>(Debit)</small></th>
                         <th>Local Currency<br><small>(Credit)</small></th>
                         <th>Avg Rate</th>
+                        <th>Closing Rate</th>
+
                         <th>Diff</th>
                         <th>Realised Gain/Loss</th>
                         <th>Unrealised Gain/Loss</th>
@@ -100,6 +104,7 @@
                         <th id="total-local-credit"></th>
 
                         <th colspan="1"></th> <!-- avg rate -->
+                        <th colspan="1"></th> <!-- diff -->
                         <th colspan="1"></th> <!-- diff -->
 
                         <th id="total-realised"></th>
@@ -140,6 +145,7 @@
                 $('input[name="ending_date"]').val(ending_date);
             }
         });
+
         var forexTable = $('#forex-table').DataTable({
             processing: true,
             serverSide: true,
@@ -147,13 +153,13 @@
                 url: "{{ route('get.forex.remittance.data') }}",
                 type: "POST",
                 data: function(d) {
-                    //d.party_type = $('select[name=party_type]').val();
-                    d.party_type = "";
-
+                    d.party_type = $('select[name=party_type]').val(); // use actual filter
                     d.currency_id = $('select[name=currency_id]').val();
                     d.starting_date = $('input[name=starting_date]').val();
                     d.ending_date = $('input[name=ending_date]').val();
                     d._token = "{{ csrf_token() }}";
+                    // optional: if you later add manual closing rate input:
+                    // d.closing_rate_global = $('#closing_rate_global').val();
                 }
             },
             columns: [{
@@ -211,6 +217,12 @@
                     className: 'text-center'
                 },
                 {
+                    data: 'closing_rate',
+                    name: 'closing_rate',
+                    className: 'text-center'
+                },
+
+                {
                     data: 'diff',
                     name: 'diff',
                     className: 'text-center'
@@ -222,7 +234,8 @@
                     name: 'realised',
                     className: 'text-center',
                     render: function(val) {
-                        if (!val || val == 0) return '<span class="badge badge-secondary">-</span>';
+                        if (!val || val == 0)
+                            return '<span class="badge badge-secondary">-</span>';
 
                         let num = parseFloat(val);
                         let color = num > 0 ? 'success' : 'danger';
@@ -238,10 +251,11 @@
                     name: 'unrealised',
                     className: 'text-center',
                     render: function(val) {
-                        if (!val || val == 0) return '<span class="badge badge-secondary">-</span>';
+                        if (!val || val == 0)
+                            return '<span class="badge badge-secondary">-</span>';
 
                         let num = parseFloat(val);
-                        let color = num > 0 ? 'info' : 'warning';
+                        let color = num > 0 ? 'info' : 'warning'; // blue for gain, yellow for loss
                         let sign = num > 0 ? '+' : '-';
 
                         return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
@@ -281,17 +295,17 @@
                 var api = this.api();
                 var json = api.ajax.json();
 
-                // ===== TOTALS FROM CONTROLLER =====
                 if (json && json.totals) {
 
-                    // TOTAL BASE/LOCAL
                     function colSum(index) {
                         return api.column(index, {
-                            page: 'current'
-                        }).data().reduce((a, b) => {
-                            let val = parseFloat((b || '').replace(/[^0-9.-]+/g, ""));
-                            return a + (isNaN(val) ? 0 : val);
-                        }, 0);
+                                page: 'current'
+                            })
+                            .data()
+                            .reduce(function(a, b) {
+                                let val = parseFloat((b || '').toString().replace(/[^0-9.-]+/g, ""));
+                                return a + (isNaN(val) ? 0 : val);
+                            }, 0);
                     }
 
                     $('#total-base-debit').html(colSum(6).toFixed(2));
@@ -299,20 +313,20 @@
                     $('#total-local-debit').html(colSum(8).toFixed(2));
                     $('#total-local-credit').html(colSum(9).toFixed(2));
 
-
-                    // ====== REALISED TOTAL ======
                     let rGain = json.totals.realised_gain;
                     let rLoss = json.totals.realised_loss;
                     let uGain = json.totals.unrealised_gain;
                     let uLoss = json.totals.unrealised_loss;
                     let final = json.totals.final_gain_loss;
 
-                    // Apply badges
                     function badge(val) {
-                        if (val == 0) return '<span class="badge badge-secondary">-</span>';
+                        if (!val || val == 0)
+                            return '<span class="badge badge-secondary">-</span>';
+
                         let num = parseFloat(val);
                         let color = num > 0 ? 'success' : 'danger';
                         let sign = num > 0 ? '+' : '-';
+
                         return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
                     }
 
@@ -323,7 +337,6 @@
             }
         });
 
-        // Filter reload
         $('#filter-btn').on('click', function(e) {
             e.preventDefault();
             forexTable.ajax.reload();
