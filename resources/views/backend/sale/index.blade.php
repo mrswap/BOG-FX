@@ -117,6 +117,11 @@
                         <th id="total-unrealised"></th>
                         <th id="final-gain-loss"></th>
                     </tr>
+                    <tr>
+                        <th colspan="6" class="text-right font-weight-bold">Net Balance</th>
+                        <th colspan="10" id="party-net-balance" class="text-left font-weight-bold"></th>
+                    </tr>
+
                 </tfoot>
 
 
@@ -160,85 +165,69 @@
                 url: "{{ route('get.forex.remittance.data') }}",
                 type: "POST",
                 data: function(d) {
-                    d.party_type = $('select[name=party_type]').val(); // use actual filter
+                    d.party_type = $('select[name=party_type]').val();
                     d.currency_id = $('select[name=currency_id]').val();
                     d.starting_date = $('input[name=starting_date]').val();
                     d.ending_date = $('input[name=ending_date]').val();
                     d._token = "{{ csrf_token() }}";
-                    // optional: if you later add manual closing rate input:
-                    // d.closing_rate_global = $('#closing_rate_global').val();
                 }
             },
+
             columns: [{
                     data: 'sn',
-                    name: 'sn',
                     className: 'text-center'
                 },
                 {
-                    data: 'date',
-                    name: 'date'
+                    data: 'date'
                 },
                 {
-                    data: 'particulars',
-                    name: 'particulars'
+                    data: 'particulars'
                 },
                 {
-                    data: 'vch_type',
-                    name: 'vch_type'
+                    data: 'vch_type'
                 },
                 {
                     data: 'vch_no',
-                    name: 'vch_no',
                     className: 'text-center'
                 },
                 {
                     data: 'exch_rate',
-                    name: 'exch_rate',
                     className: 'text-center'
                 },
 
                 {
                     data: 'base_debit',
-                    name: 'base_debit',
                     className: 'text-right'
                 },
                 {
                     data: 'base_credit',
-                    name: 'base_credit',
                     className: 'text-right'
                 },
                 {
                     data: 'local_debit',
-                    name: 'local_debit',
                     className: 'text-right'
                 },
                 {
                     data: 'local_credit',
-                    name: 'local_credit',
                     className: 'text-right'
                 },
 
                 {
                     data: 'avg_rate',
-                    name: 'avg_rate',
                     className: 'text-center'
                 },
                 {
                     data: 'closing_rate',
-                    name: 'closing_rate',
                     className: 'text-center'
                 },
-
                 {
                     data: 'diff',
-                    name: 'diff',
                     className: 'text-center'
                 },
 
-                // -------- REALISED (Gain/Loss) --------
+                // Realised
                 {
                     data: 'realised',
-                    name: 'realised',
                     className: 'text-center',
                     render: function(val) {
                         if (!val || val == 0)
@@ -252,17 +241,16 @@
                     }
                 },
 
-                // -------- UNREALISED (Gain/Loss) --------
+                // Unrealised
                 {
                     data: 'unrealised',
-                    name: 'unrealised',
                     className: 'text-center',
                     render: function(val) {
                         if (!val || val == 0)
                             return '<span class="badge badge-secondary">-</span>';
 
                         let num = parseFloat(val);
-                        let color = num > 0 ? 'info' : 'warning'; // blue for gain, yellow for loss
+                        let color = num > 0 ? 'info' : 'warning';
                         let sign = num > 0 ? '+' : '-';
 
                         return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
@@ -270,8 +258,7 @@
                 },
 
                 {
-                    data: 'remarks',
-                    name: 'remarks'
+                    data: 'remarks'
                 }
             ],
 
@@ -315,6 +302,7 @@
                             }, 0);
                     }
 
+                    // Footer totals
                     $('#total-base-debit').html(colSum(6).toFixed(2));
                     $('#total-base-credit').html(colSum(7).toFixed(2));
                     $('#total-local-debit').html(colSum(8).toFixed(2));
@@ -340,6 +328,24 @@
                     $('#total-realised').html(badge(rGain - rLoss));
                     $('#total-unrealised').html(badge(uGain - uLoss));
                     $('#final-gain-loss').html(badge(final));
+
+                    // =========== NET BALANCE (Dr/Cr) ===========
+                    let totalDebitUSD = parseFloat($('#total-base-debit').text()) || 0;
+                    let totalCreditUSD = parseFloat($('#total-base-credit').text()) || 0;
+
+                    let net = totalCreditUSD - totalDebitUSD;
+
+                    let msg = "";
+
+                    if (net > 0) {
+                        msg = `${net.toFixed(2)} USD <strong class="text-success">(Cr)</strong>`;
+                    } else if (net < 0) {
+                        msg = `${Math.abs(net).toFixed(2)} USD <strong class="text-danger">(Dr)</strong>`;
+                    } else {
+                        msg = `<strong>0.00 (Nil)</strong>`;
+                    }
+
+                    $('#party-net-balance').html(msg);
                 }
             }
         });
