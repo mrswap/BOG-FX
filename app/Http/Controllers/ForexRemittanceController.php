@@ -94,135 +94,127 @@ class ForexRemittanceController extends Controller
         ]);
     }
 
+    public function forexRemittanceData(Request $request)
+    {
+        // Base query for counts & totals
+        $baseQuery = ForexRemittance::with(['party', 'baseCurrency', 'localCurrency'])
+            ->orderBy('transaction_date')
+            ->orderBy('id');
 
-public function forexRemittanceData(Request $request)
-{
-    // Base query
-    $baseQuery = ForexRemittance::with(['party','baseCurrency','localCurrency'])
-        ->orderBy('transaction_date')
-        ->orderBy('id');
+        $rows = $baseQuery->get();
 
-    $rows = $baseQuery->get();
+        $data = [];
+        $sn = 1;
 
-    $data = [];
-    $sn = 1;
+        // TOTALS INITIALISE
+        $totalRealisedGain = 0;
+        $totalRealisedLoss = 0;
+        $totalUnrealisedGain = 0;
+        $totalUnrealisedLoss = 0;
 
-    // TOTALS INITIALISE
-    $totalRealisedGain = 0;
-    $totalRealisedLoss = 0;
-    $totalUnrealisedGain = 0;
-    $totalUnrealisedLoss = 0;
+        foreach ($rows as $t) {
 
-    foreach ($rows as $t) {
+            // Add to totals
+            $totalRealisedGain    += floatval($t->realised_gain);
+            $totalRealisedLoss    += floatval($t->realised_loss);
+            $totalUnrealisedGain  += floatval($t->unrealised_gain);
+            $totalUnrealisedLoss  += floatval($t->unrealised_loss);
 
-        // SUM TOTALS
-        $totalRealisedGain    += floatval($t->realised_gain);
-        $totalRealisedLoss    += floatval($t->realised_loss);
-        $totalUnrealisedGain  += floatval($t->unrealised_gain);
-        $totalUnrealisedLoss  += floatval($t->unrealised_loss);
+            // BASE debit/credit output
+            $baseDebit  = $t->direction === 'debit'
+                ? number_format($t->base_amount, 4) . " ({$t->baseCurrency->code})"
+                : 0;
 
-        // BASE debit/credit output
-        $baseDebit  = $t->direction === 'debit'
-            ? number_format($t->base_amount, 4) . " ({$t->baseCurrency->code})"
-            : 0;
+            $baseCredit = $t->direction === 'credit'
+                ? number_format($t->base_amount, 4) . " ({$t->baseCurrency->code})"
+                : 0;
 
-        $baseCredit = $t->direction === 'credit'
-            ? number_format($t->base_amount, 4) . " ({$t->baseCurrency->code})"
-            : 0;
+            // LOCAL debit/credit output
+            $localDebit  = $t->direction === 'debit'
+                ? number_format($t->local_amount, 4) . " ({$t->localCurrency->code})"
+                : 0;
 
-        // LOCAL debit/credit output
-        $localDebit  = $t->direction === 'debit'
-            ? number_format($t->local_amount, 4) . " ({$t->localCurrency->code})"
-            : 0;
+            $localCredit = $t->direction === 'credit'
+                ? number_format($t->local_amount, 4) . " ({$t->localCurrency->code})"
+                : 0;
 
-        $localCredit = $t->direction === 'credit'
-            ? number_format($t->local_amount, 4) . " ({$t->localCurrency->code})"
-            : 0;
-
-        // SHOW FX ONLY FOR INVOICES (SALE, PURCHASE)
-        $invoiceTypes = ['sale', 'purchase'];
-        $showFx = in_array(strtolower($t->voucher_type), $invoiceTypes);
-
-        // REALISED FORMAT
-        $realised = "";
-        if ($showFx) {
+            // REALISED FORMAT
+            $realised = "";
             if ($t->realised_gain > 0 && $t->realised_loss > 0) {
                 $realised = "+" . number_format($t->realised_gain, 4)
-                          . " / -" . number_format($t->realised_loss, 4);
+                    . " / -" . number_format($t->realised_loss, 4);
             } elseif ($t->realised_gain > 0) {
                 $realised = "+" . number_format($t->realised_gain, 4);
             } elseif ($t->realised_loss > 0) {
                 $realised = "-" . number_format($t->realised_loss, 4);
             }
-        }
 
-        // UNREALISED FORMAT
-        $unrealised = "";
-        if ($showFx) {
+            // UNREALISED FORMAT
+            $unrealised = "";
             if ($t->unrealised_gain > 0 && $t->unrealised_loss > 0) {
                 $unrealised = "+" . number_format($t->unrealised_gain, 4)
-                             . " / -" . number_format($t->unrealised_loss, 4);
+                    . " / -" . number_format($t->unrealised_loss, 4);
             } elseif ($t->unrealised_gain > 0) {
                 $unrealised = "+" . number_format($t->unrealised_gain, 4);
             } elseif ($t->unrealised_loss > 0) {
                 $unrealised = "-" . number_format($t->unrealised_loss, 4);
             }
+
+            // DIFF = closing rate - invoice rate
+            $diff = null;
+            if ($t->closing_rate !== null) {
+                $diff = number_format($t->closing_rate - $t->exchange_rate, 6);
+            }
+
+            // REMARKS
+            $remarks = "";
+            if ($t->remaining_base_amount > 0) {
+                $remarks = "Remaining Base: " . number_format($t->remaining_base_amount, 4);
+            }
+
+            // Final Row
+            $data[] = [
+                "sn"             => $sn++,
+                "date"           => Carbon::parse($t->transaction_date)->format('d-m-Y'),
+                "particulars"    => $t->party->name ?? "",
+                "vch_type"       => strtoupper($t->voucher_type),
+                "vch_no"         => $t->voucher_no,
+                "exch_rate"      => number_format($t->exchange_rate, 6),
+
+                "base_debit"     => $baseDebit,
+                "base_credit"    => $baseCredit,
+                "local_debit"    => $localDebit,
+                "local_credit"   => $localCredit,
+
+                "avg_rate"       => $t->avg_rate,
+                "closing_rate"   => number_format($t->closing_rate, 6),
+
+                "diff"           => $diff,
+                "realised"       => $realised,
+                "unrealised"     => $unrealised,
+                "remarks"        => $remarks,
+            ];
         }
 
-        // DIFF (closing - invoice)
-        $diff = "";
-        if ($showFx && $t->closing_rate !== null) {
-            $diff = number_format($t->closing_rate - $t->exchange_rate, 6);
-        }
+        // FINAL NET GAIN/LOSS
+        $finalNet = ($totalRealisedGain - $totalRealisedLoss)
+            + ($totalUnrealisedGain - $totalUnrealisedLoss);
 
-        // REMARKS
-        $remarks = "";
-        if ($showFx && $t->remaining_base_amount > 0) {
-            $remarks = "Remaining Base: " . number_format($t->remaining_base_amount, 4);
-        }
-
-        // FINAL ROW PUSH
-        $data[] = [
-            "sn"             => $sn++,
-            "date"           => Carbon::parse($t->transaction_date)->format('d-m-Y'),
-            "particulars"    => $t->party->name ?? "",
-            "vch_type"       => strtoupper($t->voucher_type),
-            "vch_no"         => $t->voucher_no,
-            "exch_rate"      => number_format($t->exchange_rate, 6),
-
-            "base_debit"     => $baseDebit,
-            "base_credit"    => $baseCredit,
-            "local_debit"    => $localDebit,
-            "local_credit"   => $localCredit,
-
-            "avg_rate"       => $t->avg_rate,
-            "closing_rate"   => number_format($t->closing_rate, 6),
-
-            "diff"           => $diff,
-            "realised"       => $realised,
-            "unrealised"     => $unrealised,
-            "remarks"        => $remarks,
-        ];
+        return response()->json([
+            'draw' => intval($request->draw),
+            'recordsTotal' => $baseQuery->count(),
+            'recordsFiltered' => $baseQuery->count(),
+            'data' => $data,
+            'totals' => [
+                'realised_gain'      => round($totalRealisedGain, 2),
+                'realised_loss'      => round($totalRealisedLoss, 2),
+                'unrealised_gain'    => round($totalUnrealisedGain, 2),
+                'unrealised_loss'    => round($totalUnrealisedLoss, 2),
+                'final_gain_loss'    => round($finalNet, 2),
+            ]
+        ]);
     }
 
-    // FINAL NET GAIN/LOSS
-    $finalNet = ($totalRealisedGain - $totalRealisedLoss)
-              + ($totalUnrealisedGain - $totalUnrealisedLoss);
-
-    return response()->json([
-        'draw' => intval($request->draw),
-        'recordsTotal' => $baseQuery->count(),
-        'recordsFiltered' => $baseQuery->count(),
-        'data' => $data,
-        'totals' => [
-            'realised_gain'      => round($totalRealisedGain, 2),
-            'realised_loss'      => round($totalRealisedLoss, 2),
-            'unrealised_gain'    => round($totalUnrealisedGain, 2),
-            'unrealised_loss'    => round($totalUnrealisedLoss, 2),
-            'final_gain_loss'    => round($finalNet, 2),
-        ]
-    ]);
-}
 
 
 
