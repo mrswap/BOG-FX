@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services;
 
 use App\Models\ForexRemittance;
@@ -6,198 +7,179 @@ use App\Models\ForexMatch;
 use App\Models\Currency;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Exception;
+use Carbon\Carbon;
 
 class ForexFifoService
 {
     /**
-     * Apply FIFO matches for a party + ledger_type + currency.
-     *
-     * Rules implemented:
-     * - Two-way FIFO (credits match oldest debits).
-     * - Do NOT transfer leftover from a credit to an already-settled debit.
-     * - Realised gain/loss recorded on the invoice (debit) row only.
-     * - Leftover credit remains available to match future debits.
+     * Apply FIFO matching and calculate realised / unrealised gains & losses.
      *
      * @param int $partyId
-     * @param string $ledgerType
+     * @param string $ledgerType 'customer'|'supplier'
      * @param int $baseCurrencyId
-     * @param float|null $closingRateGlobal optional manual closing rate (highest priority)
+     * @param float|null $closingRateGlobal optional override for closing rate
+     * @return void
      */
     public function applyFifoFor(int $partyId, string $ledgerType, int $baseCurrencyId, $closingRateGlobal = null)
     {
         Log::info("===== FIFO START =====");
         Log::info("Party: {$partyId} | LedgerType: {$ledgerType} | Currency: {$baseCurrencyId}");
 
-        // Load only rows with remaining_base_amount > 0 (these are the ones that can participate)
-        $debits = ForexRemittance::where([
-                'party_id' => $partyId,
-                'ledger_type' => $ledgerType,
-                'base_currency_id' => $baseCurrencyId,
-                'direction' => 'debit'
-            ])
-            ->where('remaining_base_amount', '>', 0)
-            ->orderBy('transaction_date', 'asc')
-            ->orderBy('id', 'asc')
-            ->get();
+        DB::transaction(function () use ($partyId, $ledgerType, $baseCurrencyId, $closingRateGlobal) {
 
-        $credits = ForexRemittance::where([
-                'party_id' => $partyId,
-                'ledger_type' => $ledgerType,
-                'base_currency_id' => $baseCurrencyId,
-                'direction' => 'credit'
-            ])
-            ->where('remaining_base_amount', '>', 0)
-            ->orderBy('transaction_date', 'asc')
-            ->orderBy('id', 'asc')
-            ->get();
+            // load transactions for this party/ledger/currency ordered for strict FIFO
+            $txns = ForexRemittance::where('party_id', $partyId)
+                ->where('ledger_type', $ledgerType)
+                ->where('base_currency_id', $baseCurrencyId)
+                ->orderBy('transaction_date')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
 
-        Log::info("Debits Loaded: ".$debits->count());
-        foreach ($debits as $d) {
-            Log::info("DEBIT ID {$d->id} | Base={$d->base_amount} | Rem={$d->remaining_base_amount} | Rate={$d->exchange_rate}");
-        }
+            // Partition into debits and credits based on direction field
+            $debits = $txns->filter(function ($t) { return $t->direction === 'debit' && $t->remaining_base_amount > 0; })->values();
+            $credits = $txns->filter(function ($t) { return $t->direction === 'credit' && $t->remaining_base_amount > 0; })->values();
 
-        Log::info("Credits Loaded: ".$credits->count());
-        foreach ($credits as $c) {
-            Log::info("CREDIT ID {$c->id} | Base={$c->base_amount} | Rem={$c->remaining_base_amount} | Rate={$c->exchange_rate}");
-        }
+            $di = 0; $ci = 0;
+            while ($di < $debits->count() && $ci < $credits->count()) {
+                $debit = $debits[$di];
+                $credit = $credits[$ci];
 
-        // Iterate credits and match to oldest debits (FIFO).
-        // Important: we intentionally process credits -> debits so incoming payments (credits)
-        // consume oldest invoices (debits). When a new debit arrives the same routine will
-        // be triggered and will find available credits to match.
-        foreach ($credits as $credit) {
-            // always work off fresh model for credit
-            $credit = ForexRemittance::find($credit->id);
-            if (!$credit) continue;
-
-            $creditWorkRem = (float) $credit->remaining_base_amount;
-            if ($creditWorkRem <= 0) continue;
-
-            Log::info("PROCESSING CREDIT ID {$credit->id} | WorkRem={$creditWorkRem}");
-
-            foreach ($debits as $debit) {
-                // reload debit (fresh)
-                $debit = ForexRemittance::find($debit->id);
-                if (!$debit || (float)$debit->remaining_base_amount <= 0) {
-                    // nothing to match with this debit
+                // how much to match
+                $matchAmount = min($debit->remaining_base_amount, $credit->remaining_base_amount);
+                if ($matchAmount <= 0) {
+                    if ($debit->remaining_base_amount <= 0) $di++;
+                    if ($credit->remaining_base_amount <= 0) $ci++;
                     continue;
                 }
 
-                if ($creditWorkRem <= 0) {
-                    Log::info("-- Credit {$credit->id} fully consumed. Breaking debit loop.");
-                    break;
+                // Rates
+                $debitRate = floatval($debit->exchange_rate);
+                $creditRate = floatval($credit->exchange_rate);
+
+                // Compute realised depending on ledger perspective
+                if ($ledgerType === 'customer') {
+                    // Sales (debit) matched with Receipts (credit): realised = (receipt_rate - sale_rate) * matched
+                    $realised = round(($creditRate - $debitRate) * $matchAmount, 4);
+                } else {
+                    // Supplier: Purchases (credit) matched with Payments (debit): realised = (payment_rate - purchase_rate) * matched
+                    $realised = round(($debitRate - $creditRate) * $matchAmount, 4);
                 }
 
-                $debitRem = (float) $debit->remaining_base_amount;
-                if ($debitRem <= 0) continue;
+                // Persist match record
+                $match = new ForexMatch();
+                $match->party_id = $partyId;
+                $match->ledger_type = $ledgerType;
+                $match->base_currency_id = $baseCurrencyId;
+                $match->debit_txn_id = $debit->id;
+                $match->credit_txn_id = $credit->id;
+                $match->matched_base_amount = $matchAmount;
+                $match->debit_rate = $debitRate;
+                $match->credit_rate = $creditRate;
+                $match->realised_gain = $realised > 0 ? $realised : 0;
+                $match->realised_loss = $realised < 0 ? abs($realised) : 0;
+                $match->save();
 
-                // amount to match
-                $matchBase = min($creditWorkRem, $debitRem);
-                if ($matchBase <= 0) continue;
+                // Update debit & credit settled/remaining
+                $debit->settled_base_amount = round($debit->settled_base_amount + $matchAmount, 4);
+                $debit->remaining_base_amount = round($debit->remaining_base_amount - $matchAmount, 4);
 
-                Log::info("MATCH -> Credit {$credit->id} WITH Debit {$debit->id} FOR Base={$matchBase}");
+                $credit->settled_base_amount = round($credit->settled_base_amount + $matchAmount, 4);
+                $credit->remaining_base_amount = round($credit->remaining_base_amount - $matchAmount, 4);
 
-                // compute local (INR) for matched portion
-                $debitLocal  = $matchBase * (float)$debit->exchange_rate;
-                $creditLocal = $matchBase * (float)$credit->exchange_rate;
-                $diff = $creditLocal - $debitLocal;
-                $gain = $diff > 0 ? $diff : 0;
-                $loss = $diff < 0 ? abs($diff) : 0;
+                // Assign realised to both sides (company perspective)
+                if ($realised > 0) {
+                    $debit->realised_gain = round($debit->realised_gain + $realised, 4);
+                    $credit->realised_gain = round($credit->realised_gain + $realised, 4);
+                } elseif ($realised < 0) {
+                    $loss = abs($realised);
+                    $debit->realised_loss = round($debit->realised_loss + $loss, 4);
+                    $credit->realised_loss = round($credit->realised_loss + $loss, 4);
+                }
 
-                Log::info("CALC -> debitLocal={$debitLocal} creditLocal={$creditLocal} diff={$diff} gain={$gain} loss={$loss}");
+                // Save changes
+                $debit->save();
+                $credit->save();
 
-                // perform DB transaction for this match
-                DB::transaction(function() use (&$debit, &$credit, $matchBase, $gain, $loss, $partyId, $ledgerType, $baseCurrencyId) {
-                    // reduce debit remaining + increase settled
-                    $debit->settled_base_amount = bcadd((float)$debit->settled_base_amount, $matchBase, 4);
-                    $debit->remaining_base_amount = bcsub((float)$debit->remaining_base_amount, $matchBase, 4);
+                Log::info("Matched: debit_id={$debit->id} credit_id={$credit->id} amount={$matchAmount} realised={$realised}");
 
-                    // record realised on the invoice (debit) row (per client rule)
-                    $debit->realised_gain = bcadd((float)$debit->realised_gain, $gain, 4);
-                    $debit->realised_loss = bcadd((float)$debit->realised_loss, $loss, 4);
-
-                    $debit->save();
-
-                    // reduce credit remaining + increase settled
-                    $credit->settled_base_amount = bcadd((float)$credit->settled_base_amount, $matchBase, 4);
-                    $credit->remaining_base_amount = bcsub((float)$credit->remaining_base_amount, $matchBase, 4);
-
-                    // do NOT write realised on credit (we keep realised on invoice rows)
-                    $credit->save();
-
-                    // create match audit
-                    ForexMatch::create([
-                        'party_id' => $partyId,
-                        'ledger_type' => $ledgerType,
-                        'base_currency_id' => $baseCurrencyId,
-                        'debit_txn_id' => $debit->id,
-                        'credit_txn_id' => $credit->id,
-                        'matched_base_amount' => $matchBase,
-                        'debit_rate' => $debit->exchange_rate,
-                        'credit_rate' => $credit->exchange_rate,
-                        'realised_gain' => $gain,
-                        'realised_loss' => $loss,
-                    ]);
-                }); // end transaction
-
-                // decrement working rem for credit
-                $creditWorkRem = bcsub((float)$creditWorkRem, $matchBase, 4);
-
-                // log current remaining values
-                $freshDebit = ForexRemittance::find($debit->id);
-                $freshCredit = ForexRemittance::find($credit->id);
-
-                Log::info("POST-MATCH -> DebitRem={$freshDebit->remaining_base_amount} | CreditRem={$freshCredit->remaining_base_amount}");
-            } // end foreach debits
-
-            // IMPORTANT: do NOT move leftover credit into invoice rows.
-            // leftover should remain on credit row for future matching.
-        } // end foreach credits
-
-        // --- POST PROCESS: compute UNREALISED for debit rows with remaining > 0 ---
-        // closing rate priority: explicit > last txn rate > currency master
-        $closingRate = null;
-        if (!is_null($closingRateGlobal)) {
-            $closingRate = (float) $closingRateGlobal;
-        } else {
-            $closingRate = ForexRemittance::where([
-                'party_id' => $partyId,
-                'ledger_type' => $ledgerType,
-                'base_currency_id' => $baseCurrencyId
-            ])->orderBy('transaction_date', 'desc')->orderBy('id', 'desc')->value('exchange_rate');
-
-            if (!$closingRate) {
-                $closingRate = optional(Currency::find($baseCurrencyId))->exchange_rate;
+                // Advance pointers if fully settled
+                if ($debit->remaining_base_amount <= 0) $di++;
+                if ($credit->remaining_base_amount <= 0) $ci++;
             }
-        }
 
-        Log::info("Post-FIFO closingRate used = " . ($closingRate ?? 'NULL'));
-
-        if ($closingRate) {
-            $remainingDebits = ForexRemittance::where([
-                'party_id' => $partyId,
-                'ledger_type' => $ledgerType,
-                'base_currency_id' => $baseCurrencyId,
-                'direction' => 'debit'
-            ])->where('remaining_base_amount', '>', 0)
-              ->orderBy('transaction_date', 'asc')
-              ->orderBy('id', 'asc')
-              ->get();
-
-            foreach ($remainingDebits as $d) {
-                $rem = (float)$d->remaining_base_amount;
-                $rateDiff = $closingRate - (float)$d->exchange_rate;
-                $unreal = round($rateDiff * $rem, 2);
-
-                $d->unrealised_gain = $unreal > 0 ? $unreal : 0;
-                $d->unrealised_loss = $unreal < 0 ? abs($unreal) : 0;
-                $d->save();
-
-                Log::info("UNREAL -> DebitID {$d->id} Rem={$rem} rateDiff={$rateDiff} unreal={$unreal}");
+            // After all matching, compute unrealised for remaining open txns using closing rate
+            $closingRate = $closingRateGlobal;
+            if (is_null($closingRate)) {
+                $closingRate = $this->getClosingRateForCurrency($baseCurrencyId);
             }
-        }
+            $closingRate = floatval($closingRate);
+
+            // Apply unrealised to all remaining txns (both debits and credits)
+            $remainingTxns = ForexRemittance::where('party_id', $partyId)
+                ->where('ledger_type', $ledgerType)
+                ->where('base_currency_id', $baseCurrencyId)
+                ->where('remaining_base_amount', '>', 0)
+                ->get();
+
+            foreach ($remainingTxns as $txn) {
+                $remaining = floatval($txn->remaining_base_amount);
+                $invoiceRate = floatval($txn->exchange_rate);
+
+                // Unrealised = (Closing Rate - Invoice Rate) * Remaining
+                $unreal = round(($closingRate - $invoiceRate) * $remaining, 4);
+
+                if ($unreal > 0) {
+                    $txn->unrealised_gain = $unreal;
+                    $txn->unrealised_loss = 0;
+                } elseif ($unreal < 0) {
+                    $txn->unrealised_gain = 0;
+                    $txn->unrealised_loss = abs($unreal);
+                } else {
+                    $txn->unrealised_gain = 0;
+                    $txn->unrealised_loss = 0;
+                }
+
+                $txn->avg_rate = $txn->avg_rate ?? null; // keep existing or null
+                $txn->closing_rate = $closingRate;
+                $txn->save();
+
+                Log::info("Unrealised for txn_id={$txn->id} remaining={$remaining} unreal={$unreal}");
+            }
+
+            // For fully settled transactions ensure unrealised is zero (clean-up)
+            $fullySettled = ForexRemittance::where('party_id', $partyId)
+                ->where('ledger_type', $ledgerType)
+                ->where('base_currency_id', $baseCurrencyId)
+                ->where('remaining_base_amount', '<=', 0)
+                ->get();
+
+            foreach ($fullySettled as $f) {
+                // Already have realised populated; clear unrealised fields
+                $f->unrealised_gain = 0;
+                $f->unrealised_loss = 0;
+                $f->closing_rate = $closingRate;
+                $f->save();
+            }
+
+        }, 5); // retry 5 times on deadlock
 
         Log::info("===== FIFO END =====");
+    }
+
+    /**
+     * Fallback to currency exchange_rate as closing rate, or 0 if not found.
+     *
+     * @param int $currencyId
+     * @return float
+     */
+    protected function getClosingRateForCurrency(int $currencyId)
+    {
+        $c = Currency::find($currencyId);
+        if (! $c) {
+            Log::warning("Currency {$currencyId} not found for closing rate fallback. Using 0.");
+            return 0;
+        }
+        return floatval($c->exchange_rate);
     }
 }
