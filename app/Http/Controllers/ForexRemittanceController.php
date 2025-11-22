@@ -48,11 +48,13 @@ class ForexRemittanceController extends Controller
         $partyId = $request->party_id;
         $voucherType = strtolower($request->voucher_type);
 
-        // MAP ledger + direction
+        // debit/credit
         $direction = in_array($voucherType, ['sale', 'payment']) ? 'debit' : 'credit';
+
+        // ledger type
         $ledgerType = in_array($voucherType, ['sale', 'receipt']) ? 'customer' : 'supplier';
 
-        $txn = new ForexRemittance();
+        $txn = new \App\Models\ForexRemittance();
         $txn->party_id = $partyId;
         $txn->ledger_type = $ledgerType;
         $txn->voucher_type = $voucherType;
@@ -96,8 +98,7 @@ class ForexRemittanceController extends Controller
 
     public function forexRemittanceData(Request $request)
     {
-        // Base query for counts & totals
-        $baseQuery = ForexRemittance::with(['party', 'baseCurrency', 'localCurrency'])
+        $baseQuery = \App\Models\ForexRemittance::with(['party', 'baseCurrency', 'localCurrency'])
             ->orderBy('transaction_date')
             ->orderBy('id');
 
@@ -106,21 +107,63 @@ class ForexRemittanceController extends Controller
         $data = [];
         $sn = 1;
 
-        // TOTALS INITIALISE
-        $totalRealisedGain = 0;
-        $totalRealisedLoss = 0;
-        $totalUnrealisedGain = 0;
-        $totalUnrealisedLoss = 0;
+        $totalRealisedGain = 0.0;
+        $totalRealisedLoss = 0.0;
+        $totalUnrealisedGain = 0.0;
+        $totalUnrealisedLoss = 0.0;
 
         foreach ($rows as $t) {
 
-            // Add to totals
             $totalRealisedGain    += floatval($t->realised_gain);
             $totalRealisedLoss    += floatval($t->realised_loss);
             $totalUnrealisedGain  += floatval($t->unrealised_gain);
             $totalUnrealisedLoss  += floatval($t->unrealised_loss);
 
-            // BASE debit/credit output
+            // determine closing rate
+            $closingRate = $t->closing_rate ?: ($t->baseCurrency->exchange_rate ?? 0);
+
+            $vtype = strtolower($t->voucher_type);
+            $remaining = floatval($t->remaining_base_amount);
+
+            // ----------------------------------------
+            // ⭐ CORRECT COMPUTED UNREALISED LOGIC ⭐
+            // ----------------------------------------
+            $computedUnreal = null;
+
+            if ($remaining > 0) {
+
+                // default invoice exposure rate
+                $invoiceRate = floatval($t->exchange_rate);
+
+                // for receipt/payment with remaining exposure,
+                // invoiceRate must be last matched SALE/PURCHASE rate
+                if (in_array($vtype, ['receipt', 'payment'])) {
+
+                    $lastMatch = \App\Models\ForexMatch::where('credit_txn_id', $t->id)
+                        ->orderBy('id', 'desc')
+                        ->first();
+
+                    if ($lastMatch) {
+                        $invoiceRate = floatval($lastMatch->debit_rate);
+                    }
+                }
+
+                $computedUnreal = round(($closingRate - $invoiceRate) * $remaining, 4);
+            }
+
+            // ----------------------------------------
+            // DIFF LOGIC
+            // ----------------------------------------
+            $correctDiff = "";
+            if (in_array($vtype, ['receipt', 'payment']) && $remaining == 0) {
+                $correctDiff = "";
+            } elseif (in_array($vtype, ['receipt', 'payment']) && $remaining > 0) {
+                $correctDiff = number_format($closingRate - floatval($t->exchange_rate), 6, '.', '');
+            } elseif (in_array($vtype, ['sale', 'purchase'])) {
+                $correctDiff = number_format($closingRate - floatval($t->exchange_rate), 6, '.', '');
+            }
+
+            // base/local amounts
             $baseDebit  = $t->direction === 'debit'
                 ? number_format($t->base_amount, 4) . " ({$t->baseCurrency->code})"
                 : 0;
@@ -129,7 +172,6 @@ class ForexRemittanceController extends Controller
                 ? number_format($t->base_amount, 4) . " ({$t->baseCurrency->code})"
                 : 0;
 
-            // LOCAL debit/credit output
             $localDebit  = $t->direction === 'debit'
                 ? number_format($t->local_amount, 4) . " ({$t->localCurrency->code})"
                 : 0;
@@ -138,65 +180,81 @@ class ForexRemittanceController extends Controller
                 ? number_format($t->local_amount, 4) . " ({$t->localCurrency->code})"
                 : 0;
 
-            // REALISED FORMAT
-            $realised = "";
-            if ($t->realised_gain > 0 && $t->realised_loss > 0) {
-                $realised = "+" . number_format($t->realised_gain, 4)
-                    . " / -" . number_format($t->realised_loss, 4);
-            } elseif ($t->realised_gain > 0) {
-                $realised = "+" . number_format($t->realised_gain, 4);
-            } elseif ($t->realised_loss > 0) {
-                $realised = "-" . number_format($t->realised_loss, 4);
+            // REALISED DISPLAY
+            $realisedDisplay = "";
+            if (!in_array($vtype, ['receipt', 'payment'])) {
+                if ($t->realised_gain > 0 && $t->realised_loss > 0) {
+                    $realisedDisplay = "+" . number_format($t->realised_gain, 4)
+                        . " / -" . number_format($t->realised_loss, 4);
+                } elseif ($t->realised_gain > 0) {
+                    $realisedDisplay = "+" . number_format($t->realised_gain, 4);
+                } elseif ($t->realised_loss > 0) {
+                    $realisedDisplay = "-" . number_format($t->realised_loss, 4);
+                }
             }
 
-            // UNREALISED FORMAT
-            $unrealised = "";
-            if ($t->unrealised_gain > 0 && $t->unrealised_loss > 0) {
-                $unrealised = "+" . number_format($t->unrealised_gain, 4)
-                    . " / -" . number_format($t->unrealised_loss, 4);
-            } elseif ($t->unrealised_gain > 0) {
-                $unrealised = "+" . number_format($t->unrealised_gain, 4);
-            } elseif ($t->unrealised_loss > 0) {
-                $unrealised = "-" . number_format($t->unrealised_loss, 4);
-            }
+            // ----------------------------------------
+            // UNREALISED DISPLAY (uses computedUnreal)
+            // ----------------------------------------
+            $unrealisedDisplay = "";
 
-            // DIFF = closing rate - invoice rate
-            $diff = null;
-            if ($t->closing_rate !== null) {
-                $diff = number_format($t->closing_rate - $t->exchange_rate, 6);
+            if (in_array($vtype, ['receipt', 'payment'])) {
+
+                if ($remaining > 0) {
+
+                    if ($t->unrealised_gain > 0)
+                        $unrealisedDisplay = "+" . number_format($t->unrealised_gain, 4);
+
+                    elseif ($t->unrealised_loss > 0)
+                        $unrealisedDisplay = "-" . number_format($t->unrealised_loss, 4);
+
+                    else
+                        $unrealisedDisplay = number_format($computedUnreal, 4);
+                }
+            } else {
+
+                if ($remaining > 0) {
+                    if ($t->unrealised_gain > 0)
+                        $unrealisedDisplay = "+" . number_format($t->unrealised_gain, 4);
+
+                    elseif ($t->unrealised_loss > 0)
+                        $unrealisedDisplay = "-" . number_format($t->unrealised_loss, 4);
+
+                    else
+                        $unrealisedDisplay = ($computedUnreal != 0)
+                            ? number_format($computedUnreal, 4)
+                            : "";
+                }
             }
 
             // REMARKS
-            $remarks = "";
-            if ($t->remaining_base_amount > 0) {
-                $remarks = "Remaining Base: " . number_format($t->remaining_base_amount, 4);
-            }
+            $remarks = ($remaining > 0)
+                ? "Remaining Base: " . number_format($remaining, 4)
+                : "";
 
-            // Final Row
             $data[] = [
-                "sn"             => $sn++,
-                "date"           => Carbon::parse($t->transaction_date)->format('d-m-Y'),
-                "particulars"    => $t->party->name ?? "",
-                "vch_type"       => strtoupper($t->voucher_type),
-                "vch_no"         => $t->voucher_no,
-                "exch_rate"      => number_format($t->exchange_rate, 6),
+                "sn" => $sn++,
+                "date" => \Carbon\Carbon::parse($t->transaction_date)->format('d-m-Y'),
+                "particulars" => $t->party->name ?? "",
+                "vch_type" => strtoupper($t->voucher_type),
+                "vch_no" => $t->voucher_no,
+                "exch_rate" => number_format($t->exchange_rate, 6),
 
-                "base_debit"     => $baseDebit,
-                "base_credit"    => $baseCredit,
-                "local_debit"    => $localDebit,
-                "local_credit"   => $localCredit,
+                "base_debit" => $baseDebit,
+                "base_credit" => $baseCredit,
+                "local_debit" => $localDebit,
+                "local_credit" => $localCredit,
 
-                "avg_rate"       => $t->avg_rate,
-                "closing_rate"   => number_format($t->closing_rate, 6),
+                "avg_rate" => $t->avg_rate,
+                "closing_rate" => number_format($closingRate, 6, '.', ''),
 
-                "diff"           => $diff,
-                "realised"       => $realised,
-                "unrealised"     => $unrealised,
-                "remarks"        => $remarks,
+                "diff" => $correctDiff,
+                "realised" => $realisedDisplay,
+                "unrealised" => $unrealisedDisplay,
+                "remarks" => $remarks,
             ];
         }
 
-        // FINAL NET GAIN/LOSS
         $finalNet = ($totalRealisedGain - $totalRealisedLoss)
             + ($totalUnrealisedGain - $totalUnrealisedLoss);
 
@@ -206,15 +264,14 @@ class ForexRemittanceController extends Controller
             'recordsFiltered' => $baseQuery->count(),
             'data' => $data,
             'totals' => [
-                'realised_gain'      => round($totalRealisedGain, 2),
-                'realised_loss'      => round($totalRealisedLoss, 2),
-                'unrealised_gain'    => round($totalUnrealisedGain, 2),
-                'unrealised_loss'    => round($totalUnrealisedLoss, 2),
-                'final_gain_loss'    => round($finalNet, 2),
+                'realised_gain'   => round($totalRealisedGain, 2),
+                'realised_loss'   => round($totalRealisedLoss, 2),
+                'unrealised_gain' => round($totalUnrealisedGain, 2),
+                'unrealised_loss' => round($totalUnrealisedLoss, 2),
+                'final_gain_loss' => round($finalNet, 2),
             ]
         ]);
     }
-
 
 
 

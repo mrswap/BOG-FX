@@ -20,25 +20,18 @@ class ForexRunTests extends Command
         $this->info("==== FOREX TEST RUN START ====");
         Log::info("==== FOREX TEST RUN START ====");
 
-        // --------------------------------------------------------------------------------------
         // CLEAN DATA
-        // --------------------------------------------------------------------------------------
         ForexRemittance::truncate();
         Log::info("Old remittance data cleared");
 
-        // --------------------------------------------------------------------------------------
         // CREATE PARTY
-        // --------------------------------------------------------------------------------------
         $party = Party::firstOrCreate(
             ['name' => 'Test Forex Party'],
             ['status' => 1]
         );
-
         Log::info("Party ID: {$party->id} created/loaded");
 
-        // --------------------------------------------------------------------------------------
-        // CREATE CURRENCIES
-        // --------------------------------------------------------------------------------------
+        // CREATE CURRENCIES (FIXED)
         $usd = Currency::firstOrCreate(['code' => 'USD'], ['exchange_rate' => 89]);
         $inr = Currency::firstOrCreate(['code' => 'INR'], ['exchange_rate' => 1]);
 
@@ -46,20 +39,16 @@ class ForexRunTests extends Command
 
         $fifo = app(ForexFifoService::class);
 
-        // --------------------------------------------------------------------------------------
-        // FIX 1: TIMESTAMPS ENSURE FIFO ORDERING CORRECT
-        // --------------------------------------------------------------------------------------
+        // TIMESTAMPS
         $t = Carbon::now()->subMinutes(20);
 
-        // --------------------------------------------------------------------------------------
-        // HELPER TO ADD FX TRANSACTION
-        // --------------------------------------------------------------------------------------
+        // ADD FX TRANSACTION
         $add = function($type, $no, $amt, $rate) use ($party, $usd, $inr, &$t) {
 
             $direction = in_array($type, ['sale','payment']) ? 'debit' : 'credit';
             $ledger    = in_array($type, ['sale','receipt']) ? 'customer' : 'supplier';
 
-            $t = $t->addSeconds(30); // maintain strict FIFO order
+            $t = $t->addSeconds(30);
 
             $fx = ForexRemittance::create([
                 'party_id'        => $party->id,
@@ -96,31 +85,21 @@ class ForexRunTests extends Command
             return $fx;
         };
 
-        // --------------------------------------------------------------------------------------
         // TEST SEQUENCE
-        // --------------------------------------------------------------------------------------
-        $add('sale', 'S1', 1000, 89);      // Sale
-        $add('receipt', 'R1', 1100, 89.2); // Receipt (advance)
-        $add('sale', 'S2', 200, 89.1);     // Sale
-        $add('receipt', 'R2', 150, 89);    // Receipt
-        $add('purchase', 'P1', 1000, 90);  // Purchase
-        $add('payment', 'PY1', 1100, 89.2); // Payment (advance)
+        $add('sale', 'S1', 1000, 89);        // Sale
+        $add('receipt', 'R1', 1100, 89.2);   // Receipt (advance)
+        $add('sale', 'S2', 200, 89.1);       // Sale
+        $add('receipt', 'R2', 150, 89);      // Receipt
+        $add('purchase', 'P1', 1000, 90);    // Purchase
+        $add('payment', 'PY1', 1100, 89.2);  // Payment (advance)
 
-        // --------------------------------------------------------------------------------------
-        // RUN FIFO FOR CUSTOMER LEG
-        // --------------------------------------------------------------------------------------
+        // FIXED: run FIFO with correct closing_rate (89)
         Log::info("Running FIFO for CUSTOMER...");
-        $fifo->applyFifoFor($party->id, 'customer', $usd->id);
+        $fifo->applyFifoFor($party->id, 'customer', $usd->id, 89);
 
-        // --------------------------------------------------------------------------------------
-        // RUN FIFO FOR SUPPLIER LEG
-        // --------------------------------------------------------------------------------------
         Log::info("Running FIFO for SUPPLIER...");
-        $fifo->applyFifoFor($party->id, 'supplier', $usd->id);
+        $fifo->applyFifoFor($party->id, 'supplier', $usd->id, 89);
 
-        // --------------------------------------------------------------------------------------
-        // FINISHED
-        // --------------------------------------------------------------------------------------
         $this->info("==== FOREX TEST RUN COMPLETE ====");
         Log::info("==== FOREX TEST RUN COMPLETE ====");
     }
