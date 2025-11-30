@@ -3,538 +3,426 @@
 namespace App\Http\Controllers;
 
 use App\Models\ForexRemittance;
+use App\Models\ForexMatch;
+use App\Models\ForexRate;
 use App\Models\Currency;
-use App\Services\ForexFifoService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use App\Models\Party;
-use DB;
+use App\Services\ForexMatchingService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
-
 
 class ForexRemittanceController extends Controller
 {
-    public function index()
-    {
-        $currency_list = Currency::active()->get();
-        $starting_date = date('Y-m-01');
-        $ending_date   = date('Y-m-d');
-
-        return view('backend.forex.index', compact('currency_list', 'starting_date', 'ending_date'));
-    }
-
-    public function create()
-    {
-        $currency_list = Currency::active()->get();
-        $party = \App\Models\Party::all();
-        return view('backend.forex.create', compact('currency_list', 'party'));
-    }
-
-    // inside App\Http\Controllers\ForexRemittanceController
-
+    /**
+     * Store a new forex remittance (Sale / Purchase / Receipt / Payment)
+     * - triggers auto-match (FIFO) immediately and persists matches
+     * - extensive logging for each step
+     */
     public function store(Request $request)
     {
-        $request->validate([
-            'party_id' => 'required|integer',
-            'voucher_type' => 'required|string',
-            'voucher_no' => 'required|string',
+        Log::info('[ForexRemittanceController@store] Entered store()', ['request' => $request->all()]);
+
+        $rules = [
+            'party_id' => 'required|integer|exists:parties,id',
             'transaction_date' => 'required|date',
-            'base_currency_id' => 'required|integer',
-            'local_currency_id' => 'required|integer',
-            'base_amount' => 'required|numeric',
-            'exchange_rate' => 'required|numeric',
-        ]);
+            'base_currency_id' => 'required|integer|exists:currencies,id',
+            'local_currency_id' => 'required|integer|exists:currencies,id',
+            'base_amount' => 'required|numeric|min:0.0001',
+            'voucher_type' => 'required|in:receipt,payment,sale,purchase',
+            'voucher_no' => 'required|string',
+        ];
 
-        $partyId = $request->party_id;
-        $voucherType = strtolower($request->voucher_type);
+        $validator = \Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            Log::warning('[ForexRemittanceController@store] Validation failed', ['errors' => $validator->errors()->all()]);
+            return back()->withErrors($validator)->withInput();
+        }
 
-        // debit/credit
-        $direction = in_array($voucherType, ['sale', 'payment']) ? 'debit' : 'credit';
+        DB::beginTransaction();
+        try {
+            // Fetch currencies
+            $baseCurrency = Currency::find($request->base_currency_id);
+            $localCurrency = Currency::find($request->local_currency_id);
 
-        // ledger type
-        $ledgerType = in_array($voucherType, ['sale', 'receipt']) ? 'customer' : 'supplier';
+            Log::info('[ForexRemittanceController@store] Fetched currencies', [
+                'base' => $baseCurrency ? $baseCurrency->toArray() : null,
+                'local' => $localCurrency ? $localCurrency->toArray() : null,
+            ]);
 
-        $txn = new \App\Models\ForexRemittance();
-        $txn->party_id = $partyId;
-        $txn->ledger_type = $ledgerType;
-        $txn->voucher_type = $voucherType;
-        $txn->voucher_no = $request->voucher_no;
-        $txn->transaction_date = $request->transaction_date;
-        $txn->base_currency_id = $request->base_currency_id;
-        $txn->local_currency_id = $request->local_currency_id;
+            // Exchange rate priority
+            $exchangeRate = $request->input('exchange_rate');
+            if (!$exchangeRate || floatval($exchangeRate) == 0) {
+                $exchangeRate = $localCurrency->exchange_rate ?? ($baseCurrency->exchange_rate ?? 1);
+                Log::info('[ForexRemittanceController@store] Using fallback exchange_rate', ['exchange_rate' => $exchangeRate]);
+            } else {
+                Log::info('[ForexRemittanceController@store] Using provided exchange_rate', ['exchange_rate' => $exchangeRate]);
+            }
 
-        $txn->base_amount = $request->base_amount;
-        $txn->exchange_rate = $request->exchange_rate;
-        $txn->local_amount = round($request->base_amount * $request->exchange_rate, 4);
+            // Local amount
+            $baseAmount = floatval($request->input('base_amount'));
+            $localAmount = $request->input('local_amount');
+            if (!$localAmount || floatval($localAmount) == 0) {
+                $localAmount = round($baseAmount * floatval($exchangeRate), 4);
+                Log::info('[ForexRemittanceController@store] Auto-calculated local_amount', ['base_amount' => $baseAmount, 'exchange_rate' => $exchangeRate, 'local_amount' => $localAmount]);
+            } else {
+                $localAmount = floatval($localAmount);
+                Log::info('[ForexRemittanceController@store] Provided local_amount used', ['local_amount' => $localAmount]);
+            }
 
-        // FX fields initialization
-        $txn->direction = $direction;
-        $txn->remaining_base_amount = $request->base_amount;
-        $txn->settled_base_amount = 0;
+            // Avg rate fallback (local/base)
+            $avgRate = $request->input('avg_rate');
+            if (!$avgRate || floatval($avgRate) == 0) {
+                $avgRate = $baseAmount > 0 ? round($localAmount / $baseAmount, 6) : floatval($exchangeRate);
+                Log::info('[ForexRemittanceController@store] Auto-calculated avg_rate', ['avg_rate' => $avgRate]);
+            } else {
+                $avgRate = floatval($avgRate);
+                Log::info('[ForexRemittanceController@store] Provided avg_rate used', ['avg_rate' => $avgRate]);
+            }
 
-        $txn->realised_gain = 0;
-        $txn->realised_loss = 0;
-        $txn->unrealised_gain = 0;
-        $txn->unrealised_loss = 0;
+            // Prepare payload
+            $data = [
+                'party_id' => $request->party_id,
+                'party_type' => $request->input('party_type'),
+                'transaction_date' => Carbon::parse($request->transaction_date)->toDateString(),
+                'base_currency_id' => $baseCurrency->id,
+                'base_amount' => $baseAmount,
+                'local_currency_id' => $localCurrency->id,
+                'exchange_rate' => floatval($exchangeRate),
+                'local_amount' => $localAmount,
+                'voucher_type' => $request->voucher_type,
+                'voucher_no' => $request->voucher_no,
+                'avg_rate' => $avgRate,
+                'closing_rate' => $request->input('closing_rate') ? floatval($request->input('closing_rate')) : null,
+                'remarks' => $request->input('remarks'),
+                // initialise settlement tracking
+                'settled_base_amount' => 0,
+                'remaining_base_amount' => $baseAmount,
+            ];
 
-        $txn->avg_rate = null;
-        $txn->closing_rate = null;
+            Log::info('[ForexRemittanceController@store] Prepared remittance payload', ['payload' => $data]);
 
-        $txn->save();
+            // Persist remittance
+            $remittance = ForexRemittance::create($data);
+            Log::info('[ForexRemittanceController@store] Created ForexRemittance', ['remittance_id' => $remittance->id, 'remittance' => $remittance->toArray()]);
 
-        // RUN FIFO AFTER SAVE
-        app(\App\Services\ForexFifoService::class)
-            ->applyFifoFor(
-                $partyId,
-                $ledgerType,
-                $request->base_currency_id
-            );
+            // Immediately attempt auto-matching (FIFO) via the service
+            try {
+                Log::info('[ForexRemittanceController@store] Calling ForexMatchingService->autoMatchForRemittance', ['remittance_id' => $remittance->id]);
+                $matcher = new ForexMatchingService();
+                $matcher->autoMatchForRemittance($remittance);
+                Log::info('[ForexRemittanceController@store] ForexMatchingService completed', ['remittance_id' => $remittance->id]);
+            } catch (\Throwable $e) {
+                // do not fail store if matching error; log for debugging
+                Log::error('[ForexRemittanceController@store] Exception during matching', ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            }
 
-        return response()->json([
-            'status' => 200,
-            'message' => 'Forex transaction saved & FIFO applied successfully',
-        ]);
+            DB::commit();
+
+            Log::info('[ForexRemittanceController@store] Commit successful. Store finished', ['remittance_id' => $remittance->id]);
+            return redirect()->back()->with('success', 'Forex remittance saved successfully.');
+        } catch (\Throwable $e) {
+
+            DB::rollBack();
+            Log::error('[ForexRemittanceController@store] Exception caught, rolled back', ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            print_r("Error saving remittance: " . $e->getMessage());
+            //return redirect()->back()->with('error', 'Failed to save remittance. Check logs.');
+        }
     }
+
+    /**
+     * Data endpoint for server-side DataTable ledger: forexRemittanceData()
+     * - computes realised (only invoices) by summing persisted ForexMatch.realised_gain_loss (invoice side)
+     * - unrealised computed per-row for remaining_base_amount using closing rate fallback -> avg_rate
+     */
 
     public function forexRemittanceData(Request $request)
     {
-        $baseQuery = \App\Models\ForexRemittance::with(['party', 'baseCurrency', 'localCurrency'])
-            ->orderBy('transaction_date')
-            ->orderBy('id');
+        Log::info('[ForexRemittanceController@forexRemittanceData] Entered', ['request' => $request->all()]);
 
-        $rows = $baseQuery->get();
+        $partyType = $request->input('party_type');
+        $currencyId = $request->input('currency_id') ? intval($request->input('currency_id')) : null;
+        $startingDate = $request->input('starting_date') ? Carbon::parse($request->input('starting_date'))->toDateString() : null;
+        $endingDate = $request->input('ending_date') ? Carbon::parse($request->input('ending_date'))->toDateString() : null;
+
+        Log::info('[ForexRemittanceController@forexRemittanceData] Filters', compact('partyType', 'currencyId', 'startingDate', 'endingDate'));
+
+        $query = ForexRemittance::with(['matchesAsInvoice', 'matchesAsSettlement', 'baseCurrency', 'localCurrency', 'party']);
+
+        if ($partyType) {
+            $query->where('party_type', $partyType);
+        }
+
+        if ($currencyId && $currencyId !== 0) {
+            $query->where(function ($q) use ($currencyId) {
+                $q->where('base_currency_id', $currencyId)
+                    ->orWhere('local_currency_id', $currencyId);
+            });
+        }
+
+        if ($startingDate && $endingDate) {
+            $query->whereBetween('transaction_date', [$startingDate, $endingDate]);
+        }
+
+        $start = intval($request->input('start', 0));
+        $length = intval($request->input('length', 10));
+        $draw = intval($request->input('draw', 1));
+
+        $totalRecords = $query->count();
+        $rows = $query->orderBy('transaction_date', 'asc')
+            ->orderBy('id', 'asc')
+            ->offset($start)
+            ->limit($length)
+            ->get();
 
         $data = [];
-        $sn = 1;
+        $totals = [
+            'base_debit' => 0,
+            'base_credit' => 0,
+            'local_debit' => 0,
+            'local_credit' => 0,
+            'realised_gain' => 0,
+            'realised_loss' => 0,
+            'unrealised_gain' => 0,
+            'unrealised_loss' => 0
+        ];
 
-        $totalRealisedGain = 0.0;
-        $totalRealisedLoss = 0.0;
-        $totalUnrealisedGain = 0.0;
-        $totalUnrealisedLoss = 0.0;
+        foreach ($rows as $i => $r) {
 
-        foreach ($rows as $t) {
+            // ----------------------------
+            // 1. DR/CR MAPPING
+            // ----------------------------
+            $baseDebit = $baseCredit = $localDebit = $localCredit = 0;
 
-            $totalRealisedGain    += floatval($t->realised_gain);
-            $totalRealisedLoss    += floatval($t->realised_loss);
-            $totalUnrealisedGain  += floatval($t->unrealised_gain);
-            $totalUnrealisedLoss  += floatval($t->unrealised_loss);
-
-            // determine closing rate
-            $closingRate = $t->closing_rate ?: ($t->baseCurrency->exchange_rate ?? 0);
-
-            $vtype = strtolower($t->voucher_type);
-            $remaining = floatval($t->remaining_base_amount);
-
-            // ----------------------------------------
-            // ⭐ CORRECT COMPUTED UNREALISED LOGIC ⭐
-            // ----------------------------------------
-            $computedUnreal = null;
-
-            if ($remaining > 0) {
-
-                // default invoice exposure rate
-                $invoiceRate = floatval($t->exchange_rate);
-
-                // for receipt/payment with remaining exposure,
-                // invoiceRate must be last matched SALE/PURCHASE rate
-                if (in_array($vtype, ['receipt', 'payment'])) {
-
-                    $lastMatch = \App\Models\ForexMatch::where('credit_txn_id', $t->id)
-                        ->orderBy('id', 'desc')
-                        ->first();
-
-                    if ($lastMatch) {
-                        $invoiceRate = floatval($lastMatch->debit_rate);
-                    }
-                }
-
-                $computedUnreal = round(($closingRate - $invoiceRate) * $remaining, 4);
+            switch ($r->voucher_type) {
+                case 'sale':
+                    $baseDebit  = $r->base_amount;
+                    $localDebit  = $r->local_amount;
+                    break;
+                case 'purchase':
+                    $baseCredit = $r->base_amount;
+                    $localCredit = $r->local_amount;
+                    break;
+                case 'receipt':
+                    $baseCredit = $r->base_amount;
+                    $localCredit = $r->local_amount;
+                    break;
+                case 'payment':
+                    $baseDebit  = $r->base_amount;
+                    $localDebit  = $r->local_amount;
+                    break;
             }
 
-            // ----------------------------------------
-            // DIFF LOGIC
-            // ----------------------------------------
-            $correctDiff = "";
-            if (in_array($vtype, ['receipt', 'payment']) && $remaining == 0) {
-                $correctDiff = "";
-            } elseif (in_array($vtype, ['receipt', 'payment']) && $remaining > 0) {
-                $correctDiff = number_format($closingRate - floatval($t->exchange_rate), 6, '.', '');
-            } elseif (in_array($vtype, ['sale', 'purchase'])) {
-                $correctDiff = number_format($closingRate - floatval($t->exchange_rate), 6, '.', '');
+            $totals['base_debit']  += $baseDebit;
+            $totals['base_credit'] += $baseCredit;
+            $totals['local_debit'] += $localDebit;
+            $totals['local_credit'] += $localCredit;
+
+
+            // ----------------------------
+            // 2. DETERMINE ROW RATE
+            // ----------------------------
+            $rowRate = floatval($r->exchange_rate ?? $r->avg_rate ?? 0);
+
+
+            // ----------------------------
+            // 3. DETERMINE CLOSING RATE
+            // ----------------------------
+            $closingRate = null;
+
+            // A) If closing_rate is stored directly in remittance row → PRIORITY #1
+            if ($r->closing_rate !== null) {
+                $closingRate = floatval($r->closing_rate);
             }
 
-            // base/local amounts
-            $baseDebit  = $t->direction === 'debit'
-                ? number_format($t->base_amount, 4) . " ({$t->baseCurrency->code})"
-                : 0;
+            // B) Else resolve via ForexRate table
+            if ($closingRate === null && $endingDate) {
+                $closingRate = $this->getClosingRateForCurrencyOnDate($r->base_currency_id, $endingDate);
+            }
 
-            $baseCredit = $t->direction === 'credit'
-                ? number_format($t->base_amount, 4) . " ({$t->baseCurrency->code})"
-                : 0;
+            if ($closingRate === null) {
+                $closingRate = $this->getLatestClosingRateForCurrency($r->base_currency_id);
+            }
 
-            $localDebit  = $t->direction === 'debit'
-                ? number_format($t->local_amount, 4) . " ({$t->localCurrency->code})"
-                : 0;
+            // C) Fallback
+            if ($closingRate === null) {
+                $closingRate = floatval($r->avg_rate ?? $rowRate);
+            }
 
-            $localCredit = $t->direction === 'credit'
-                ? number_format($t->local_amount, 4) . " ({$t->localCurrency->code})"
-                : 0;
 
-            // REALISED DISPLAY
-            $realisedDisplay = "";
-            if (!in_array($vtype, ['receipt', 'payment'])) {
-                if ($t->realised_gain > 0 && $t->realised_loss > 0) {
-                    $realisedDisplay = "+" . number_format($t->realised_gain, 4)
-                        . " / -" . number_format($t->realised_loss, 4);
-                } elseif ($t->realised_gain > 0) {
-                    $realisedDisplay = "+" . number_format($t->realised_gain, 4);
-                } elseif ($t->realised_loss > 0) {
-                    $realisedDisplay = "-" . number_format($t->realised_loss, 4);
+            // ----------------------------
+            // 4. REALISED GAIN/LOSS (INVOICE ONLY)
+            // ----------------------------
+            $realised = 0;
+            if (in_array($r->voucher_type, ['sale', 'purchase'])) {
+                $sum = ForexMatch::where('invoice_id', $r->id)->sum('realised_gain_loss');
+                $realised = floatval($sum);
+            }
+
+
+            // ----------------------------
+            // 5. UNREALISED GAIN/LOSS
+            // ----------------------------
+            $remainingBase = floatval($r->remaining_base_amount);
+            $unrealised = 0;
+
+            if ($remainingBase > 0 && $closingRate !== null) {
+                $unrealised = $remainingBase * ($closingRate - $rowRate);
+            }
+
+
+            // ----------------------------
+            // 6. DIFF LOGIC (final memory rules)
+            // ----------------------------
+            $diff = "";
+
+            $isInvoice    = in_array($r->voucher_type, ['sale', 'purchase']);
+            $isSettlement = in_array($r->voucher_type, ['receipt', 'payment']);
+
+            $invoiceMatches    = $r->matchesAsInvoice;
+            $settlementMatches = $r->matchesAsSettlement;
+
+            // INVOICE FULLY MATCHED → weighted settlement rate
+            if ($isInvoice && $remainingBase == 0 && $invoiceMatches->count() > 0) {
+
+                $totalBase = 0;
+                $weightedSettlementRate = 0;
+
+                foreach ($invoiceMatches as $m) {
+                    $totalBase += $m->matched_base_amount;
+                    $weightedSettlementRate += ($m->matched_base_amount * $m->settlement_rate);
+                }
+
+                if ($totalBase > 0) {
+                    $effectiveRate = $weightedSettlementRate / $totalBase;
+                    $diff = round($effectiveRate - $rowRate, 6);
                 }
             }
 
-            // ----------------------------------------
-            // UNREALISED DISPLAY (uses computedUnreal)
-            // ----------------------------------------
-            $unrealisedDisplay = "";
-
-            if (in_array($vtype, ['receipt', 'payment'])) {
-
-                if ($remaining > 0) {
-
-                    if ($t->unrealised_gain > 0)
-                        $unrealisedDisplay = "+" . number_format($t->unrealised_gain, 4);
-
-                    elseif ($t->unrealised_loss > 0)
-                        $unrealisedDisplay = "-" . number_format($t->unrealised_loss, 4);
-
-                    else
-                        $unrealisedDisplay = number_format($computedUnreal, 4);
-                }
-            } else {
-
-                if ($remaining > 0) {
-                    if ($t->unrealised_gain > 0)
-                        $unrealisedDisplay = "+" . number_format($t->unrealised_gain, 4);
-
-                    elseif ($t->unrealised_loss > 0)
-                        $unrealisedDisplay = "-" . number_format($t->unrealised_loss, 4);
-
-                    else
-                        $unrealisedDisplay = ($computedUnreal != 0)
-                            ? number_format($computedUnreal, 4)
-                            : "";
-                }
+            // INVOICE UNMATCHED → diff = closing - rowRate
+            elseif ($isInvoice && $remainingBase > 0) {
+                $diff = round($closingRate - $rowRate, 6);
             }
 
-            // REMARKS
-            $remarks = ($remaining > 0)
-                ? "Remaining Base: " . number_format($remaining, 4)
-                : "";
+            // SETTLEMENT MATCHED → diff blank
+            elseif ($isSettlement && $settlementMatches->count() > 0) {
+                $diff = "";
+            }
 
+            // SETTLEMENT UNMATCHED → diff = rowRate - closingRate
+            elseif ($isSettlement && $remainingBase > 0) {
+                $diff = round($rowRate - $closingRate, 6);
+            }
+
+
+            // ----------------------------
+            // 7. TOTALS
+            // ----------------------------
+            if ($realised >= 0) $totals['realised_gain'] += $realised;
+            else                $totals['realised_loss'] += abs($realised);
+
+            if ($unrealised >= 0) $totals['unrealised_gain'] += $unrealised;
+            else                  $totals['unrealised_loss'] += abs($unrealised);
+
+
+            // ----------------------------
+            // 8. BUILD OUTPUT ROW
+            // ----------------------------
             $data[] = [
-                "sn" => $sn++,
-                "date" => \Carbon\Carbon::parse($t->transaction_date)->format('d-m-Y'),
-                "particulars" => $t->party->name ?? "",
-                "vch_type" => strtoupper($t->voucher_type),
-                "vch_no" => $t->voucher_no,
-                "exch_rate" => number_format($t->exchange_rate, 6),
-
-                "base_debit" => $baseDebit,
-                "base_credit" => $baseCredit,
-                "local_debit" => $localDebit,
-                "local_credit" => $localCredit,
-
-                "avg_rate" => $t->avg_rate,
-                "closing_rate" => number_format($closingRate, 6, '.', ''),
-
-                "diff" => $correctDiff,
-                "realised" => $realisedDisplay,
-                "unrealised" => $unrealisedDisplay,
-                "remarks" => $remarks,
+                'sn'            => $start + $i + 1,
+                'date'          => $r->transaction_date,
+                'particulars'   => ($r->party ? $r->party->name : 'Unknown') . ' | ' . ucfirst($r->voucher_type),
+                'vch_type'      => ucfirst($r->voucher_type),
+                'vch_no'        => $r->voucher_no,
+                'exch_rate'     => number_format($rowRate, 4),
+                'base_debit'    => $baseDebit ? number_format($baseDebit, 4, '.', ',') : '',
+                'base_credit'   => $baseCredit ? number_format($baseCredit, 4, '.', ',') : '',
+                'local_debit'   => $localDebit ? number_format($localDebit, 4, '.', ',') : '',
+                'local_credit'  => $localCredit ? number_format($localCredit, 4, '.', ',') : '',
+                'avg_rate'      => number_format(floatval($r->avg_rate), 6),
+                'closing_rate'  => number_format(floatval($closingRate), 6),
+                'diff'          => $diff === "" ? "" : number_format($diff, 6),
+                'realised'      => round($realised, 4),
+                'unrealised'    => round($unrealised, 4),
+                'remarks'       => $r->remarks ?? ''
             ];
         }
 
-        $finalNet = ($totalRealisedGain - $totalRealisedLoss)
-            + ($totalUnrealisedGain - $totalUnrealisedLoss);
+        $finalGainLoss =
+            ($totals['realised_gain'] - $totals['realised_loss']) +
+            ($totals['unrealised_gain'] - $totals['unrealised_loss']);
 
         return response()->json([
-            'draw' => intval($request->draw),
-            'recordsTotal' => $baseQuery->count(),
-            'recordsFiltered' => $baseQuery->count(),
+            'draw' => $draw,
+            'recordsTotal' => $totalRecords,
+            'recordsFiltered' => $totalRecords,
             'data' => $data,
             'totals' => [
-                'realised_gain'   => round($totalRealisedGain, 2),
-                'realised_loss'   => round($totalRealisedLoss, 2),
-                'unrealised_gain' => round($totalUnrealisedGain, 2),
-                'unrealised_loss' => round($totalUnrealisedLoss, 2),
-                'final_gain_loss' => round($finalNet, 2),
+                'realised_gain' => round($totals['realised_gain'], 4),
+                'realised_loss' => round($totals['realised_loss'], 4),
+                'unrealised_gain' => round($totals['unrealised_gain'], 4),
+                'unrealised_loss' => round($totals['unrealised_loss'], 4),
+                'final_gain_loss' => round($finalGainLoss, 4)
             ]
         ]);
     }
 
 
 
-    public function reportData(Request $request)
+    /**
+     * Helper: get manual closing rate for a currency on a given date
+     * Uses rate_date field on forex_rates table. Returns latest closing_rate on or before date or null.
+     */
+    protected function getClosingRateForCurrencyOnDate(int $currencyId, string $date)
     {
-        $type = $request->type;
-        $start = $request->starting_date ?: date('Y-m-01');
-        $end   = $request->ending_date ?: date('Y-m-d');
-        $currency = $request->currency_id;
-        $party    = $request->party_id;
-        $voucher  = $request->voucher_no;
-        $closingRateInput = $request->closing_rate_global;
-
-        $q = ForexRemittance::with('party', 'baseCurrency', 'localCurrency')
-            ->whereBetween('transaction_date', [$start . " 00:00:00", $end . " 23:59:59"])
-            ->orderBy('transaction_date', 'asc')
-            ->orderBy('id', 'asc');
-
-        if (!empty($currency) && $currency != 0) $q->where('base_currency_id', $currency);
-        if (!empty($party)) $q->where('party_id', $party);
-        if (!empty($voucher)) $q->where('voucher_no', $voucher);
-
-        switch ($type) {
-            case 'invoice':
-                $q->whereIn('voucher_type', ['sale', 'purchase']);
-                break;
-            case 'realised':
-                $q->where(function ($z) {
-                    $z->where('realised_gain', '>', 0)->orWhere('realised_loss', '>', 0);
-                });
-                break;
-            case 'unrealised':
-                $q->where(function ($z) {
-                    $z->where('unrealised_gain', '>', 0)->orWhere('unrealised_loss', '>', 0);
-                });
-                break;
-        }
-
-        $recordsTotal = $q->count();
-        $startRow = (int)$request->start;
-        $length = (int)$request->length ?: 100;
-
-        $rowsDB = (clone $q)->offset($startRow)->limit($length)->get();
-
-        if ($request->filled('closing_rate_global')) {
-            $closingRate = (float)$closingRateInput;
-        } else {
-            $closingRate = (clone $q)->orderBy('transaction_date', 'desc')->orderBy('id', 'desc')->value('exchange_rate');
-            if (!$closingRate && !empty($currency) && $currency != 0) {
-                $closingRate = optional(Currency::find($currency))->exchange_rate;
-            }
-        }
-
-        $rows = [];
-        $sn = $startRow + 1;
-
-        $totalRealisedGain = 0.0;
-        $totalRealisedLoss = 0.0;
-        $totalUnrealisedGain = 0.0;
-        $totalUnrealisedLoss = 0.0;
-
-        foreach ($rowsDB as $rawFx) {
-            $fx = $rawFx->fresh();
-
-            $currBase  = $fx->baseCurrency->code ?? '';
-            $currLocal = $fx->localCurrency->code ?? '';
-
-            $baseDebit  = $fx->direction == 'debit' ? $fx->base_amount : 0;
-            $baseCredit = $fx->direction == 'credit' ? $fx->base_amount : 0;
-            $localDebit  = $fx->direction == 'debit' ? $fx->local_amount : 0;
-            $localCredit = $fx->direction == 'credit' ? $fx->local_amount : 0;
-
-            $realised   = $fx->realised_gain - $fx->realised_loss;
-            $unrealised = $fx->unrealised_gain - $fx->unrealised_loss;
-
-            $totalRealisedGain += (float)$fx->realised_gain;
-            $totalRealisedLoss += (float)$fx->realised_loss;
-            $totalUnrealisedGain += (float)$fx->unrealised_gain;
-            $totalUnrealisedLoss += (float)$fx->unrealised_loss;
-
-            $rows[] = [
-                'sn' => $sn++,
-                'date' => $fx->transaction_date->format('d-m-Y'),
-                'party' => $fx->party->name,
-                'voucher' => strtoupper($fx->voucher_type),
-                'voucher_no' => $fx->voucher_no,
-                'exchange' => $fx->exchange_rate,
-                'base_debit' => $baseDebit ? $baseDebit . " ({$currBase})" : 0,
-                'base_credit' => $baseCredit ? $baseCredit . " ({$currBase})" : 0,
-                'local_debit' => $localDebit ? $localDebit . " ({$currLocal})" : 0,
-                'local_credit' => $localCredit ? $localCredit . " ({$currLocal})" : 0,
-                'avg_rate' => $fx->avg_rate,
-                'closing_rate' => $closingRate,
-                'diff' => $fx->avg_rate ? round($fx->avg_rate - $fx->exchange_rate, 4) : null,
-                'realised' => $realised,
-                'unrealised' => $unrealised,
-            ];
-
-            // optional virtual remaining row (show separate remaining if desired) for invoices
-            if ($closingRate && (float)$fx->remaining_base_amount > 0 && in_array($fx->voucher_type, ['sale', 'purchase'])) {
-                $rem = (float)$fx->remaining_base_amount;
-                $rate = (float)$fx->exchange_rate;
-                $diff = $closingRate - $rate;
-                $unrealGL = round($diff * $rem, 2);
-
-                if ($unrealGL >= 0) $totalUnrealisedGain += $unrealGL;
-                else $totalUnrealisedLoss += abs($unrealGL);
-
-                $rows[] = [
-                    'sn' => $sn++,
-                    'date' => $fx->transaction_date->format('d-m-Y'),
-                    'party' => $fx->party->name,
-                    'voucher' => strtoupper($fx->voucher_type) . ' (REMAINING)',
-                    'voucher_no' => $fx->voucher_no,
-                    'exchange' => $rate,
-                    'base_debit' => 0,
-                    'base_credit' => 0,
-                    'local_debit' => 0,
-                    'local_credit' => 0,
-                    'avg_rate' => $closingRate,
-                    'closing_rate' => $closingRate,
-                    'diff' => round($diff, 4),
-                    'realised' => 0,
-                    'unrealised' => $unrealGL,
-                ];
-            }
-
-            // optional: if this row is an advance (receipt/payment) and has remaining, show advance unreal in an extra row
-            if ((in_array($fx->voucher_type, ['receipt', 'payment'])) && (float)$fx->remaining_base_amount > 0) {
-                $rem = (float)$fx->remaining_base_amount;
-                // compute avg invoice rate for this ledger type (same logic as FIFO service)
-                if ($fx->ledger_type === 'customer') {
-                    $agg = ForexRemittance::where([
-                        'party_id' => $fx->party_id,
-                        'ledger_type' => 'customer',
-                        'base_currency_id' => $fx->base_currency_id,
-                        'voucher_type' => 'sale'
-                    ])->select(DB::raw('COALESCE(SUM(base_amount * exchange_rate),0) as weighted_sum'), DB::raw('COALESCE(SUM(base_amount),0) as total_base'))->first();
-
-                    $avg = ($agg && $agg->total_base > 0) ? ($agg->weighted_sum / $agg->total_base) : null;
-                } else {
-                    $agg = ForexRemittance::where([
-                        'party_id' => $fx->party_id,
-                        'ledger_type' => 'supplier',
-                        'base_currency_id' => $fx->base_currency_id,
-                        'voucher_type' => 'purchase'
-                    ])->select(DB::raw('COALESCE(SUM(base_amount * exchange_rate),0) as weighted_sum'), DB::raw('COALESCE(SUM(base_amount),0) as total_base'))->first();
-
-                    $avg = ($agg && $agg->total_base > 0) ? ($agg->weighted_sum / $agg->total_base) : null;
-                }
-
-                if ($avg !== null) {
-                    $advDiff = round(($avg - (float)$fx->exchange_rate) * $rem, 2);
-                } else {
-                    $advDiff = 0;
-                }
-
-                $rows[] = [
-                    'sn' => $sn++,
-                    'date' => $fx->transaction_date->format('d-m-Y'),
-                    'party' => $fx->party->name,
-                    'voucher' => strtoupper($fx->voucher_type) . ' (ADVANCE REMAINING)',
-                    'voucher_no' => $fx->voucher_no,
-                    'exchange' => $fx->exchange_rate,
-                    'base_debit' => 0,
-                    'base_credit' => 0,
-                    'local_debit' => 0,
-                    'local_credit' => 0,
-                    'avg_rate' => $avg,
-                    'closing_rate' => $closingRate,
-                    'diff' => $avg ? round($avg - $fx->exchange_rate, 4) : null,
-                    'realised' => 0,
-                    'unrealised' => $advDiff,
-                ];
-
-                if ($advDiff >= 0) $totalUnrealisedGain += $advDiff;
-                else $totalUnrealisedLoss += abs($advDiff);
-            }
-        }
-
-        $finalNet = ($totalRealisedGain - $totalRealisedLoss) + ($totalUnrealisedGain - $totalUnrealisedLoss);
-
-        return response()->json([
-            'draw' => intval($request->draw),
-            'recordsTotal' => $recordsTotal,
-            'recordsFiltered' => $recordsTotal,
-            'data' => $rows,
-            'totals' => [
-                'realised_gain' => $totalRealisedGain,
-                'realised_loss' => $totalRealisedLoss,
-                'unrealised_gain' => $totalUnrealisedGain,
-                'unrealised_loss' => $totalUnrealisedLoss,
-                'final_gain_loss' => $finalNet,
-            ],
+        Log::info('[ForexRemittanceController@getClosingRateForCurrencyOnDate] Looking up closing rate', [
+            'currency_id' => $currencyId,
+            'date' => $date
         ]);
+
+        $rate = ForexRate::where('currency_id', $currencyId)
+            ->where('rate_date', '<=', $date)
+            ->orderBy('rate_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if ($rate) {
+            Log::info('[ForexRemittanceController@getClosingRateForCurrencyOnDate] Found closing rate', [
+                'closing_rate' => $rate->closing_rate,
+                'id' => $rate->id,
+                'rate_date' => $rate->rate_date
+            ]);
+            return floatval($rate->closing_rate);
+        }
+
+        Log::info('[ForexRemittanceController@getClosingRateForCurrencyOnDate] No closing rate found');
+        return null;
     }
-
-
 
     /**
-     * Party ledger UI
+     * Helper: get latest closing rate for a currency (if date not specified)
      */
-    public function partyLedger($partyId)
+    protected function getLatestClosingRateForCurrency(int $currencyId)
     {
-        $currency_list = Currency::active()->get();
-        return view('backend.forex.party_ledger', compact('partyId', 'currency_list'));
-    }
-    public function partyLedgerData(Request $request, $partyId)
-    {
-        $currencyId = $request->currency_id;
-        $start = $request->starting_date ?: date('Y-m-01');
-        $end = $request->ending_date ?: date('Y-m-d');
+        Log::info('[ForexRemittanceController@getLatestClosingRateForCurrency] Looking up latest closing rate', [
+            'currency_id' => $currencyId
+        ]);
 
-        $q = ForexRemittance::with('party', 'baseCurrency', 'localCurrency')
-            ->where('party_id', $partyId)
-            ->when($currencyId && $currencyId != 0, fn($q) => $q->where('base_currency_id', $currencyId))
-            ->whereBetween('transaction_date', [$start . " 00:00:00", $end . " 23:59:59"])
-            ->orderBy('transaction_date', 'asc')
-            ->orderBy('id', 'asc');
+        $rate = ForexRate::where('currency_id', $currencyId)
+            ->orderBy('rate_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
 
-        $rowsDB = $q->get();
-        $data = [];
-        $sn = 1;
-
-        $runningBaseBalance = 0.0;
-        $runningLocalBalance = 0.0;
-
-        foreach ($rowsDB as $rawFx) {
-            $fx = $rawFx->fresh();
-
-            $baseDebit = $fx->direction == 'debit' ? (float)$fx->base_amount : 0;
-            $baseCredit = $fx->direction == 'credit' ? (float)$fx->base_amount : 0;
-            $localDebit = $fx->direction == 'debit' ? (float)$fx->local_amount : 0;
-            $localCredit = $fx->direction == 'credit' ? (float)$fx->local_amount : 0;
-
-            $runningBaseBalance += ($baseDebit - $baseCredit);
-            $runningLocalBalance += ($localDebit - $localCredit);
-
-            $realised = in_array($fx->voucher_type, ['sale', 'purchase']) ? ((float)$fx->realised_gain - (float)$fx->realised_loss) : "0";
-            $unrealised = ((float)$fx->unrealised_gain || (float)$fx->unrealised_loss)
-                ? ((float)$fx->unrealised_gain - (float)$fx->unrealised_loss)
-                : (in_array($fx->voucher_type, ['sale', 'purchase']) ? 0 : "0");
-
-            $data[] = [
-                'sn' => $sn++,
-                'date' => $fx->transaction_date->format('d-m-Y'),
-                'particulars' => strtoupper($fx->voucher_type) . ' - ' . $fx->voucher_no,
-                'base_debit' => $baseDebit ? $baseDebit . ' (' . ($fx->baseCurrency->code ?? '') . ')' : 0,
-                'base_credit' => $baseCredit ? $baseCredit . ' (' . ($fx->baseCurrency->code ?? '') . ')' : 0,
-                'local_debit' => $localDebit ? $localDebit . ' (' . ($fx->localCurrency->code ?? '') . ')' : 0,
-                'local_credit' => $localCredit ? $localCredit . ' (' . ($fx->localCurrency->code ?? '') . ')' : 0,
-                'realised' => $realised,
-                'unrealised' => $unrealised,
-                'running_base' => $runningBaseBalance,
-                'running_local' => $runningLocalBalance,
-            ];
+        if ($rate) {
+            Log::info('[ForexRemittanceController@getLatestClosingRateForCurrency] Found latest rate', [
+                'closing_rate' => $rate->closing_rate,
+                'rate_date' => $rate->rate_date
+            ]);
+            return floatval($rate->closing_rate);
         }
 
-        return response()->json([
-            'draw' => intval($request->draw),
-            'recordsTotal' => count($data),
-            'recordsFiltered' => count($data),
-            'data' => $data
-        ]);
+        Log::info('[ForexRemittanceController@getLatestClosingRateForCurrency] No latest closing rate found');
+        return null;
     }
 }

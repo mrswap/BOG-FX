@@ -7,26 +7,32 @@ use Illuminate\Database\Eloquent\Model;
 class ForexMatch extends Model
 {
     protected $fillable = [
-        'party_id',
-        'ledger_type',
-        'base_currency_id',
-        'debit_txn_id',
-        'credit_txn_id',
+        'invoice_id',
+        'settlement_id',
+        'match_date',
         'matched_base_amount',
-        'debit_rate',
-        'credit_rate',
-        'realised_gain',
-        'realised_loss'
+        'matched_local_amount',
+        'invoice_rate',
+        'settlement_rate',
+        'realised_gain_loss'
     ];
 
+    protected $casts = [
+        'match_date' => 'date',
+        'matched_base_amount' => 'decimal:4',
+        'matched_local_amount' => 'decimal:4',
+        'invoice_rate' => 'decimal:6',
+        'settlement_rate' => 'decimal:6',
+        'realised_gain_loss' => 'decimal:4',
+    ];
 
-    public function debit()
+    public function invoice()
     {
-        return $this->belongsTo(ForexRemittance::class, 'debit_txn_id');
+        return $this->belongsTo(ForexRemittance::class, 'invoice_id');
     }
 
-    public function credit()
+    public function settlement()
     {
-        return $this->belongsTo(ForexRemittance::class, 'credit_txn_id');
+        return $this->belongsTo(ForexRemittance::class, 'settlement_id');
     }
 }

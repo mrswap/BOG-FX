@@ -3,104 +3,198 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Models\Party;
-use App\Models\Currency;
-use App\Models\ForexRemittance;
-use App\Services\ForexFifoService;
+use Illuminate\Http\Request;
 use Carbon\Carbon;
+
+use App\Http\Controllers\ForexRemittanceController;
+use App\Models\ForexRemittance;
+use App\Models\ForexMatch;
 
 class ForexRunTests extends Command
 {
     protected $signature = 'forex:run-tests';
-    protected $description = 'Run forex FIFO test sequences (sales/receipt/purchase/payment) with logs';
+    protected $description = 'Run full FIFO Forex test scenarios using store() + matching';
 
     public function handle()
     {
-        $this->info("==== FOREX TEST RUN START ====");
-        Log::info("==== FOREX TEST RUN START ====");
+        $this->info("=======================================================");
+        $this->info("🔥 FOREX FULL TEST SUITE STARTED");
+        $this->info("=======================================================\n");
 
-        // CLEAN DATA
-        ForexRemittance::truncate();
-        Log::info("Old remittance data cleared");
+        Log::info("🔥 forex:run-tests started");
 
-        // CREATE PARTY
-        $party = Party::firstOrCreate(
-            ['name' => 'Test Forex Party'],
-            ['status' => 1]
-        );
-        Log::info("Party ID: {$party->id} created/loaded");
+        // -----------------------------------------------------
+        // CLEAN DATABASE SAFELY
+        // -----------------------------------------------------
+        $this->cleanDatabase();
 
-        // CREATE CURRENCIES (FIXED)
-        $usd = Currency::firstOrCreate(['code' => 'USD'], ['exchange_rate' => 89]);
-        $inr = Currency::firstOrCreate(['code' => 'INR'], ['exchange_rate' => 1]);
+        // -----------------------------------------------------
+        // RUN TEST CASES
+        // -----------------------------------------------------
+        $controller = new ForexRemittanceController;
 
-        Log::info("USD ID = {$usd->id}, INR ID = {$inr->id}");
+        $this->info("\n➡️ Running Test Case 1: Receipt R1");
+        $this->callStore($controller, [
+            'party_id' => 1,
+            'party_type' => 'customer',
+            'transaction_date' => '2025-11-28',
+            'base_currency_id' => 1,
+            'local_currency_id' => 2,
+            'base_amount' => 1000,
+            'exchange_rate' => 80,
+            'local_amount' => 80000,
+            'avg_rate' => 80,
+            'closing_rate' => 80,
+            'voucher_type' => 'receipt',
+            'voucher_no' => 'R1'
+        ]);
 
-        $fifo = app(ForexFifoService::class);
+        $this->info("\n➡️ Running Test Case 2: Sale S1");
+        $this->callStore($controller, [
+            'party_id' => 1,
+            'party_type' => 'customer',
+            'transaction_date' => '2025-11-28',
+            'base_currency_id' => 1,
+            'local_currency_id' => 2,
+            'base_amount' => 500,
+            'exchange_rate' => 82,
+            'local_amount' => 41000,
+            'avg_rate' => 82,
+            'closing_rate' => 82,
+            'voucher_type' => 'sale',
+            'voucher_no' => 'S1'
+        ]);
 
-        // TIMESTAMPS
-        $t = Carbon::now()->subMinutes(20);
+        $this->info("\n➡️ Running Test Case 3: Sale S2");
+        $this->callStore($controller, [
+            'party_id' => 1,
+            'party_type' => 'supplier',
+            'transaction_date' => '2025-11-28',
+            'base_currency_id' => 1,
+            'local_currency_id' => 2,
+            'base_amount' => 1000,
+            'exchange_rate' => 76,
+            'local_amount' => 76000,
+            'avg_rate' => 76,
+            'closing_rate' => 76,
+            'voucher_type' => 'sale',
+            'voucher_no' => 'S2'
+        ]);
 
-        // ADD FX TRANSACTION
-        $add = function($type, $no, $amt, $rate) use ($party, $usd, $inr, &$t) {
+        $this->info("\n➡️ Running Test Case 4: Receipt R2");
+        $this->callStore($controller, [
+            'party_id' => 1,
+            'party_type' => 'customer',
+            'transaction_date' => '2025-11-28',
+            'base_currency_id' => 1,
+            'local_currency_id' => 2,
+            'base_amount' => 500,
+            'exchange_rate' => 83,
+            'local_amount' => 41500,
+            'avg_rate' => 83,
+            'closing_rate' => 83,
+            'voucher_type' => 'receipt',
+            'voucher_no' => 'R2'
+        ]);
 
-            $direction = in_array($type, ['sale','payment']) ? 'debit' : 'credit';
-            $ledger    = in_array($type, ['sale','receipt']) ? 'customer' : 'supplier';
+        $this->info("\n➡️ Running Test Case 5: Purchase P1");
+        $this->callStore($controller, [
+            'party_id' => 1,
+            'party_type' => 'supplier',
+            'transaction_date' => '2025-11-28',
+            'base_currency_id' => 1,
+            'local_currency_id' => 2,
+            'base_amount' => 1000,
+            'exchange_rate' => 75,
+            'local_amount' => 75000,
+            'avg_rate' => 75,
+            'closing_rate' => 77,
+            'voucher_type' => 'purchase',
+            'voucher_no' => 'P1'
+        ]);
 
-            $t = $t->addSeconds(30);
+        $this->info("\n➡️ Running Test Case 6: Payment PAY1");
+        $this->callStore($controller, [
+            'party_id' => 1,
+            'party_type' => 'supplier',
+            'transaction_date' => '2025-11-28',
+            'base_currency_id' => 1,
+            'local_currency_id' => 2,
+            'base_amount' => 600,
+            'exchange_rate' => 74,
+            'local_amount' => 44400,
+            'avg_rate' => 74,
+            'closing_rate' => 74,
+            'voucher_type' => 'payment',
+            'voucher_no' => 'PAY1'
+        ]);
 
-            $fx = ForexRemittance::create([
-                'party_id'        => $party->id,
-                'transaction_date'=> $t,
-                'voucher_type'    => $type,
-                'voucher_no'      => $no,
-                'base_currency_id'=> $usd->id,
-                'local_currency_id'=> $inr->id,
-                'base_amount'     => $amt,
-                'exchange_rate'   => $rate,
-                'avg_rate'        => null,
-                'closing_rate'    => null,
-                'local_amount'    => round($amt * $rate, 4),
-                'direction'       => $direction,
-                'ledger_type'     => $ledger,
-                'remaining_base_amount' => $amt,
-                'settled_base_amount'   => 0,
-                'realised_gain' => 0,
-                'realised_loss' => 0,
-                'unrealised_gain' => 0,
-                'unrealised_loss' => 0,
-            ]);
+        // -----------------------------------------------------
+        // SHOW FINAL LEDGER SNAPSHOT
+        // -----------------------------------------------------
+        $this->showLedger();
 
-            Log::info("Created FX Txn ({$type}) => ", [
-                'id' => $fx->id,
-                'vch_no' => $no,
-                'base' => $amt,
-                'rate' => $rate,
-                'ledger' => $ledger,
-                'direction' => $direction,
-                'timestamp' => $t
-            ]);
+        $this->info("\n=======================================================");
+        $this->info("🔥 FOREX FULL TEST SUITE COMPLETED");
+        $this->info("=======================================================\n");
 
-            return $fx;
-        };
+        return 0;
+    }
 
-        // TEST SEQUENCE
-        $add('sale', 'S1', 1000, 89);        // Sale
-        $add('receipt', 'R1', 1100, 89.2);   // Receipt (advance)
-        $add('sale', 'S2', 200, 89.1);       // Sale
-        $add('receipt', 'R2', 150, 89);      // Receipt
-        $add('purchase', 'P1', 1000, 90);    // Purchase
-        $add('payment', 'PY1', 1100, 89.2);  // Payment (advance)
+    // ----------------------------------------------------------------------
+    // CLEAN DB
+    // ----------------------------------------------------------------------
+    private function cleanDatabase()
+    {
+        $this->info("🧹 Cleaning database...");
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
 
-        // FIXED: run FIFO with correct closing_rate (89)
-        Log::info("Running FIFO for CUSTOMER...");
-        $fifo->applyFifoFor($party->id, 'customer', $usd->id, 89);
+        DB::table('forex_matches')->delete();
+        DB::table('forex_remittances')->delete();
 
-        Log::info("Running FIFO for SUPPLIER...");
-        $fifo->applyFifoFor($party->id, 'supplier', $usd->id, 89);
+        DB::statement('ALTER TABLE forex_matches AUTO_INCREMENT = 1;');
+        DB::statement('ALTER TABLE forex_remittances AUTO_INCREMENT = 1;');
 
-        $this->info("==== FOREX TEST RUN COMPLETE ====");
-        Log::info("==== FOREX TEST RUN COMPLETE ====");
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+        $this->info("✔ Database cleaned.\n");
+    }
+
+    // ----------------------------------------------------------------------
+    // CALL STORE() SAFELY
+    // ----------------------------------------------------------------------
+    private function callStore($controller, array $data)
+    {
+        $request = new Request($data);
+
+        Log::info("➡️ Test Input", $data);
+        $controller->store($request);
+
+        $this->info("✔ Stored: " . $data['voucher_type'] . " " . $data['voucher_no']);
+    }
+
+    // ----------------------------------------------------------------------
+    // DISPLAY LEDGER
+    // ----------------------------------------------------------------------
+    private function showLedger()
+    {
+        $this->info("\n📘 FINAL LEDGER (forex_remittances)");
+
+        $rows = ForexRemittance::orderBy('id')->get();
+
+        foreach ($rows as $r) {
+            $this->line(
+                "ID {$r->id} | {$r->voucher_type} {$r->voucher_no} | Base {$r->base_amount} | Settled {$r->settled_base_amount} | Rem {$r->remaining_base_amount}"
+            );
+        }
+
+        $this->info("\n📙 MATCH RECORDS:");
+        foreach (ForexMatch::orderBy('id')->get() as $m) {
+            $this->line(
+                "Match #{$m->id} | Invoice {$m->invoice_id} | Settlement {$m->settlement_id} | Base {$m->matched_base_amount} | Realised {$m->realised_gain_loss}"
+            );
+        }
     }
 }

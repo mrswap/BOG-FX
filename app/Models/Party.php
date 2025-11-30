@@ -1,4 +1,4 @@
-<?php 
+<?php
 
 namespace App\Models;
 
@@ -23,11 +23,6 @@ class Party extends Model
 
     public function forexRemittances()
     {
-        return $this->hasMany(ForexRemittance::class);
-    }
-
-    public function scopeActive($query)
-    {
-        return $query->where('is_active', 1);
+        return $this->hasMany(ForexRemittance::class, 'party_id');
     }
 }

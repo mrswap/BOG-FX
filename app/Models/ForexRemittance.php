@@ -1,13 +1,15 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
 
 class ForexRemittance extends Model
 {
     protected $fillable = [
         'party_id',
-        'ledger_type',
+        'party_type',
         'voucher_type',
         'voucher_no',
         'transaction_date',
@@ -18,7 +20,6 @@ class ForexRemittance extends Model
         'local_amount',
         'avg_rate',
         'closing_rate',
-        'direction',
         'settled_base_amount',
         'remaining_base_amount',
         'realised_gain',
@@ -31,8 +32,12 @@ class ForexRemittance extends Model
     protected $casts = [
         'transaction_date' => 'date',
         'base_amount' => 'decimal:4',
-        'exchange_rate' => 'decimal:6',
         'local_amount' => 'decimal:4',
+        'exchange_rate' => 'decimal:6',
+        'avg_rate' => 'decimal:6',
+        'closing_rate' => 'decimal:6',
+        'settled_base_amount' => 'decimal:4',
+        'remaining_base_amount' => 'decimal:4',
     ];
 
     public function party()
@@ -48,5 +53,28 @@ class ForexRemittance extends Model
     public function localCurrency()
     {
         return $this->belongsTo(Currency::class, 'local_currency_id');
+    }
+
+    public function matchesAsInvoice()
+    {
+        return $this->hasMany(ForexMatch::class, 'invoice_id');
+    }
+
+    public function matchesAsSettlement()
+    {
+        return $this->hasMany(ForexMatch::class, 'settlement_id');
+    }
+
+    public function getMatchesAttribute()
+    {
+        $invoiceMatches = $this->relationLoaded('matchesAsInvoice')
+            ? $this->matchesAsInvoice
+            : $this->matchesAsInvoice()->get();
+
+        $settlementMatches = $this->relationLoaded('matchesAsSettlement')
+            ? $this->matchesAsSettlement
+            : $this->matchesAsSettlement()->get();
+
+        return $invoiceMatches->merge($settlementMatches)->values();
     }
 }

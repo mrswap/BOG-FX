@@ -7,17 +7,31 @@ use Illuminate\Database\Eloquent\Model;
 class ForexRate extends Model
 {
     protected $fillable = [
-        'currency_id', 'date', 'buy_rate', 'sell_rate', 'source',
+        'currency_id',
+        'rate_date',
+        'closing_rate',
+        'notes',
     ];
 
     protected $casts = [
-        'date' => 'date',
-        'buy_rate' => 'decimal:6',
-        'sell_rate' => 'decimal:6',
+        'rate_date' => 'date',
+        'closing_rate' => 'decimal:6'
     ];
 
     public function currency()
     {
         return $this->belongsTo(Currency::class);
+    }
+
+    public function scopeByDate($q, $date)
+    {
+        return $q->where('rate_date', $date);
+    }
+
+    public function scopeLatestRate($q, $currencyId)
+    {
+        return $q->where('currency_id', $currencyId)
+            ->orderBy('rate_date', 'desc')
+            ->first();
     }
 }
