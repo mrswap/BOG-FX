@@ -30,7 +30,7 @@ class ForexRemittance extends Model
     ];
 
     protected $casts = [
-        'transaction_date' => 'date',
+        'transaction_date' => 'date:Y-m-d',
         'base_amount' => 'decimal:4',
         'local_amount' => 'decimal:4',
         'exchange_rate' => 'decimal:6',

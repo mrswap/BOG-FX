@@ -4,24 +4,58 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * App\Models\Currency
+ *
+ * Columns:
+ *  - id
+ *  - name
+ *  - code
+ *  - exchange_rate
+ *  - is_active
+ *  - created_at
+ *  - updated_at
+ */
 class Currency extends Model
 {
-    protected $fillable = ["name", "code", "exchange_rate", "is_active"];
+    // If your table name differs, set protected $table = 'currencies';
+    // protected $table = 'currencies';
 
+    protected $fillable = [
+        'name',
+        'code',
+        'exchange_rate',
+        'is_active',
+    ];
 
-    // ✅ Add this scope
+    protected $casts = [
+        'exchange_rate' => 'float',
+        'is_active' => 'boolean',
+    ];
+
+    /**
+     * Scope to fetch only active currencies.
+     *
+     * Usage: Currency::active()->get();
+     */
     public function scopeActive($query)
     {
         return $query->where('is_active', 1);
     }
 
-    public function forexRemittances()
+    /**
+     * Helper: returns the display label like "USD — US Dollar".
+     */
+    public function getLabelAttribute()
     {
-        return $this->hasMany(ForexRemittance::class, 'base_currency_id');
+        return "{$this->code} — {$this->name}";
     }
 
-    public function forexRates()
+    /**
+     * Optionally: get current rate (alias).
+     */
+    public function getRateAttribute()
     {
-        return $this->hasMany(ForexRate::class);
+        return $this->exchange_rate;
     }
 }

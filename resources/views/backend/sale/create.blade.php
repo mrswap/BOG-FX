@@ -76,7 +76,7 @@
                                         <option value="">Select Party</option>
                                         @foreach ($party as $c)
                                             <option value="{{ $c->id }}" data-type="customer">
-                                                {{ $c->name }} 
+                                                {{ $c->name }}
                                             </option>
                                         @endforeach
 
@@ -185,14 +185,6 @@
                                 </div>
                             </div>
 
-                            {{-- Average Rate --}}
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label>Average Exchange Rate (optional)</label>
-                                    <input type="number" step="0.0001" name="avg_rate" id="avg_rate"
-                                        class="form-control" placeholder="Leave empty to auto-calc">
-                                </div>
-                            </div>
                         </div>
 
                         {{-- Remarks --}}
