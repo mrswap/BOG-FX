@@ -5,31 +5,19 @@ namespace App\Services;
 use App\Models\Transaction;
 use App\Models\ForexMatch;
 use App\Models\ForexRate;
-use Illuminate\Support\Collection;
 use Carbon\Carbon;
 
 class LedgerBuilder
 {
     protected $gainLossService;
+    protected $rateResolver;
 
-    public function __construct(GainLossService $gls)
+    public function __construct(GainLossService $gls, RateResolver $rateResolver)
     {
         $this->gainLossService = $gls;
+        $this->rateResolver = $rateResolver;
     }
 
-    /**
-     * Build rows for DataTable with filters.
-     *
-     * Filters supported in $opts:
-     *  - party_type (customer|supplier)
-     *  - currency_id (int) -- matches base_currency_id OR local_currency_id (0 = all)
-     *  - starting_date (Y-m-d)
-     *  - ending_date (Y-m-d)
-     *
-     * Returns: array of rows ready for DataTable, each row includes 'realised' and 'unrealised' numeric values.
-     *
-     * NOTE: This function intentionally computes realised/unrealised using stored forex_matches table.
-     */
     public function buildForDataTable(array $opts = []): array
     {
         $q = Transaction::with(['party', 'baseCurrency', 'localCurrency'])
@@ -64,7 +52,7 @@ class LedgerBuilder
         foreach ($txs as $tx) {
             $partyName = $tx->party ? $tx->party->name : 'Unknown Party';
 
-            // Base / Local DR-CR mapping
+            // Base / Local DR-CR mapping (same as before)
             $baseDebit = $baseCredit = $localDebit = $localCredit = 0.0;
             switch ($tx->voucher_type) {
                 case 'sale':
@@ -85,78 +73,56 @@ class LedgerBuilder
                     break;
             }
 
-            // Row authoritative rate (invoice/settlement)
             $rowRate = (float)($tx->exchange_rate ?? 0.0);
 
-            // Closing rate resolution (row.closing_rate -> closing for end date -> latest -> avg/rowRate)
-            $closingRate = null;
-            if (!is_null($tx->closing_rate)) {
-                $closingRate = (float)$tx->closing_rate;
-            } else {
-                if (!empty($opts['ending_date'])) {
-                    $baseCode = $tx->baseCurrency ? $tx->baseCurrency->code : null;
-                    $localCode = $tx->localCurrency ? $tx->localCurrency->code : null;
-                    if ($baseCode && $localCode) {
-                        $closingRate = ForexRate::getClosingRate($baseCode, $localCode, $opts['ending_date']);
-                    }
-                }
-                if ($closingRate === null) {
-                    $baseCode = $tx->baseCurrency ? $tx->baseCurrency->code : null;
-                    $localCode = $tx->localCurrency ? $tx->localCurrency->code : null;
-                    if ($baseCode && $localCode) {
-                        $closingRate = ForexRate::getClosingRate($baseCode, $localCode, now()->toDateString());
-                    }
-                }
-                if ($closingRate === null) {
-                    // fallback to avg_rate or rowRate
-                    $closingRate = (float)($tx->avg_rate ?? $rowRate);
-                }
-            }
+            // RESOLVE CLOSING RATE (using RateResolver)
+            $closingRate = (float)$this->rateResolver->getClosingRate($tx);
 
             // realised amount: sum of realised_amount from forex_matches where tx participates
-            $realisedFromInvoice = (float)ForexMatch::where('invoice_id', $tx->id)->sum('realised_amount');
-            $realisedFromSettlement = (float)ForexMatch::where('settlement_id', $tx->id)->sum('realised_amount');
-            // 1) Identify invoice-type
             $isInvoice = in_array($tx->voucher_type, ['sale', 'purchase']);
 
-            // 2) Realised only for invoices
             $realisedFromInvoice = (float) ForexMatch::where('invoice_id', $tx->id)->sum('realised_amount');
-
-            if ($isInvoice) {
-                // sale & purchase only
-                $realised = $realisedFromInvoice;
-            } else {
-                // receipt & payment NEVER show realised
-                $realised = 0;
-            }
-
+            $realised = $isInvoice ? $realisedFromInvoice : 0.0;
 
             // matched base sums
             $invoiceMatched = (float)ForexMatch::where('invoice_id', $tx->id)->sum('matched_base');
             $settlementMatched = (float)ForexMatch::where('settlement_id', $tx->id)->sum('matched_base');
 
             // remaining base
-            $isInvoice = in_array($tx->voucher_type, ['sale', 'purchase']);
             $remainingBase = $isInvoice
                 ? max(0.0, (float)$tx->base_amount - $invoiceMatched)
                 : max(0.0, (float)$tx->base_amount - $settlementMatched);
 
-            // unrealised calculation (V7 rules implemented)
+            // Get invoiceRateOverride if present on tx (special-case)
+            $invoiceRateOverride = $tx->closing_rate_override ?? null;
+
+            // unrealised calculation (use GainLossService with resolver results)
             $unrealised = 0.0;
-            if ($remainingBase > 0 && $closingRate !== null) {
+            if ($remainingBase > 0) {
                 if ($isInvoice) {
-                    $unrealised = round($remainingBase * ($closingRate - $rowRate), 4);
+                    $unrealised = $this->gainLossService->calcUnrealised(
+                        $remainingBase,
+                        $closingRate,
+                        $rowRate,
+                        'invoice'
+                    );
                 } else {
                     // settlement (advance)
-                    $unrealised = round($remainingBase * ($rowRate - $closingRate), 4);
+                    $unrealised = $this->gainLossService->calcUnrealised(
+                        $remainingBase,
+                        $closingRate,
+                        $rowRate,
+                        'advance',
+                        $rowRate,
+                        $invoiceRateOverride
+                    );
                 }
             }
 
-            // calculate diff (effective rate indicator)
+            // compute diff field as before (keeps your previous logic)
             $diff = "";
             if ($isInvoice) {
                 if ($remainingBase == 0 && $invoiceMatched > 0) {
-                    // compute weighted effective settlement rate
                     $matches = ForexMatch::where('invoice_id', $tx->id)->get();
                     $totalBase = 0.0;
                     $weightedSettlement = 0.0;
