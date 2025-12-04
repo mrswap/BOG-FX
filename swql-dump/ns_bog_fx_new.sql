@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 28, 2025 at 01:29 PM
+-- Generation Time: Dec 04, 2025 at 04:39 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -715,14 +715,11 @@ CREATE TABLE `failed_jobs` (
 
 CREATE TABLE `forex_matches` (
   `id` bigint(20) UNSIGNED NOT NULL,
+  `party_id` bigint(20) UNSIGNED NOT NULL,
   `invoice_id` bigint(20) UNSIGNED NOT NULL,
   `settlement_id` bigint(20) UNSIGNED NOT NULL,
-  `match_date` date NOT NULL,
-  `matched_base_amount` decimal(18,4) NOT NULL,
-  `matched_local_amount` decimal(18,4) NOT NULL,
-  `invoice_rate` decimal(18,6) NOT NULL,
-  `settlement_rate` decimal(18,6) NOT NULL,
-  `realised_gain_loss` decimal(18,4) NOT NULL DEFAULT 0.0000,
+  `matched_base` double NOT NULL,
+  `realised_amount` double NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -731,11 +728,10 @@ CREATE TABLE `forex_matches` (
 -- Dumping data for table `forex_matches`
 --
 
-INSERT INTO `forex_matches` (`id`, `invoice_id`, `settlement_id`, `match_date`, `matched_base_amount`, `matched_local_amount`, `invoice_rate`, `settlement_rate`, `realised_gain_loss`, `created_at`, `updated_at`) VALUES
-(1, 2, 1, '2025-11-28', 500.0000, 40000.0000, 82.000000, 80.000000, -1000.0000, '2025-11-28 10:40:50', '2025-11-28 10:40:50'),
-(2, 3, 1, '2025-11-28', 500.0000, 40000.0000, 76.000000, 80.000000, 2000.0000, '2025-11-28 10:55:48', '2025-11-28 10:55:48'),
-(3, 3, 4, '2025-11-28', 500.0000, 41500.0000, 76.000000, 83.000000, 3500.0000, '2025-11-28 11:41:59', '2025-11-28 11:41:59'),
-(4, 5, 6, '2025-11-28', 600.0000, 44400.0000, 75.000000, 74.000000, -600.0000, '2025-11-28 12:15:29', '2025-11-28 12:15:29');
+INSERT INTO `forex_matches` (`id`, `party_id`, `invoice_id`, `settlement_id`, `matched_base`, `realised_amount`, `created_at`, `updated_at`) VALUES
+(1, 1, 1, 2, 50, 100, '2025-12-04 11:12:27', '2025-12-04 11:12:27'),
+(2, 1, 1, 3, 150, -450, '2025-12-04 11:13:33', '2025-12-04 11:13:33'),
+(3, 1, 7, 8, 500, 1000, '2025-12-04 11:23:48', '2025-12-04 11:23:48');
 
 -- --------------------------------------------------------
 
@@ -745,55 +741,21 @@ INSERT INTO `forex_matches` (`id`, `invoice_id`, `settlement_id`, `match_date`, 
 
 CREATE TABLE `forex_rates` (
   `id` bigint(20) UNSIGNED NOT NULL,
-  `currency_id` bigint(20) UNSIGNED NOT NULL,
-  `rate_date` date NOT NULL,
-  `closing_rate` decimal(18,6) NOT NULL,
-  `notes` varchar(500) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `forex_remittances`
---
-
-CREATE TABLE `forex_remittances` (
-  `id` bigint(20) UNSIGNED NOT NULL,
+  `date` date NOT NULL,
+  `base_currency_id` int(10) UNSIGNED NOT NULL,
+  `local_currency_id` int(10) UNSIGNED NOT NULL,
   `party_id` bigint(20) UNSIGNED DEFAULT NULL,
-  `party_type` enum('customer','supplier') DEFAULT NULL,
-  `voucher_type` enum('sale','purchase','receipt','payment') NOT NULL,
-  `voucher_no` varchar(255) NOT NULL,
-  `transaction_date` date NOT NULL,
-  `base_currency_id` bigint(20) UNSIGNED NOT NULL,
-  `base_amount` decimal(18,4) NOT NULL,
-  `local_currency_id` bigint(20) UNSIGNED NOT NULL,
-  `exchange_rate` decimal(18,6) NOT NULL,
-  `local_amount` decimal(18,4) NOT NULL,
-  `avg_rate` decimal(18,6) DEFAULT NULL,
-  `closing_rate` decimal(18,6) DEFAULT NULL,
-  `settled_base_amount` decimal(18,4) NOT NULL DEFAULT 0.0000,
-  `remaining_base_amount` decimal(18,4) NOT NULL DEFAULT 0.0000,
-  `remarks` text DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL,
-  `realised_gain_loss` decimal(18,4) DEFAULT 0.0000,
-  `unrealised_gain_loss` decimal(18,4) DEFAULT 0.0000,
-  `is_matched` tinyint(1) DEFAULT 0
+  `rate` double NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `forex_remittances`
+-- Dumping data for table `forex_rates`
 --
 
-INSERT INTO `forex_remittances` (`id`, `party_id`, `party_type`, `voucher_type`, `voucher_no`, `transaction_date`, `base_currency_id`, `base_amount`, `local_currency_id`, `exchange_rate`, `local_amount`, `avg_rate`, `closing_rate`, `settled_base_amount`, `remaining_base_amount`, `remarks`, `created_at`, `updated_at`, `realised_gain_loss`, `unrealised_gain_loss`, `is_matched`) VALUES
-(1, 1, 'customer', 'receipt', 'R1', '2025-11-28', 1, 1000.0000, 2, 80.000000, 80000.0000, 90.000000, 90.000000, 1000.0000, 0.0000, NULL, '2025-11-28 10:40:01', '2025-11-28 10:55:48', 0.0000, 0.0000, 0),
-(2, 1, 'customer', 'sale', 'S1', '2025-11-28', 1, 500.0000, 2, 82.000000, 41000.0000, 82.000000, 82.000000, 500.0000, 0.0000, NULL, '2025-11-28 10:40:50', '2025-11-28 10:40:50', 0.0000, 0.0000, 0),
-(3, 1, 'supplier', 'sale', 's2', '2025-11-28', 1, 1000.0000, 2, 76.000000, 76000.0000, 76.000000, 76.000000, 1000.0000, 0.0000, NULL, '2025-11-28 10:55:48', '2025-11-28 11:41:59', 0.0000, 0.0000, 0),
-(4, 1, 'customer', 'receipt', 'r2', '2025-11-28', 1, 500.0000, 2, 83.000000, 41500.0000, 83.000000, 83.000000, 500.0000, 0.0000, NULL, '2025-11-28 11:41:59', '2025-11-28 11:41:59', 0.0000, 0.0000, 0),
-(5, 1, 'customer', 'purchase', 'p1', '2025-11-28', 1, 1000.0000, 2, 75.000000, 75000.0000, 75.000000, 77.000000, 600.0000, 400.0000, NULL, '2025-11-28 12:10:51', '2025-11-28 12:15:29', 0.0000, 0.0000, 0),
-(6, 1, 'customer', 'payment', 'pay1', '2025-11-28', 1, 600.0000, 2, 74.000000, 44400.0000, 74.000000, 74.000000, 600.0000, 0.0000, NULL, '2025-11-28 12:15:29', '2025-11-28 12:15:29', 0.0000, 0.0000, 0);
+INSERT INTO `forex_rates` (`id`, `date`, `base_currency_id`, `local_currency_id`, `party_id`, `rate`) VALUES
+(1, '2025-12-04', 1, 2, 1, 80.333333333333),
+(2, '2025-12-04', 2, 2, 1, 78),
+(3, '2025-12-01', 2, 2, 1, 80);
 
 -- --------------------------------------------------------
 
@@ -2610,6 +2572,44 @@ INSERT INTO `taxes` (`id`, `name`, `rate`, `is_active`, `woocommerce_tax_id`, `c
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `transactions`
+--
+
+CREATE TABLE `transactions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `party_id` bigint(20) UNSIGNED NOT NULL,
+  `party_type` enum('customer','supplier') DEFAULT NULL,
+  `transaction_date` date NOT NULL,
+  `base_currency_id` bigint(20) UNSIGNED NOT NULL,
+  `base_amount` double NOT NULL,
+  `advance_remaining` double DEFAULT NULL,
+  `closing_rate` double DEFAULT NULL,
+  `closing_rate_override` double DEFAULT NULL,
+  `local_currency_id` bigint(20) UNSIGNED NOT NULL,
+  `exchange_rate` double NOT NULL,
+  `local_amount` double NOT NULL,
+  `voucher_type` enum('sale','purchase','receipt','payment') NOT NULL,
+  `voucher_no` varchar(255) NOT NULL,
+  `remarks` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `transactions`
+--
+
+INSERT INTO `transactions` (`id`, `party_id`, `party_type`, `transaction_date`, `base_currency_id`, `base_amount`, `advance_remaining`, `closing_rate`, `closing_rate_override`, `local_currency_id`, `exchange_rate`, `local_amount`, `voucher_type`, `voucher_no`, `remarks`, `created_at`, `updated_at`) VALUES
+(1, 1, 'customer', '2025-12-04', 1, 200, NULL, 82, NULL, 2, 80, 16000, 'purchase', 'Pur1', NULL, '2025-12-04 11:11:08', '2025-12-04 11:11:08'),
+(2, 1, 'customer', '2025-12-04', 2, 50, NULL, 78, NULL, 2, 78, 3900, 'payment', 'pay1', NULL, '2025-12-04 11:12:27', '2025-12-04 11:12:27'),
+(3, 1, 'customer', '2025-12-04', 1, 150, NULL, 80, NULL, 2, 83, 12450, 'payment', 'Pay2', NULL, '2025-12-04 11:13:33', '2025-12-04 11:13:33'),
+(6, 1, 'customer', '2025-12-04', 1, 1000, 1000, 85, NULL, 2, 80, 80000, 'payment', 'Pay3', NULL, '2025-12-04 11:21:48', '2025-12-04 11:21:49'),
+(7, 1, 'customer', '2025-12-01', 2, 500, NULL, 78, NULL, 2, 80, 40000, 'sale', 'Sale1', NULL, '2025-12-04 11:22:46', '2025-12-04 11:22:46'),
+(8, 1, 'customer', '2025-12-04', 2, 1000, 500, 78, NULL, 2, 82, 82000, 'receipt', 'R1', NULL, '2025-12-04 11:23:48', '2025-12-04 11:23:48');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `transfers`
 --
 
@@ -2931,28 +2931,17 @@ ALTER TABLE `failed_jobs`
 --
 ALTER TABLE `forex_matches`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `invoice_id` (`invoice_id`),
-  ADD KEY `settlement_id` (`settlement_id`),
-  ADD KEY `idx_match_invoice` (`invoice_id`,`match_date`);
+  ADD KEY `party_idx` (`party_id`),
+  ADD KEY `invoice_idx` (`invoice_id`),
+  ADD KEY `settlement_idx` (`settlement_id`);
 
 --
 -- Indexes for table `forex_rates`
 --
 ALTER TABLE `forex_rates`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `unique_rate` (`currency_id`,`rate_date`);
-
---
--- Indexes for table `forex_remittances`
---
-ALTER TABLE `forex_remittances`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `party_id` (`party_id`),
-  ADD KEY `transaction_date` (`transaction_date`),
-  ADD KEY `voucher_type` (`voucher_type`),
-  ADD KEY `base_currency_id` (`base_currency_id`),
-  ADD KEY `local_currency_id` (`local_currency_id`),
-  ADD KEY `idx_party_date` (`party_id`,`transaction_date`);
+  ADD UNIQUE KEY `unique_rate_pair` (`date`,`base_currency_id`,`local_currency_id`),
+  ADD KEY `date_idx` (`date`);
 
 --
 -- Indexes for table `general_settings`
@@ -3257,6 +3246,18 @@ ALTER TABLE `taxes`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `transactions`
+--
+ALTER TABLE `transactions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `voucher_no_unique` (`voucher_no`),
+  ADD KEY `party_idx` (`party_id`),
+  ADD KEY `voucher_type_idx` (`voucher_type`),
+  ADD KEY `transaction_date_idx` (`transaction_date`),
+  ADD KEY `transactions_base_currency_fk` (`base_currency_id`),
+  ADD KEY `transactions_local_currency_fk` (`local_currency_id`);
+
+--
 -- Indexes for table `transfers`
 --
 ALTER TABLE `transfers`
@@ -3462,19 +3463,13 @@ ALTER TABLE `failed_jobs`
 -- AUTO_INCREMENT for table `forex_matches`
 --
 ALTER TABLE `forex_matches`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `forex_rates`
 --
 ALTER TABLE `forex_rates`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `forex_remittances`
---
-ALTER TABLE `forex_remittances`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `general_settings`
@@ -3759,6 +3754,12 @@ ALTER TABLE `taxes`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
+-- AUTO_INCREMENT for table `transactions`
+--
+ALTER TABLE `transactions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+
+--
 -- AUTO_INCREMENT for table `transfers`
 --
 ALTER TABLE `transfers`
@@ -3796,22 +3797,17 @@ ALTER TABLE `warehouses`
 -- Constraints for table `forex_matches`
 --
 ALTER TABLE `forex_matches`
-  ADD CONSTRAINT `forex_matches_ibfk_1` FOREIGN KEY (`invoice_id`) REFERENCES `forex_remittances` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `forex_matches_ibfk_2` FOREIGN KEY (`settlement_id`) REFERENCES `forex_remittances` (`id`) ON DELETE CASCADE;
+  ADD CONSTRAINT `match_invoice_fk` FOREIGN KEY (`invoice_id`) REFERENCES `transactions` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `match_party_fk` FOREIGN KEY (`party_id`) REFERENCES `parties` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `match_settlement_fk` FOREIGN KEY (`settlement_id`) REFERENCES `transactions` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `forex_rates`
+-- Constraints for table `transactions`
 --
-ALTER TABLE `forex_rates`
-  ADD CONSTRAINT `forex_rates_ibfk_1` FOREIGN KEY (`currency_id`) REFERENCES `currencies` (`id`) ON DELETE CASCADE;
-
---
--- Constraints for table `forex_remittances`
---
-ALTER TABLE `forex_remittances`
-  ADD CONSTRAINT `forex_remittances_ibfk_1` FOREIGN KEY (`party_id`) REFERENCES `parties` (`id`) ON DELETE SET NULL,
-  ADD CONSTRAINT `forex_remittances_ibfk_2` FOREIGN KEY (`base_currency_id`) REFERENCES `currencies` (`id`),
-  ADD CONSTRAINT `forex_remittances_ibfk_3` FOREIGN KEY (`local_currency_id`) REFERENCES `currencies` (`id`);
+ALTER TABLE `transactions`
+  ADD CONSTRAINT `transactions_base_currency_fk` FOREIGN KEY (`base_currency_id`) REFERENCES `currencies` (`id`),
+  ADD CONSTRAINT `transactions_local_currency_fk` FOREIGN KEY (`local_currency_id`) REFERENCES `currencies` (`id`),
+  ADD CONSTRAINT `transactions_party_fk` FOREIGN KEY (`party_id`) REFERENCES `parties` (`id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
