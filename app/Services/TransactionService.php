@@ -127,6 +127,15 @@ class TransactionService
             $partyId = $tx->party_id;
             $tx->delete();
 
+
+
+            // 🟢 If no transactions remain for this party, wipe daily rates
+            $remaining = Transaction::where('party_id', $partyId)->count();
+            if ($remaining === 0) {
+                ForexRate::where('party_id', $partyId)->delete();
+            }
+
+
             // FULL rebuild after deletion
             $this->rebuildBucket($partyId);
 
@@ -149,6 +158,7 @@ class TransactionService
         // get ordered transactions
         $txs = Transaction::where('party_id', $partyId)
             ->orderBy('transaction_date')
+
             ->orderByRaw("CASE WHEN voucher_type IN ('sale','purchase') THEN 0 ELSE 1 END")
             ->orderBy('id')
             ->get();

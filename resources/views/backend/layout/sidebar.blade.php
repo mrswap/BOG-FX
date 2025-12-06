@@ -7,10 +7,10 @@
     <!-- Sales Menu -->
     <li>
         <a href="#sale" aria-expanded="false" data-toggle="collapse">
-            <i class="dripicons-cart"></i><span>{{ trans('file.Sale') }}</span>
+            <i class="dripicons-cart"></i><span>Transactions</span>
         </a>
         <ul id="sale" class="collapse list-unstyled">
-            <li id="sale-list-menu"><a href="{{ route('sales.index') }}">Remitance List</a></li>
+            <li id="sale-list-menu"><a href="{{ route('sales.index') }}">Profit & Lose</a></li>
             <li id="sale-create-menu"><a href="{{ route('sales.create') }}">Create Remitance </a></li>
         </ul>
     </li>
@@ -37,41 +37,16 @@
         <ul id="forexReportMenu" class="collapse list-unstyled">
 
             <li>
-                <a href="{{ route('forex.report', 'invoice') }}">
-                    <i class="dripicons-document-edit"></i> Invoice Wise Report
-                </a>
-            </li>
-
-            <li>
-                <a href="{{ route('forex.report', 'party') }}">
+                <a href="{{ route('forex.txn.report.party') }}">
                     <i class="dripicons-user"></i> Party Wise Report
                 </a>
             </li>
 
             <li>
-                <a href="{{ route('forex.report', 'base') }}">
-                    <i class="dripicons-gear"></i> Base Currency Wise Report
+                <a href="{{ route('forex.txn.report.currency') }}">
+                    <i class="dripicons-gear"></i>Currency Wise Report
                 </a>
             </li>
-
-            <li>
-                <a href="{{ route('forex.report', 'local') }}">
-                    <i class="dripicons-flag"></i> Local Currency Wise Report
-                </a>
-            </li>
-
-            <li>
-                <a href="{{ route('forex.report', 'realised') }}">
-                    <i class="dripicons-checkmark"></i> Realised Gain/Loss
-                </a>
-            </li>
-
-            <li>
-                <a href="{{ route('forex.report', 'unrealised') }}">
-                    <i class="dripicons-warning"></i> Unrealised Gain/Loss
-                </a>
-            </li>
-
         </ul>
     </li>
 

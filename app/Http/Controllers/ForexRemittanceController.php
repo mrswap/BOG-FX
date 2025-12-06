@@ -71,16 +71,13 @@ class ForexRemittanceController extends Controller
     /**
      * Update transaction (clears matches + rebuilds bucket)
      */
-    /**
-     * Update transaction (clears matches + rebuilds bucket)
-     */
     public function update(Request $request, Transaction $transaction)
     {
 
         \Log::info('Forex transaction update data: ', [
             'request_data' => $request->all()
         ]);
-        
+
         $data = $this->validateRequest($request, $transaction->id);
 
         if (empty($data['local_amount']) && isset($data['base_amount'], $data['exchange_rate'])) {
@@ -275,5 +272,171 @@ class ForexRemittanceController extends Controller
 
         Log::info('[forexRemittanceData] returning rows=' . count($rows));
         return response()->json($response);
+    }
+
+    // PARTY WISE
+    public function partyReport(Request $req)
+    {
+        $parties = Party::orderBy('name')->get();
+        $currencies = Currency::orderBy('code')->get();
+
+        return view('backend.sale.party_wise', compact('parties', 'currencies'));
+    }
+
+    // CURRENCY WISE
+    public function currencyReport(Request $req)
+    {
+        $parties = Party::orderBy('name')->get();
+        $currencies = Currency::orderBy('code')->get();
+        return view('backend.sale.currency_wise', compact('parties', 'currencies'));
+    }
+    public function getPartyWiseReport(Request $request)
+    {
+        // Validation
+        $request->validate([
+            'starting_date' => 'required|date',
+            'ending_date'   => 'required|date',
+            'party_id'      => 'nullable|integer',
+        ]);
+
+        // LedgerBuilder filters
+        $opts = [
+            'party_id'      => $request->party_id ? intval($request->party_id) : null,
+            'starting_date' => $request->starting_date,
+            'ending_date'   => $request->ending_date,
+        ];
+
+        // LedgerBuilder row data
+        $rows = $this->ledgerBuilder->buildPartyWise($opts);
+
+        // Totals calculation (same logic as your forexRemittanceData)
+        $totals = [
+            'base_debit'      => 0.0,
+            'base_credit'     => 0.0,
+            'local_debit'     => 0.0,
+            'local_credit'    => 0.0,
+            'realised_gain'   => 0.0,
+            'realised_loss'   => 0.0,
+            'unrealised_gain' => 0.0,
+            'unrealised_loss' => 0.0,
+        ];
+
+        foreach ($rows as $r) {
+            $bd = floatval(str_replace(',', '', $r['base_debit'] ?? 0));
+            $bc = floatval(str_replace(',', '', $r['base_credit'] ?? 0));
+            $ld = floatval(str_replace(',', '', $r['local_debit'] ?? 0));
+            $lc = floatval(str_replace(',', '', $r['local_credit'] ?? 0));
+
+            $totals['base_debit']  += $bd;
+            $totals['base_credit'] += $bc;
+            $totals['local_debit'] += $ld;
+            $totals['local_credit'] += $lc;
+
+            $real = floatval($r['realised']);
+            $unreal = floatval($r['unrealised']);
+
+            if ($real >= 0) $totals['realised_gain'] += $real;
+            else $totals['realised_loss'] += abs($real);
+
+            if ($unreal >= 0) $totals['unrealised_gain'] += $unreal;
+            else $totals['unrealised_loss'] += abs($unreal);
+        }
+
+        $finalGainLoss = ($totals['realised_gain'] - $totals['realised_loss'])
+            + ($totals['unrealised_gain'] - $totals['unrealised_loss']);
+
+        return response()->json([
+            'draw'            => intval($request->draw ?? 1),
+            'recordsTotal'    => count($rows),
+            'recordsFiltered' => count($rows),
+            'data'            => $rows,
+            'totals' => [
+                'base_debit'       => round($totals['base_debit'], 2),
+                'base_credit'      => round($totals['base_credit'], 2),
+                'local_debit'      => round($totals['local_debit'], 2),
+                'local_credit'     => round($totals['local_credit'], 2),
+                'realised_gain'    => round($totals['realised_gain'], 4),
+                'realised_loss'    => round($totals['realised_loss'], 4),
+                'unrealised_gain'  => round($totals['unrealised_gain'], 4),
+                'unrealised_loss'  => round($totals['unrealised_loss'], 4),
+                'final_gain_loss'  => round($finalGainLoss, 4),
+            ]
+        ]);
+    }
+
+    public function getCurrencyWiseReport(Request $request)
+    {
+        $request->validate([
+            'starting_date'     => 'required|date',
+            'ending_date'       => 'required|date',
+            'base_currency_id'  => 'nullable|integer',
+            'local_currency_id' => 'nullable|integer',
+        ]);
+
+        // FILTER OPTIONS
+        $opts = [
+            'starting_date'     => $request->starting_date,
+            'ending_date'       => $request->ending_date,
+            'base_currency_id'  => $request->base_currency_id ? intval($request->base_currency_id) : null,
+            'local_currency_id' => $request->local_currency_id ? intval($request->local_currency_id) : null,
+        ];
+
+        // FETCH ROWS FROM LEDGERBUILDER
+        $rows = $this->ledgerBuilder->buildCurrencyWise($opts);
+
+        // TOTALS DEFAULT
+        $totals = [
+            'base_debit'      => 0.0,
+            'base_credit'     => 0.0,
+            'local_debit'     => 0.0,
+            'local_credit'    => 0.0,
+            'realised_gain'   => 0.0,
+            'realised_loss'   => 0.0,
+            'unrealised_gain' => 0.0,
+            'unrealised_loss' => 0.0,
+        ];
+
+        // CALCULATE TOTALS
+        foreach ($rows as $r) {
+            $bd = floatval(str_replace(',', '', $r['base_debit'] ?? 0));
+            $bc = floatval(str_replace(',', '', $r['base_credit'] ?? 0));
+            $ld = floatval(str_replace(',', '', $r['local_debit'] ?? 0));
+            $lc = floatval(str_replace(',', '', $r['local_credit'] ?? 0));
+
+            $totals['base_debit']  += $bd;
+            $totals['base_credit'] += $bc;
+            $totals['local_debit'] += $ld;
+            $totals['local_credit'] += $lc;
+
+            $real = floatval($r['realised']);
+            $unreal = floatval($r['unrealised']);
+
+            if ($real >= 0) $totals['realised_gain'] += $real;
+            else $totals['realised_loss'] += abs($real);
+
+            if ($unreal >= 0) $totals['unrealised_gain'] += $unreal;
+            else $totals['unrealised_loss'] += abs($unreal);
+        }
+
+        $finalGainLoss = ($totals['realised_gain'] - $totals['realised_loss'])
+            + ($totals['unrealised_gain'] - $totals['unrealised_loss']);
+
+        return response()->json([
+            'draw'            => intval($request->draw ?? 1),
+            'recordsTotal'    => count($rows),
+            'recordsFiltered' => count($rows),
+            'data'            => $rows,
+            'totals' => [
+                'base_debit'      => round($totals['base_debit'], 2),
+                'base_credit'     => round($totals['base_credit'], 2),
+                'local_debit'     => round($totals['local_debit'], 2),
+                'local_credit'    => round($totals['local_credit'], 2),
+                'realised_gain'   => round($totals['realised_gain'], 4),
+                'realised_loss'   => round($totals['realised_loss'], 4),
+                'unrealised_gain' => round($totals['unrealised_gain'], 4),
+                'unrealised_loss' => round($totals['unrealised_loss'], 4),
+                'final_gain_loss' => round($finalGainLoss, 4),
+            ]
+        ]);
     }
 }

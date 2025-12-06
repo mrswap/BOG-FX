@@ -95,6 +95,36 @@ Route::prefix('forex/remittance')->group(function () {
     Route::put('/forex/remittance/{transaction}', [ForexRemittanceController::class, 'update'])
         ->name('forex.remittance.update');
 });
+Route::group(['middleware' => ['common', 'auth', 'active']], function () {
+
+    // PARTY WISE REPORT
+    Route::get(
+        '/forex/report/party',
+        [ForexRemittanceController::class, 'partyReport']
+    )->name('forex.txn.report.party');
+
+    // CURRENCY WISE REPORT
+    Route::get(
+        '/forex/report/currency',
+        [ForexRemittanceController::class, 'currencyReport']
+    )->name('forex.txn.report.currency');
+
+    // Datatable API (same for both with type parameter)
+    Route::post(
+        '/forex/report/data',
+        [ForexRemittanceController::class, 'getReportData']
+    )->name('forex.txn.report.data');
+
+    Route::post('/reports/party-wise/data', 
+    [ForexRemittanceController::class, 'getPartyWiseReport'])
+    ->name('report.party.data');
+
+
+    Route::post('/reports/currency-wise/data',
+    [ForexRemittanceController::class, 'getCurrencyWiseReport'])
+    ->name('report.currency.data');
+
+});
 
 
 Route::match(

@@ -176,4 +176,71 @@ class LedgerBuilder
 
         return $rows;
     }
+
+
+    public function buildCurrencyWise(array $opts): array
+    {
+        $q = Transaction::with(['party', 'baseCurrency', 'localCurrency'])
+            ->orderBy('transaction_date', 'asc')
+            ->orderBy('id', 'asc');
+
+        // BASE CURRENCY FILTER
+        if (!empty($opts['base_currency_id']) && $opts['base_currency_id'] != 0) {
+            $q->where('base_currency_id', intval($opts['base_currency_id']));
+        }
+
+        // LOCAL CURRENCY FILTER
+        if (!empty($opts['local_currency_id']) && $opts['local_currency_id'] != 0) {
+            $q->where('local_currency_id', intval($opts['local_currency_id']));
+        }
+
+        // DATE RANGE
+        if (!empty($opts['starting_date']) && !empty($opts['ending_date'])) {
+            $start = Carbon::parse($opts['starting_date'])->toDateString();
+            $end   = Carbon::parse($opts['ending_date'])->toDateString();
+            $q->whereBetween('transaction_date', [$start, $end]);
+        }
+
+        $txs = $q->get();
+        $rows = [];
+        $sn = 1;
+
+        foreach ($txs as $tx) {
+            $rows[] = $this->formatTxRow($tx, $sn++);
+        }
+
+        return $rows;
+    }
+
+
+    public function buildPartyWise(array $opts): array
+    {
+        $q = Transaction::with(['party', 'baseCurrency', 'localCurrency'])
+            ->orderBy('transaction_date', 'asc')
+            ->orderBy('id', 'asc');
+
+        // ONLY THIS PARTY
+        if (!empty($opts['party_id'])) {
+            $q->where('party_id', intval($opts['party_id']));
+        }
+
+        // DATE FILTER
+        if (!empty($opts['starting_date']) && !empty($opts['ending_date'])) {
+            $start = Carbon::parse($opts['starting_date'])->toDateString();
+            $end   = Carbon::parse($opts['ending_date'])->toDateString();
+            $q->whereBetween('transaction_date', [$start, $end]);
+        }
+
+        // now reuse SAME row-building logic
+        $txs = $q->get();
+
+        $rows = [];
+        $sn = 1;
+
+        foreach ($txs as $tx) {
+            $rows[] = $this->formatTxRow($tx, $sn++); // SAME formatting function
+        }
+
+        return $rows;
+    }
 }

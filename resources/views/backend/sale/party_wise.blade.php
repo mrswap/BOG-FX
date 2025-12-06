@@ -16,11 +16,7 @@
 
     <section>
         <div class="container-fluid">
-            @if (in_array('forex-add', $all_permission))
-                <a href="{{ route('sales.create') }}" class="btn btn-info add-forex-btn">
-                    <i class="dripicons-plus"></i> Add Forex Remittance
-                </a>
-            @endif
+
 
             <div class="card mt-3">
                 <h3 class="text-center mt-3">Filter Forex Remittances</h3>
@@ -29,42 +25,26 @@
                     <div class="row mt-2">
                         <div class="col-md-3">
                             <label><strong>From Date</strong></label>
-                            <input type="text" name="starting_date" autocomplete="off" value="{{ $starting_date }}"
-                                class="form-control datepicker" required>
+                            <input type="text" name="starting_date" autocomplete="off" class="form-control datepicker"
+                                required>
                         </div>
 
                         <div class="col-md-3">
                             <label><strong>To Date</strong></label>
-                            <input type="text" name="ending_date" autocomplete="off" value="{{ $ending_date }}"
-                                class="form-control datepicker" required>
+                            <input type="text" name="ending_date" autocomplete="off" class="form-control datepicker"
+                                required>
                         </div>
 
-
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label><strong>Party Type</strong></label>
-                                <select name="party_type" class="form-control">
-                                    <option value="">Both</option>
-
-                                    <option value="customer">Customer</option>
-                                    <option value="supplier">Supplier</option>
-                                </select>
-                            </div>
+                        <div class="col-md-4">
+                            <label><strong>Select Party</strong></label>
+                            <select name="party_id" class="form-control">
+                                <option value="">All Parties</option>
+                                @foreach ($parties as $p)
+                                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                                @endforeach
+                            </select>
                         </div>
 
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label><strong>Currency</strong></label>
-                                <select name="currency_id" class="form-control">
-                                    <option value="0">All</option>
-                                    @foreach ($currency_list as $currency)
-                                        <option value="{{ $currency->id }}" data-rate="{{ $currency->exchange_rate }}">
-                                            {{ $currency->code }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
 
                         <div class="col-md-2 mt-3">
                             <button class="btn btn-primary" type="submit" id="filter-btn">Submit</button>
@@ -171,16 +151,16 @@
             processing: true,
             serverSide: true,
             ajax: {
-                url: "{{ route('get.forex.remittance.data') }}",
+                url: "{{ route('report.party.data') }}",
                 type: "POST",
                 data: function(d) {
-                    d.party_type = $('select[name=party_type]').val();
-                    d.currency_id = $('select[name=currency_id]').val();
+                    d._token = "{{ csrf_token() }}";
+                    d.party_id = $('select[name=party_id]').val();
                     d.starting_date = $('input[name=starting_date]').val();
                     d.ending_date = $('input[name=ending_date]').val();
-                    d._token = "{{ csrf_token() }}";
                 }
-            },
+            }
+
 
             columns: [{
                     data: 'sn',
