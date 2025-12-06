@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\Transaction;
 use App\Models\ForexRate;
+use App\Models\ForexMatch;
 use App\Services\MatchingEngine;
+use App\Services\RateResolver;
 use Carbon\Carbon;
 use DB;
 
@@ -20,67 +22,145 @@ class TransactionService
     }
 
     /**
-     * Create transaction + auto-calc local amount + auto-fill closing_rate (priority manual->resolver)
-     *
-     * Accepts optional 'closing_rate_override' in $data for SPECIAL CASE
+     * Create transaction + calculate closing + update daily rate + MATCH or REBUILD
      */
     public function create(array $data): Transaction
     {
-        // compute local_amount if not passed
+        // local amount
         if (empty($data['local_amount']) && isset($data['base_amount'], $data['exchange_rate'])) {
             $data['local_amount'] = round($data['base_amount'] * $data['exchange_rate'], 4);
         }
 
-        // cast numeric values
-        if (isset($data['base_amount'])) $data['base_amount'] = (float)$data['base_amount'];
-        if (isset($data['exchange_rate'])) $data['exchange_rate'] = (float)$data['exchange_rate'];
+        // ensure numeric
+        $data['base_amount'] = (float)$data['base_amount'];
+        $data['exchange_rate'] = (float)$data['exchange_rate'];
 
-        // If user provided explicit closing_rate in form -> keep it (highest priority)
-        if (!empty($data['closing_rate'])) {
-            $data['closing_rate'] = (float)$data['closing_rate'];
-        }
-
-        // Ensure transaction_date exists
+        // date fallback
         if (empty($data['transaction_date'])) {
             $data['transaction_date'] = date('Y-m-d');
         }
 
-        // Persist transaction inside DB transaction (safety)
         DB::beginTransaction();
         try {
+            // save
             $tx = Transaction::create($data);
 
-            // If no manual closing_rate provided, resolve using RateResolver
+            // closing rate
             if (empty($tx->closing_rate)) {
-                $calculated = $this->rateResolver->getClosingRate($tx);
-                if (!is_null($calculated)) {
-                    $tx->closing_rate = (float)$calculated;
-                    // avoid touching user-closing when user provided one
+                $resolved = $this->rateResolver->getClosingRate($tx);
+                if (!is_null($resolved)) {
+                    $tx->closing_rate = $resolved;
                     $tx->save();
                 }
             }
 
-            // Update/insert party-day weighted rate (persist for re-use) - optional but useful
+            // update daily forex_rates (party wise avg)
             $this->updatePartyDailyRate($tx);
 
-            // Trigger matching (synchronous)
-            $this->matchingEngine->process($tx);
+            // BACKDATE CHECK → REBUILD whole bucket
+            $maxDate = Transaction::where('party_id', $tx->party_id)
+                ->where('id', '!=', $tx->id)
+                ->max('transaction_date');
+
+            if ($maxDate && $tx->transaction_date < $maxDate) {
+
+                // FULL REBUILD (correct FIFO)
+                $this->rebuildBucket($tx->party_id);
+            } else {
+
+                // normal
+                $this->matchingEngine->process($tx);
+            }
 
             DB::commit();
             return $tx;
         } catch (\Throwable $e) {
             DB::rollBack();
-            \Log::error("TransactionService::create error: " . $e->getMessage(), [
-                'payload' => $data, 'trace' => $e->getTraceAsString()
-            ]);
+            \Log::error("TransactionService::create error: " . $e->getMessage());
             throw $e;
         }
     }
 
+
     /**
-     * Update or insert party-date weighted average into forex_rates table.
-     *
-     * This supports the fallback where market rates are missing.
+     * Update transaction (forces full rebuild)
+     */
+    public function update(Transaction $tx, array $data): Transaction
+    {
+        DB::beginTransaction();
+        try {
+            // remove old matches
+            $this->matchingEngine->clearMatchesForTransaction($tx);
+
+            // update
+            $tx->update($data);
+
+            // closing rate update (if needed)
+            if (empty($tx->closing_rate)) {
+                $tx->closing_rate = $this->rateResolver->getClosingRate($tx);
+                $tx->save();
+            }
+
+            // recompute party daily rate
+            $this->updatePartyDailyRate($tx);
+
+            // FULL rebuild after update
+            $this->rebuildBucket($tx->party_id);
+
+            DB::commit();
+            return $tx;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+
+    /**
+     * Delete transaction (forces full rebuild)
+     */
+    public function delete(Transaction $tx): void
+    {
+        DB::beginTransaction();
+        try {
+            $this->matchingEngine->clearMatchesForTransaction($tx);
+            $partyId = $tx->party_id;
+            $tx->delete();
+
+            // FULL rebuild after deletion
+            $this->rebuildBucket($partyId);
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+
+    /**
+     * FULL FIFO REBUILD for one party
+     */
+    protected function rebuildBucket(int $partyId): void
+    {
+        // delete all matches
+        ForexMatch::where('party_id', $partyId)->delete();
+
+        // get ordered transactions
+        $txs = Transaction::where('party_id', $partyId)
+            ->orderBy('transaction_date')
+            ->orderByRaw("CASE WHEN voucher_type IN ('sale','purchase') THEN 0 ELSE 1 END")
+            ->orderBy('id')
+            ->get();
+
+        // NEW PURE REBUILD (no per-transaction incremental matching)
+        $this->matchingEngine->rebuildForParty($txs);
+    }
+
+
+
+    /**
+     * Save daily weighted avg rate into forex_rates (party-wise)
      */
     protected function updatePartyDailyRate(Transaction $tx): void
     {
@@ -90,9 +170,7 @@ class TransactionService
             $partyId = $tx->party_id;
             $date    = $tx->transaction_date;
 
-            if (empty($baseId) || empty($localId) || empty($partyId) || empty($date)) {
-                return;
-            }
+            if (!$baseId || !$localId || !$partyId) return;
 
             $txs = Transaction::where('party_id', $partyId)
                 ->where('transaction_date', $date)
@@ -102,16 +180,16 @@ class TransactionService
 
             if ($txs->isEmpty()) return;
 
-            $totalBase = 0.0;
-            $weighted = 0.0;
+            $total = $txs->sum('base_amount');
+            $weighted = 0;
+
             foreach ($txs as $t) {
-                $totalBase += (float)$t->base_amount;
-                $weighted += ((float)$t->base_amount * (float)$t->exchange_rate);
+                $weighted += $t->base_amount * $t->exchange_rate;
             }
 
-            if ($totalBase <= 0) return;
+            if ($total <= 0) return;
 
-            $avgRate = $weighted / $totalBase;
+            $avg = $weighted / $total;
 
             ForexRate::updateOrCreate([
                 'date' => $date,
@@ -119,10 +197,10 @@ class TransactionService
                 'base_currency_id' => $baseId,
                 'local_currency_id' => $localId
             ], [
-                'rate' => $avgRate
+                'rate' => $avg
             ]);
         } catch (\Throwable $e) {
-            \Log::warning("updatePartyDailyRate failed: " . $e->getMessage());
+            \Log::warning("updatePartyDailyRate: " . $e->getMessage());
         }
     }
 }
