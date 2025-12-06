@@ -167,6 +167,10 @@ class LedgerBuilder
                 'realised' => round($realised, 4),
                 'unrealised' => round($unrealised, 4),
                 'remarks' => $tx->remarks ?? '',
+
+                // ⭐ New URLs for action column
+                'edit_url' => route('sales.edit', $tx->id),
+                'delete_url' => route('forex.remittance.destroy', $tx->id),
             ];
         }
 

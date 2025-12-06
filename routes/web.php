@@ -72,7 +72,7 @@ use App\Http\Controllers\LabelsController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\ForexRemittanceController;
 
 
 
@@ -85,7 +85,15 @@ Route::prefix('forex/remittance')->group(function () {
     Route::get('/create', [App\Http\Controllers\ForexRemittanceController::class, 'create'])->name('forex.remittance.create');
     Route::post('/store', [App\Http\Controllers\ForexRemittanceController::class, 'store'])->name('forex.remittance.store');
     Route::get('/{id}/show', [App\Http\Controllers\ForexRemittanceController::class, 'show'])->name('forex.remittance.show');
-    Route::delete('/{id}', [App\Http\Controllers\ForexRemittanceController::class, 'destroy'])->name('forex.remittance.destroy');
+    Route::delete(
+        '/forex/remittance/{transaction}',
+        [ForexRemittanceController::class, 'destroy']
+    )
+        ->name('forex.remittance.destroy');
+
+
+    Route::put('/forex/remittance/{transaction}', [ForexRemittanceController::class, 'update'])
+        ->name('forex.remittance.update');
 });
 
 
@@ -94,11 +102,13 @@ Route::match(
     '/forex-report/{type}',
     [App\Http\Controllers\ForexRemittanceController::class, 'report']
 )
-->middleware(['common', 'auth', 'active'])
-->name('forex.report');
-Route::post('/get-forex-report-data', 
-[App\Http\Controllers\ForexRemittanceController::class, 'reportData'])
-->name('forex.report.data');
+    ->middleware(['common', 'auth', 'active'])
+    ->name('forex.report');
+Route::post(
+    '/get-forex-report-data',
+    [App\Http\Controllers\ForexRemittanceController::class, 'reportData']
+)
+    ->name('forex.report.data');
 
 
 Route::get('migrate', function () {

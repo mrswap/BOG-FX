@@ -92,6 +92,7 @@
                         <th>Realised Gain/Loss</th>
                         <th>Unrealised Gain/Loss</th>
                         <th>Remarks</th>
+                        <th class="text-center">Action</th>
 
                     </tr>
                 </thead>
@@ -116,6 +117,7 @@
                         <th id="total-realised"></th>
                         <th id="total-unrealised"></th>
                         <th id="final-gain-loss"></th>
+
                     </tr>
                     <tr>
                         <th colspan="6" class="text-right font-weight-bold">Net Balance</th>
@@ -259,7 +261,21 @@
 
                 {
                     data: 'remarks'
+                },
+                {
+                    data: null,
+                    className: "text-center",
+                    orderable: false,
+                    render: function(row) {
+                        return `
+                        <a href="${row.edit_url}" class="btn btn-sm btn-primary">Edit</a>
+                        <button class="btn btn-sm btn-danger delete-forex" data-url="${row.delete_url}">
+                            Delete
+                        </button>
+                    `;
+                    }
                 }
+
             ],
 
             dom: '<"row mb-3"lfB>rtip',
@@ -353,6 +369,21 @@
         $('#filter-btn').on('click', function(e) {
             e.preventDefault();
             forexTable.ajax.reload();
+        });
+
+        $(document).on("click", ".delete-forex", function() {
+            let url = $(this).data("url");
+
+            if (!confirm("Are you sure you want to delete this remittance?")) return;
+
+            $.post(url, {
+                _token: "{{ csrf_token() }}",
+                _method: "DELETE"
+            }, function(res) {
+                forexTable.ajax.reload();
+            }).fail(function() {
+                alert("Delete failed");
+            });
         });
     </script>
 @endpush

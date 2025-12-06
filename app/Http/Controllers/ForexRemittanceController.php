@@ -68,6 +68,9 @@ class ForexRemittanceController extends Controller
     /**
      * Update transaction (clears matches + rebuilds bucket)
      */
+    /**
+     * Update transaction (clears matches + rebuilds bucket)
+     */
     public function update(Request $request, Transaction $transaction)
     {
         $data = $this->validateRequest($request, $transaction->id);
@@ -76,18 +79,20 @@ class ForexRemittanceController extends Controller
             $data['local_amount'] = round($data['base_amount'] * $data['exchange_rate'], 4);
         }
 
-        DB::beginTransaction();
         try {
-            $this->txService->update($transaction, $data);
-            DB::commit();
-            return back()->with('success', "Transaction saved ({$tx->voucher_no})");
+            $updated = $this->txService->update($transaction, $data);
+
+            return redirect()
+                ->route('sales.index')
+                ->with('success', "Transaction updated ({$updated->voucher_no})");
         } catch (\Throwable $e) {
-            DB::rollBack();
+
             \Log::error('Forex transaction update error: ' . $e->getMessage(), [
                 'tx_id' => $transaction->id,
                 'payload' => $data,
                 'trace' => $e->getTraceAsString()
             ]);
+
             return back()->withInput()->withErrors(['error' => 'Unable to update transaction. See logs.']);
         }
     }
@@ -101,16 +106,22 @@ class ForexRemittanceController extends Controller
         try {
             $this->txService->delete($transaction);
             DB::commit();
-            return back()->with('success', "Transaction deleted");
+
+            return redirect()
+                ->route('sales.index')
+                ->with('success', "Transaction deleted");
         } catch (\Throwable $e) {
             DB::rollBack();
+
             \Log::error('Forex transaction delete error: ' . $e->getMessage(), [
                 'tx_id' => $transaction->id,
                 'trace' => $e->getTraceAsString()
             ]);
+
             return back()->withErrors(['error' => 'Unable to delete transaction. See logs.']);
         }
     }
+
 
     /**
      * Party ledger view (uses LedgerBuilder)
