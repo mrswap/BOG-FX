@@ -132,82 +132,124 @@ class MatchingEngine
 
     /**
      * ========== PURE FIFO REBUILD ==========
+     *
+     * $txs: ordered iterable (chronological, invoice-first) of Transaction models for one party
      */
     public function rebuildForParty(iterable $txs): void
     {
         DB::transaction(function () use ($txs) {
 
-            $matches = [];
-            $openInvoices = [];
+            // Nothing to do if empty
+            $txsArr = is_array($txs) ? $txs : (is_callable([$txs, 'all']) ? $txs->all() : iterator_to_array($txs));
+            if (empty($txsArr)) return;
 
-            foreach ($txs as $tx) {
+            // Determine party id from first tx (all txs are expected to be same party)
+            $first = reset($txsArr);
+            $partyId = $first->party_id ?? null;
 
-                if ($tx->isInvoice()) {
+            // 1) Ensure a clean slate: delete any existing matches for this party
+            if (!is_null($partyId)) {
+                \App\Models\ForexMatch::where('party_id', $partyId)->delete();
+            }
 
-                    // Add invoice to queue
-                    $openInvoices[] = [
-                        'tx' => $tx,
-                        'remaining' => (float)$tx->base_amount,
-                    ];
-
-                } else {
-
-                    // Settlement matches FIFO invoices
-                    $settRemaining = (float)$tx->base_amount;
-                    $i = 0;
-
-                    while ($settRemaining > 0 && $i < count($openInvoices)) {
-
-                        $invEntry = &$openInvoices[$i];
-                        if ($invEntry['remaining'] <= 0) { $i++; continue; }
-
-                        $invoiceTx = $invEntry['tx'];
-                        $invRemain = $invEntry['remaining'];
-
-                        $toMatch = min($settRemaining, $invRemain);
-
-                        $realised = $this->gainLossService->calcRealised(
-                            $toMatch,
-                            (float)$invoiceTx->exchange_rate,
-                            (float)$tx->exchange_rate,
-                            $invoiceTx->voucher_type
-                        );
-
-                        $matches[] = [
-                            'party_id' => $tx->party_id,
-                            'invoice_id' => $invoiceTx->id,
-                            'settlement_id' => $tx->id,
-                            'matched_base' => $toMatch,
-                            'realised_amount' => $realised,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
-
-                        $invEntry['remaining'] -= $toMatch;
-                        $settRemaining -= $toMatch;
-
-                        if ($invEntry['remaining'] <= 0) $i++;
-                    }
-
-                    // FINAL remaining = advance
-                    if ($settRemaining > 0) {
-                        $tx->advance_remaining = $settRemaining;
-                        $tx->save();
-                    } else {
-                        if (!empty($tx->advance_remaining)) {
-                            $tx->advance_remaining = null;
-                            $tx->save();
-                        }
+            // 2) Reset advance_remaining on all settlement transactions BEFORE matching
+            // This avoids stale advance values interfering with rebuild.
+            foreach ($txsArr as $t) {
+                if ($t->isSettlement()) {
+                    // Only update if not null to avoid unnecessary writes
+                    if (!is_null($t->advance_remaining)) {
+                        $t->advance_remaining = null;
+                        $t->save();
                     }
                 }
             }
 
+            // 3) Rebuild matches fresh (FIFO)
+            $matches = [];
+            $openInvoices = [];
+
+            foreach ($txsArr as $tx) {
+
+                if ($tx->isInvoice()) {
+                    // Add invoice to queue with full remaining
+                    $openInvoices[] = [
+                        'tx' => $tx,
+                        'remaining' => (float)$tx->base_amount,
+                    ];
+                    continue;
+                }
+
+                // Settlement processing
+                $settRemaining = (float)$tx->base_amount;
+                $i = 0;
+
+                while ($settRemaining > 0 && $i < count($openInvoices)) {
+
+                    $invEntry = &$openInvoices[$i];
+
+                    // If invoice exhausted, skip
+                    if ($invEntry['remaining'] <= 0) {
+                        $i++;
+                        continue;
+                    }
+
+                    $invoiceTx = $invEntry['tx'];
+                    $invRemain = $invEntry['remaining'];
+
+                    // Compute match amount
+                    $toMatch = min($settRemaining, $invRemain);
+                    if ($toMatch <= 0) {
+                        $i++;
+                        continue;
+                    }
+
+                    // compute realised using GainLossService
+                    $realised = $this->gainLossService->calcRealised(
+                        $toMatch,
+                        (float)$invoiceTx->exchange_rate,
+                        (float)$tx->exchange_rate,
+                        $invoiceTx->voucher_type
+                    );
+
+                    $matches[] = [
+                        'party_id' => $tx->party_id,
+                        'invoice_id' => $invoiceTx->id,
+                        'settlement_id' => $tx->id,
+                        'matched_base' => $toMatch,
+                        'realised_amount' => $realised,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+
+                    // decrement counters
+                    $invEntry['remaining'] -= $toMatch;
+                    $settRemaining -= $toMatch;
+
+                    if ($invEntry['remaining'] <= 0) $i++;
+                }
+
+                // Persist advance_remaining on settlement if something remains
+                if ($settRemaining > 0) {
+                    // set and save only when changed
+                    if ((float) $tx->advance_remaining !== (float) $settRemaining) {
+                        $tx->advance_remaining = $settRemaining;
+                        $tx->save();
+                    }
+                } else {
+                    // ensure previously stored advance is cleared
+                    if (!empty($tx->advance_remaining)) {
+                        $tx->advance_remaining = null;
+                        $tx->save();
+                    }
+                }
+            }
+
+            // 4) Bulk insert all new matches (if any)
             if (!empty($matches)) {
-                ForexMatch::insert($matches);
+                \App\Models\ForexMatch::insert($matches);
             }
         });
     }
-
     public function clearMatchesForTransaction(Transaction $tx)
     {
         ForexMatch::where('invoice_id', $tx->id)

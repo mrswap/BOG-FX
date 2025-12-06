@@ -31,6 +31,9 @@ class ForexRemittanceController extends Controller
      */
     public function store(Request $request)
     {
+        \Log::info('Forex transaction store data: ', [
+            'request_data' => $request->all()
+        ]);
         $data = $this->validateRequest($request);
 
         // compute local_amount if not provided
@@ -73,6 +76,11 @@ class ForexRemittanceController extends Controller
      */
     public function update(Request $request, Transaction $transaction)
     {
+
+        \Log::info('Forex transaction update data: ', [
+            'request_data' => $request->all()
+        ]);
+        
         $data = $this->validateRequest($request, $transaction->id);
 
         if (empty($data['local_amount']) && isset($data['base_amount'], $data['exchange_rate'])) {
