@@ -63,12 +63,19 @@ class MatchingEngine
             );
 
             ForexMatch::create([
-                'party_id' => $invoice->party_id,
-                'invoice_id' => $invoice->id,
-                'settlement_id' => $settlement->id,
-                'matched_base' => $toMatch,
+                'party_id'          => $invoice->party_id,
+                'invoice_id'        => $invoice->id,
+                'settlement_id'     => $settlement->id,
+
+                // NEW proper fields
+                'matched_base'          => $toMatch,
+                'matched_base_amount'   => $toMatch,
+                'invoice_rate'          => (float)$invoice->exchange_rate,
+                'settlement_rate'       => (float)$settlement->exchange_rate,
+
                 'realised_amount' => $realised,
             ]);
+
 
             $remaining -= $toMatch;
         }
@@ -108,10 +115,16 @@ class MatchingEngine
             );
 
             ForexMatch::create([
-                'party_id' => $settlement->party_id,
-                'invoice_id' => $invoice->id,
-                'settlement_id' => $settlement->id,
-                'matched_base' => $toMatch,
+                'party_id'          => $settlement->party_id,
+                'invoice_id'        => $invoice->id,
+                'settlement_id'     => $settlement->id,
+
+                // NEW proper fields
+                'matched_base'          => $toMatch,
+                'matched_base_amount'   => $toMatch,
+                'invoice_rate'          => (float)$invoice->exchange_rate,
+                'settlement_rate'       => (float)$settlement->exchange_rate,
+
                 'realised_amount' => $realised,
             ]);
 
@@ -210,16 +223,22 @@ class MatchingEngine
                         (float)$tx->exchange_rate,
                         $invoiceTx->voucher_type
                     );
-
+                    
                     $matches[] = [
-                        'party_id' => $tx->party_id,
-                        'invoice_id' => $invoiceTx->id,
-                        'settlement_id' => $tx->id,
-                        'matched_base' => $toMatch,
+                        'party_id'          => $tx->party_id,
+                        'invoice_id'        => $invoiceTx->id,
+                        'settlement_id'     => $tx->id,
+
+                        'matched_base'          => $toMatch,
+                        'matched_base_amount'   => $toMatch,
+                        'invoice_rate'          => (float)$invoiceTx->exchange_rate,
+                        'settlement_rate'       => (float)$tx->exchange_rate,
+
                         'realised_amount' => $realised,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
+
 
                     // decrement counters
                     $invEntry['remaining'] -= $toMatch;

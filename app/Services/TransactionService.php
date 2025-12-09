@@ -127,6 +127,22 @@ class TransactionService
             $partyId = $tx->party_id;
             $tx->delete();
 
+
+            // ----------------- ORPHAN FOREX_RATES CLEANUP (safe, targeted) -----------------
+            // Delete any forex_rates for this party that no longer have any matching transactions
+            // (match on date + base_currency_id + local_currency_id).
+            \Log::info("TransactionService: cleaning orphan forex_rates for party", ['party_id' => $partyId]);
+
+            \App\Models\ForexRate::where('party_id', $partyId)
+                ->whereNotExists(function ($query) {
+                    $query->select(\DB::raw(1))
+                        ->from('transactions')
+                        ->whereColumn('transactions.transaction_date', 'forex_rates.date')
+                        ->whereColumn('transactions.base_currency_id', 'forex_rates.base_currency_id')
+                        ->whereColumn('transactions.local_currency_id', 'forex_rates.local_currency_id')
+                        ->whereColumn('transactions.party_id', 'forex_rates.party_id');
+                })->delete();
+
             // FULL rebuild after deletion
             $this->rebuildBucket($partyId);
 

@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Transaction;
 use App\Models\ForexMatch;
-use App\Models\ForexRate;
 use Carbon\Carbon;
 
 class LedgerBuilder
@@ -33,14 +32,14 @@ class LedgerBuilder
             if ($cid !== 0) {
                 $q->where(function ($wr) use ($cid) {
                     $wr->where('base_currency_id', $cid)
-                        ->orWhere('local_currency_id', $cid);
+                       ->orWhere('local_currency_id', $cid);
                 });
             }
         }
 
         if (!empty($opts['starting_date']) && !empty($opts['ending_date'])) {
             $start = Carbon::createFromFormat('Y-m-d', $opts['starting_date'])->toDateString();
-            $end = Carbon::createFromFormat('Y-m-d', $opts['ending_date'])->toDateString();
+            $end   = Carbon::createFromFormat('Y-m-d', $opts['ending_date'])->toDateString();
             $q->whereBetween('transaction_date', [$start, $end]);
         }
 
@@ -50,54 +49,87 @@ class LedgerBuilder
         $sn = 1;
 
         foreach ($txs as $tx) {
-            $partyName = $tx->party ? $tx->party->name : 'Unknown Party';
 
-            // Base / Local DR-CR mapping (same as before)
+            $partyName = $tx->party ? $tx->party->name : 'Unknown';
+
+            // =========================
+            // DR/CR Calculation
+            // =========================
             $baseDebit = $baseCredit = $localDebit = $localCredit = 0.0;
+
             switch ($tx->voucher_type) {
                 case 'sale':
-                    $baseDebit = (float)$tx->base_amount;
+                    $baseDebit  = (float)$tx->base_amount;
                     $localDebit = (float)$tx->local_amount;
                     break;
+
                 case 'purchase':
-                    $baseCredit = (float)$tx->base_amount;
+                    $baseCredit  = (float)$tx->base_amount;
                     $localCredit = (float)$tx->local_amount;
                     break;
+
                 case 'receipt':
-                    $baseCredit = (float)$tx->base_amount;
+                    $baseCredit  = (float)$tx->base_amount;
                     $localCredit = (float)$tx->local_amount;
                     break;
+
                 case 'payment':
-                    $baseDebit = (float)$tx->base_amount;
+                    $baseDebit  = (float)$tx->base_amount;
                     $localDebit = (float)$tx->local_amount;
                     break;
             }
 
             $rowRate = (float)($tx->exchange_rate ?? 0.0);
 
-            // RESOLVE CLOSING RATE (using RateResolver)
+            // ===============================
+            // Closing Rate Resolve
+            // ===============================
             $closingRate = (float)$this->rateResolver->getClosingRate($tx);
 
-            // realised amount: sum of realised_amount from forex_matches where tx participates
+            // ===============================
+            // Realised Gain/Loss
+            // ===============================
             $isInvoice = in_array($tx->voucher_type, ['sale', 'purchase']);
 
-            $realisedFromInvoice = (float) ForexMatch::where('invoice_id', $tx->id)->sum('realised_amount');
-            $realised = $isInvoice ? $realisedFromInvoice : 0.0;
+            $realised = 0.0;
 
-            // matched base sums
-            $invoiceMatched = (float)ForexMatch::where('invoice_id', $tx->id)->sum('matched_base');
+            if ($isInvoice) {
+                $realised = (float) ForexMatch::where('invoice_id', $tx->id)->sum('realised_amount');
+            }
+
+            // ===============================
+            // REALISED BREAKUP (⭐ REQUIRED)
+            // ===============================
+            $realisedBreakup = [];
+
+            if ($isInvoice) {
+                $matches = ForexMatch::with('settlement')->where('invoice_id', $tx->id)->get();
+
+                foreach ($matches as $m) {
+                    $realisedBreakup[] = [
+                        'match_voucher' => $m->settlement ? $m->settlement->voucher_no : null,
+                        'matched_base'  => (float)$m->matched_base_amount,
+                        'inv_rate'      => (float)$m->invoice_rate,
+                        'settl_rate'    => (float)$m->settlement_rate,
+                        'realised'      => (float)$m->realised_amount,
+                    ];
+                }
+            }
+
+            // ===============================
+            // Unrealised Gain/Loss
+            // ===============================
+            $invoiceMatched    = (float)ForexMatch::where('invoice_id', $tx->id)->sum('matched_base');
             $settlementMatched = (float)ForexMatch::where('settlement_id', $tx->id)->sum('matched_base');
 
-            // remaining base
             $remainingBase = $isInvoice
                 ? max(0.0, (float)$tx->base_amount - $invoiceMatched)
                 : max(0.0, (float)$tx->base_amount - $settlementMatched);
 
-            // Get invoiceRateOverride if present on tx (special-case)
             $invoiceRateOverride = $tx->closing_rate_override ?? null;
 
-            // unrealised calculation (use GainLossService with resolver results)
             $unrealised = 0.0;
+
             if ($remainingBase > 0) {
                 if ($isInvoice) {
                     $unrealised = $this->gainLossService->calcUnrealised(
@@ -107,7 +139,6 @@ class LedgerBuilder
                         'invoice'
                     );
                 } else {
-                    // settlement (advance)
                     $unrealised = $this->gainLossService->calcUnrealised(
                         $remainingBase,
                         $closingRate,
@@ -119,21 +150,29 @@ class LedgerBuilder
                 }
             }
 
-            // compute diff field as before (keeps your previous logic)
+            // ===============================
+            // DIFF Calculation
+            // ===============================
             $diff = "";
+
             if ($isInvoice) {
                 if ($remainingBase == 0 && $invoiceMatched > 0) {
-                    $matches = ForexMatch::where('invoice_id', $tx->id)->get();
+
+                    $matches = ForexMatch::with('settlement')->where('invoice_id', $tx->id)->get();
+
                     $totalBase = 0.0;
                     $weightedSettlement = 0.0;
+
                     foreach ($matches as $m) {
                         $settTx = $m->settlement;
                         $settRate = $settTx ? (float)$settTx->exchange_rate : null;
+
                         if ($settRate !== null) {
                             $weightedSettlement += (float)$m->matched_base * $settRate;
                             $totalBase += (float)$m->matched_base;
                         }
                     }
+
                     if ($totalBase > 0) {
                         $effectiveRate = $weightedSettlement / $totalBase;
                         $diff = round($effectiveRate - $rowRate, 6);
@@ -144,32 +183,47 @@ class LedgerBuilder
             } else {
                 if ($settlementMatched == 0 && $remainingBase > 0) {
                     $diff = round($rowRate - $closingRate, 6);
-                } else {
-                    $diff = "";
                 }
             }
 
+            // ===============================
+            // ROW OUTPUT
+            // ===============================
             $rows[] = [
-                'id' => $tx->id,
-                'sn' => $sn++,
-                'date' => $tx->transaction_date instanceof \DateTime ? $tx->transaction_date->format('Y-m-d') : $tx->transaction_date,
-                'particulars' => ($tx->party ? $tx->party->name : 'Unknown') . ' — ' . ucfirst($tx->voucher_type) . ' (' . $tx->voucher_no . ')',
+                'id'         => $tx->id,
+                'sn'         => $sn++,
+                'date'       => $tx->transaction_date instanceof \DateTime
+                                ? $tx->transaction_date->format('Y-m-d')
+                                : $tx->transaction_date,
+
+                'particulars' => ($tx->party ? $tx->party->name : 'Unknown')
+                    . ' — ' . ucfirst($tx->voucher_type)
+                    . ' (' . $tx->voucher_no . ')',
+
                 'vch_type' => ucfirst($tx->voucher_type),
-                'vch_no' => $tx->voucher_no,
+                'vch_no'   => $tx->voucher_no,
+
                 'exch_rate' => number_format($rowRate, 4, '.', ''),
-                'base_debit' => $baseDebit ? number_format($baseDebit, 4, '.', ',') : '',
+
+                'base_debit'  => $baseDebit  ? number_format($baseDebit,  4, '.', ',') : '',
                 'base_credit' => $baseCredit ? number_format($baseCredit, 4, '.', ',') : '',
                 'local_debit' => $localDebit ? number_format($localDebit, 4, '.', ',') : '',
-                'local_credit' => $localCredit ? number_format($localCredit, 4, '.', ',') : '',
-                'avg_rate' => isset($tx->avg_rate) ? number_format((float)$tx->avg_rate, 6, '.', '') : '',
-                'closing_rate' => $closingRate !== null ? number_format((float)$closingRate, 6, '.', '') : '',
-                'diff' => $diff === "" ? "" : number_format((float)$diff, 6, '.', ''),
-                'realised' => round($realised, 4),
+                'local_credit'=> $localCredit? number_format($localCredit,4, '.', ',') : '',
+
+                'avg_rate'    => isset($tx->avg_rate) ? number_format((float)$tx->avg_rate, 6, '.', '') : '',
+                'closing_rate'=> number_format((float)$closingRate, 6, '.', ''),
+                'diff'        => $diff === "" ? "" : number_format((float)$diff, 6, '.', ''),
+
+                'realised'   => round($realised, 4),
                 'unrealised' => round($unrealised, 4),
+
                 'remarks' => $tx->remarks ?? '',
 
-                // ⭐ New URLs for action column
-                'edit_url' => route('sales.edit', $tx->id),
+                // ⭐ REALISED BREAKUP INCLUDED
+                'realised_breakup' => $realisedBreakup,
+
+                // ⭐ ACTION URLs
+                'edit_url'   => route('sales.edit', $tx->id),
                 'delete_url' => route('forex.remittance.destroy', $tx->id),
             ];
         }
