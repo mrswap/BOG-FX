@@ -164,9 +164,14 @@ class TransactionService
 
         // get ordered transactions
         $txs = Transaction::where('party_id', $partyId)
-            ->orderBy('transaction_date')
-            ->orderByRaw("CASE WHEN voucher_type IN ('sale','purchase') THEN 0 ELSE 1 END")
-            ->orderBy('id')
+            ->orderByRaw("
+                    transaction_date ASC,
+                    CASE 
+                        WHEN voucher_type IN ('sale','purchase') THEN 0 
+                        ELSE 1 
+                    END ASC,
+                    id ASC")
+
             ->get();
 
         // NEW PURE REBUILD (no per-transaction incremental matching)

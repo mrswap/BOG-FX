@@ -28,61 +28,45 @@
 
     <section>
         <div class="container-fluid">
-            @if (in_array('forex-add', $all_permission))
-                <a href="{{ route('sales.create') }}" class="btn btn-info add-forex-btn">
-                    <i class="dripicons-plus"></i> Add Forex Remittance
-                </a>
-            @endif
 
             <div class="card mt-3">
-                <h3 class="text-center mt-3">Filter Forex Remittances</h3>
+                <h3 class="text-center mt-3">Currency Wise Forex Report</h3>
                 <div class="card-body">
-                    {!! Form::open(['route' => 'sales.index', 'method' => 'get']) !!}
+                    {!! Form::open(['route' => 'forex.txn.report.invoice', 'method' => 'post']) !!}
                     <div class="row mt-2">
+
                         <div class="col-md-3">
                             <label><strong>From Date</strong></label>
-                            <input type="text" name="starting_date" autocomplete="off" value="{{ $starting_date }}"
-                                class="form-control datepicker" required>
+                            <input type="text" name="starting_date" autocomplete="off" class="form-control datepicker"
+                                required>
                         </div>
 
                         <div class="col-md-3">
                             <label><strong>To Date</strong></label>
-                            <input type="text" name="ending_date" autocomplete="off" value="{{ $ending_date }}"
-                                class="form-control datepicker" required>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label><strong>Party Type</strong></label>
-                                <select name="party_type" class="form-control">
-                                    <option value="">Both</option>
-
-                                    <option value="customer">Customer</option>
-                                    <option value="supplier">Supplier</option>
-                                </select>
-                            </div>
+                            <input type="text" name="ending_date" autocomplete="off" class="form-control datepicker"
+                                required>
                         </div>
 
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label><strong>Currency</strong></label>
-                                <select name="currency_id" class="form-control">
-                                    <option value="0">All</option>
-                                    @foreach ($currency_list as $currency)
-                                        <option value="{{ $currency->id }}" data-rate="{{ $currency->exchange_rate }}">
-                                            {{ $currency->code }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
+
+                        <div class="col-md-3">
+                            <label><strong>Invoice Number</label>
+                            <select name="invoice_id" class="form-control">
+                                <option value="all">All</option>
+                                @foreach ($transaction as $txn)
+                                    <option value="{{ $txn->id }}">{{ $txn->voucher_no }}</option>
+                                @endforeach
+                            </select>
                         </div>
 
-                        <div class="col-md-2 mt-3">
+                        <div class="col-md-2 mt-4 pt-2">
                             <button class="btn btn-primary" type="submit" id="filter-btn">Submit</button>
                         </div>
+
                     </div>
                     {!! Form::close() !!}
                 </div>
             </div>
+
         </div>
         <div class="table-responsive mt-3">
             <table id="forex-table" class="table table-bordered" style="width:100%">
@@ -194,41 +178,41 @@
             }
 
             let html = `
-    <table class="table table-sm table-bordered mt-2 mb-2">
-        <thead class="thead-light">
-            <tr>
-                <th>Against Vch</th>
-                <th>Matched Base</th>
-                <th>Invoice Rate</th>
-                <th>Settlement Rate</th>
-                <th>Realised</th>
-            </tr>
-        </thead>
-        <tbody>
-    `;
+                    <table class="table table-sm table-bordered mt-2 mb-2">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Against Vch</th>
+                                <th>Matched Base</th>
+                                <th>Invoice Rate</th>
+                                <th>Settlement Rate</th>
+                                <th>Realised</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                    `;
 
             row.realised_breakup.forEach(b => {
                 let color = b.realised >= 0 ? 'text-success' : 'text-danger';
                 let sign = b.realised >= 0 ? '+' : '-';
 
                 html += `
-            <tr>
-                <td>${b.match_voucher}</td>
-                <td>${Number(b.matched_base).toFixed(2)}</td>
-                <td>${Number(b.inv_rate).toFixed(4)}</td>
-                <td>${Number(b.settl_rate).toFixed(4)}</td>
-                <td class="${color}">${sign}${Math.abs(b.realised).toFixed(2)}</td>
-            </tr>
-        `;
+                        <tr>
+                            <td>${b.match_voucher}</td>
+                            <td>${Number(b.matched_base).toFixed(2)}</td>
+                            <td>${Number(b.inv_rate).toFixed(4)}</td>
+                            <td>${Number(b.settl_rate).toFixed(4)}</td>
+                            <td class="${color}">${sign}${Math.abs(b.realised).toFixed(2)}</td>
+                        </tr>
+                    `;
             });
 
             html += `
-        <tr class="bg-light font-weight-bold">
-            <td colspan="4" class="text-right">Total Realised</td>
-            <td>${Number(row.realised).toFixed(2)}</td>
-        </tr>
-    </tbody>
-    </table>`;
+                    <tr class="bg-light font-weight-bold">
+                        <td colspan="4" class="text-right">Total Realised</td>
+                        <td>${Number(row.realised).toFixed(2)}</td>
+                    </tr>
+                </tbody>
+                </table>`;
 
             return html;
         }
@@ -242,13 +226,15 @@
             serverSide: true,
 
             ajax: {
-                url: "{{ route('get.forex.remittance.data') }}",
+                url: "{{ route('report.invoice.data') }}",
                 type: "POST",
                 data: function(d) {
-                    d.party_type = $('select[name=party_type]').val();
-                    d.currency_id = $('select[name=currency_id]').val();
+
                     d.starting_date = $('input[name=starting_date]').val();
                     d.ending_date = $('input[name=ending_date]').val();
+
+                    d.invoice_id = $('select[name=invoice_id]').val();
+
                     d._token = "{{ csrf_token() }}";
                 }
             },

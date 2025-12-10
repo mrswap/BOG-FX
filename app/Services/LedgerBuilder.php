@@ -27,12 +27,18 @@ class LedgerBuilder
             $q->where('party_type', $opts['party_type']);
         }
 
+        // FILTER: Invoice-wise allowed transactions
+        if (!empty($opts['allowed_tx_ids'])) {
+            $q->whereIn('id', $opts['allowed_tx_ids']);
+        }
+
+
         if (!empty($opts['currency_id'])) {
             $cid = intval($opts['currency_id']);
             if ($cid !== 0) {
                 $q->where(function ($wr) use ($cid) {
                     $wr->where('base_currency_id', $cid)
-                       ->orWhere('local_currency_id', $cid);
+                        ->orWhere('local_currency_id', $cid);
                 });
             }
         }
@@ -186,6 +192,7 @@ class LedgerBuilder
                 }
             }
 
+
             // ===============================
             // ROW OUTPUT
             // ===============================
@@ -193,8 +200,8 @@ class LedgerBuilder
                 'id'         => $tx->id,
                 'sn'         => $sn++,
                 'date'       => $tx->transaction_date instanceof \DateTime
-                                ? $tx->transaction_date->format('Y-m-d')
-                                : $tx->transaction_date,
+                    ? $tx->transaction_date->format('Y-m-d')
+                    : $tx->transaction_date,
 
                 'particulars' => ($tx->party ? $tx->party->name : 'Unknown')
                     . ' — ' . ucfirst($tx->voucher_type)
@@ -208,10 +215,10 @@ class LedgerBuilder
                 'base_debit'  => $baseDebit  ? number_format($baseDebit,  4, '.', ',') : '',
                 'base_credit' => $baseCredit ? number_format($baseCredit, 4, '.', ',') : '',
                 'local_debit' => $localDebit ? number_format($localDebit, 4, '.', ',') : '',
-                'local_credit'=> $localCredit? number_format($localCredit,4, '.', ',') : '',
+                'local_credit' => $localCredit ? number_format($localCredit, 4, '.', ',') : '',
 
                 'avg_rate'    => isset($tx->avg_rate) ? number_format((float)$tx->avg_rate, 6, '.', '') : '',
-                'closing_rate'=> number_format((float)$closingRate, 6, '.', ''),
+                'closing_rate' => number_format((float)$closingRate, 6, '.', ''),
                 'diff'        => $diff === "" ? "" : number_format((float)$diff, 6, '.', ''),
 
                 'realised'   => round($realised, 4),
