@@ -132,26 +132,35 @@ class LedgerBuilder
                 ? max(0.0, (float)$tx->base_amount - $invoiceMatched)
                 : max(0.0, (float)$tx->base_amount - $settlementMatched);
 
-            $invoiceRateOverride = $tx->closing_rate_override ?? null;
+            // ⭐ Manual Closing Rate Override Support
+            $manualClosing = $tx->closing_rate_override ?? null;
+
+            // PRIORITY:
+            // 1. Manual entered rate
+            // 2. Auto closing rate resolver
+            $effectiveClosingRate = ($manualClosing !== null && $manualClosing !== '')
+                ? (float)$manualClosing
+                : (float)$closingRate;
 
             $unrealised = 0.0;
 
             if ($remainingBase > 0) {
+
                 if ($isInvoice) {
                     $unrealised = $this->gainLossService->calcUnrealised(
                         $remainingBase,
-                        $closingRate,
+                        $effectiveClosingRate,   // ⭐ updated
                         $rowRate,
                         'invoice'
                     );
                 } else {
                     $unrealised = $this->gainLossService->calcUnrealised(
                         $remainingBase,
-                        $closingRate,
+                        $effectiveClosingRate,   // ⭐ updated
                         $rowRate,
                         'advance',
                         $rowRate,
-                        $invoiceRateOverride
+                        $manualClosing           // ⭐ updated
                     );
                 }
             }
@@ -232,6 +241,10 @@ class LedgerBuilder
                 // ⭐ ACTION URLs
                 'edit_url'   => route('sales.edit', $tx->id),
                 'delete_url' => route('forex.remittance.destroy', $tx->id),
+
+                'remaining_base' => $remainingBase,
+                'remaining_local_value' => $remainingBase * $effectiveClosingRate,
+
             ];
         }
 

@@ -231,6 +231,8 @@ class ForexRemittanceController extends Controller
             'realised_loss' => 0.0,
             'unrealised_gain' => 0.0,
             'unrealised_loss' => 0.0,
+            'remaining_local_total' => 0.0,
+
         ];
 
         foreach ($rows as $r) {
@@ -253,6 +255,15 @@ class ForexRemittanceController extends Controller
             else $totals['realised_loss'] += abs($real);
             if ($unreal >= 0) $totals['unrealised_gain'] += $unreal;
             else $totals['unrealised_loss'] += abs($unreal);
+            // ⭐ ADD THIS EXACT BLOCK — REQUIRED FOR TOTAL REMAINING LOCAL
+            $rlv_raw = $r['remaining_local_value'] ?? 0;
+
+            // convert formatted string or numeric into float
+            $rlv = is_numeric($rlv_raw)
+                ? floatval($rlv_raw)
+                : floatval(str_replace(',', '', $rlv_raw));
+
+            $totals['remaining_local_total'] += $rlv;
         }
 
         $finalGainLoss = ($totals['realised_gain'] - $totals['realised_loss']) + ($totals['unrealised_gain'] - $totals['unrealised_loss']);
@@ -263,6 +274,8 @@ class ForexRemittanceController extends Controller
             'unrealised_gain' => round($totals['unrealised_gain'], 4),
             'unrealised_loss' => round($totals['unrealised_loss'], 4),
             'final_gain_loss' => round($finalGainLoss, 4),
+            'remaining_local_total' => round($totals['remaining_local_total'], 4),
+
         ];
 
         $response = [
