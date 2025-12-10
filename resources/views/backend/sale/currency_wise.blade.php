@@ -131,6 +131,11 @@
                         <th colspan="11" id="party-net-balance" class="text-left font-weight-bold net-balance-info">
                         </th>
                     </tr>
+                    
+                    <tr>
+                        <th colspan="6" class="text-right font-weight-bold">Local Currency Net</th>
+                        <th colspan="11" id="local-net-balance" class="text-left font-weight-bold"></th>
+                    </tr>
 
                 </tfoot>
 
@@ -382,59 +387,147 @@
             //   FOOTER TOTALS
             //////////////////////////////////////////
             drawCallback: function(settings) {
+
                 var api = this.api();
                 var json = api.ajax.json();
+                if (!json || !json.totals) return;
 
-                if (json && json.totals) {
-
-                    function colSum(index) {
-                        return api.column(index, {
-                                page: 'current'
-                            })
-                            .data()
-                            .reduce(function(a, b) {
-                                let val = parseFloat((b || '').toString().replace(/[^0-9.-]+/g, ""));
-                                return a + (isNaN(val) ? 0 : val);
-                            }, 0);
-                    }
-
-                    // FOOTER SUMS
-                    let totalDR = colSum(7);
-                    let totalCR = colSum(8);
-
-                    $('#total-base-debit').html(totalDR.toFixed(2));
-                    $('#total-base-credit').html(totalCR.toFixed(2));
-                    $('#total-local-debit').html(colSum(9).toFixed(2));
-                    $('#total-local-credit').html(colSum(10).toFixed(2));
-
-                    let rGain = json.totals.realised_gain;
-                    let rLoss = json.totals.realised_loss;
-                    let uGain = json.totals.unrealised_gain;
-                    let uLoss = json.totals.unrealised_loss;
-
-                    // NET BALANCE LOGIC
-                    let net = totalCR - totalDR;
-                    let netSign = net >= 0 ? "(Cr)" : "(Dr)";
-                    let netDisplay =
-                        `${Math.abs(net).toFixed(2)} USD <strong class="text-${net >= 0 ? 'success' : 'danger'}">${netSign}</strong>`;
-
-                    // BREAKUP TEXT
-                    let breakup = `
-            <div style="font-size: 12px; line-height: 14px; margin-top: 3px;">
-                <span class="text-danger"><strong>DR:</strong> ${totalDR.toFixed(2)}</span>
-                &nbsp; | &nbsp;
-                <span class="text-success"><strong>CR:</strong> ${totalCR.toFixed(2)}</span>
-                &nbsp; | &nbsp;
-                <strong>Net:</strong> ${Math.abs(net).toFixed(2)} ${net >= 0 ? 'Cr' : 'Dr'}
-            </div>
-        `;
-
-                    // SHOW BOTH main balance + breakup
-                    $('#party-net-balance').html(`
-            ${netDisplay}
-            ${breakup}
-        `);
+                function colSum(index) {
+                    return api.column(index, {
+                            page: 'current'
+                        }).data()
+                        .reduce((a, b) => {
+                            let v = parseFloat((b || '').toString().replace(/[^0-9.-]+/g, ''));
+                            return a + (isNaN(v) ? 0 : v);
+                        }, 0);
                 }
+
+                // ==============================
+                // BASE CURRENCY (NET BALANCE)
+                // ==============================
+                let baseDR = colSum(7);
+                let baseCR = colSum(8);
+
+                $('#total-base-debit').html(baseDR.toFixed(2));
+                $('#total-base-credit').html(baseCR.toFixed(2));
+
+                $('#total-local-debit').html(colSum(9).toFixed(2));
+                $('#total-local-credit').html(colSum(10).toFixed(2));
+
+                let netBase = baseCR - baseDR;
+                let baseSign = netBase >= 0 ? "(Cr)" : "(Dr)";
+                let baseCol = netBase >= 0 ? "success" : "danger";
+
+                let partyHTML = `
+        ${Math.abs(netBase).toFixed(2)} USD 
+        <strong class="text-${baseCol}">${baseSign}</strong>
+
+        <div style="font-size:12px; margin-top:4px;">
+            <span class="text-danger"><strong>DR:</strong> ${baseDR.toFixed(2)}</span>
+            &nbsp; | &nbsp;
+            <span class="text-success"><strong>CR:</strong> ${baseCR.toFixed(2)}</span>
+            &nbsp; | &nbsp;
+            <strong>Net:</strong> ${Math.abs(netBase).toFixed(2)} ${netBase >= 0 ? 'Cr' : 'Dr'}
+        </div>
+    `;
+                $('#party-net-balance').html(partyHTML);
+
+                // ==============================
+                // LOCAL CURRENCY DR/CR BREAKUP
+                // ==============================
+                let DR_list = [],
+                    CR_list = [];
+                let DR_total = 0,
+                    CR_total = 0;
+
+                api.rows().every(function() {
+                    let d = this.data();
+
+                    let vno = d.vch_no;
+                    let type = d.vch_type.toLowerCase();
+
+                    let ld = parseFloat((d.local_debit || "0").replace(/,/g, ""));
+                    let lc = parseFloat((d.local_credit || "0").replace(/,/g, ""));
+
+                    if ((type === "sale" || type === "payment") && ld > 0) {
+                        DR_list.push({
+                            vno,
+                            amt: ld
+                        });
+                        DR_total += ld;
+                    }
+                    if ((type === "receipt" || type === "purchase") && lc > 0) {
+                        CR_list.push({
+                            vno,
+                            amt: lc
+                        });
+                        CR_total += lc;
+                    }
+                });
+
+                let localNet = CR_total - DR_total;
+                let localSign = localNet >= 0 ? "(Cr)" : "(Dr)";
+                let localCol = localNet >= 0 ? "success" : "danger";
+
+                // ==============================
+                // FULL BREAKUP TABLE (master style)
+                // ==============================
+                let localHTML = `
+        <div style="font-size:13px;">
+            
+            <table class="table table-sm table-bordered mb-2">
+                <thead class="thead-light">
+                    <tr><th colspan="2" class="text-center">CR — Receipt + Purchase</th></tr>
+                    <tr><th>Voucher No</th><th class="text-right">Amount</th></tr>
+                </thead>
+                <tbody>
+                    ${CR_list.map(x => `
+                            <tr>
+                                <td>${x.vno}</td>
+                                <td class="text-right">${x.amt.toFixed(2)}</td>
+                            </tr>
+                        `).join("")}
+                    <tr class="font-weight-bold bg-light">
+                        <td>Total CR</td>
+                        <td class="text-right">${CR_total.toFixed(2)}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table class="table table-sm table-bordered mb-2">
+                <thead class="thead-light">
+                    <tr><th colspan="2" class="text-center">DR — Sale + Payment</th></tr>
+                    <tr><th>Voucher No</th><th class="text-right">Amount</th></tr>
+                </thead>
+                <tbody>
+                    ${DR_list.map(x => `
+                            <tr>
+                                <td>${x.vno}</td>
+                                <td class="text-right">${x.amt.toFixed(2)}</td>
+                            </tr>
+                        `).join("")}
+                    <tr class="font-weight-bold bg-light">
+                        <td>Total DR</td>
+                        <td class="text-right">${DR_total.toFixed(2)}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table class="table table-sm table-bordered">
+                <tbody>
+                    <tr class="font-weight-bold">
+                        <td>Local Net</td>
+                        <td class="text-right text-${localCol}">
+                            ${Math.abs(localNet).toFixed(2)} ${localSign}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+    `;
+
+                $('#local-net-balance').html(localHTML);
             }
 
 
