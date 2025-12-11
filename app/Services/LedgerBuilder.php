@@ -200,6 +200,18 @@ class LedgerBuilder
                     $diff = round($rowRate - $closingRate, 6);
                 }
             }
+            // Direction: what side does remaining belong to?
+            // Receipt & Purchase = CR side (they increase what party owes)
+            // Sale & Payment = DR side (they reduce what party owes)
+            $direction = null;
+
+            if ($remainingBase > 0) {
+                if (in_array($tx->voucher_type, ['receipt', 'purchase'])) {
+                    $direction = 'CR';
+                } else {
+                    $direction = 'DR';
+                }
+            }
 
 
             // ===============================
@@ -244,6 +256,8 @@ class LedgerBuilder
 
                 'remaining_base' => $remainingBase,
                 'remaining_local_value' => $remainingBase * $effectiveClosingRate,
+                'direction' => $direction,
+
 
             ];
         }

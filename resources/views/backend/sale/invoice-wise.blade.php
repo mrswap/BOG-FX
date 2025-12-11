@@ -420,97 +420,114 @@
     `;
     $('#party-net-balance').html(baseBreakupHTML);
 
-    // ===========================================
-    // LOCAL CURRENCY BREAKUP (VOUCHER-WISE)
-    // ===========================================
-    let DR_list = [];
-    let CR_list = [];
-    let DR_total = 0;
-    let CR_total = 0;
+   // ===============================================
+// CORRECT LOCAL CURRENCY NET BREAKDOWN (FINAL)
+// ===============================================
+let CR_list = [];
+let DR_list = [];
+let totalCR = 0;
+let totalDR = 0;
 
-    api.rows().every(function () {
-        let d = this.data();
-        let type = d.vch_type.toLowerCase();
+api.rows().every(function () {
+    let d = this.data();
 
-        let vno = d.vch_no;
-        let ld = parseFloat((d.local_debit || "0").replace(/,/g, ""));
-        let lc = parseFloat((d.local_credit || "0").replace(/,/g, ""));
+    let remBase = parseFloat(d.remaining_base || 0);
+    if (remBase <= 0) return;
 
-        if ((type === "sale" || type === "payment") && ld > 0) {
-            DR_list.push({ vno, amt: ld });
-            DR_total += ld;
-        }
+    let rate = parseFloat(d.exch_rate || 0);
+    let localVal = remBase * rate;
 
-        if ((type === "receipt" || type === "purchase") && lc > 0) {
-            CR_list.push({ vno, amt: lc });
-            CR_total += lc;
-        }
-    });
+    // Categorize based on direction
+    if (d.direction === "CR") {
+        CR_list.push({ vno: d.vch_no, base: remBase, rate: rate, local: localVal });
+        totalCR += localVal;
+    } 
+    else if (d.direction === "DR") {
+        DR_list.push({ vno: d.vch_no, base: remBase, rate: rate, local: localVal });
+        totalDR += localVal;
+    }
+});
 
-    let localNet = CR_total - DR_total;
-    let localSign = localNet >= 0 ? "(Cr)" : "(Dr)";
-    let localColor = localNet >= 0 ? "success" : "danger";
+// Net Result
+let localNet = totalDR - totalCR;
+let sign = localNet >= 0 ? "(Dr)" : "(Cr)";
+let color = localNet >= 0 ? "danger" : "success";
 
-    // ===========================================
-    // LOCAL TABLE BREAKUP HTML
-    // ===========================================
-    let localBreakupHTML = `
-        <div style="font-size: 13px;">
+// === HTML BUILD ===
+let html = `
+<div style="font-size: 13px;">
 
-            <table class="table table-sm table-bordered mb-2">
-                <thead class="thead-light">
-                    <tr><th colspan="2" class="text-center">CR — Receipt + Purchase</th></tr>
-                    <tr><th>Voucher No</th><th class="text-right">Amount</th></tr>
-                </thead>
-                <tbody>
-                    ${CR_list.map(x => `
-                        <tr>
-                            <td>${x.vno}</td>
-                            <td class="text-right">${x.amt.toFixed(2)}</td>
-                        </tr>
-                    `).join("")}
-                    <tr class="font-weight-bold bg-light">
-                        <td>Total CR</td>
-                        <td class="text-right">${CR_total.toFixed(2)}</td>
-                    </tr>
-                </tbody>
-            </table>
 
-            <table class="table table-sm table-bordered mb-2">
-                <thead class="thead-light">
-                    <tr><th colspan="2" class="text-center">DR — Sale + Payment</th></tr>
-                    <tr><th>Voucher No</th><th class="text-right">Amount</th></tr>
-                </thead>
-                <tbody>
-                    ${DR_list.map(x => `
-                        <tr>
-                            <td>${x.vno}</td>
-                            <td class="text-right">${x.amt.toFixed(2)}</td>
-                        </tr>
-                    `).join("")}
-                    <tr class="font-weight-bold bg-light">
-                        <td>Total DR</td>
-                        <td class="text-right">${DR_total.toFixed(2)}</td>
-                    </tr>
-                </tbody>
-            </table>
+    <!-- CR TABLE -->
+    <table class="table table-sm table-bordered mb-2">
+        <thead class="thead-light">
+            <tr><th colspan="4" class="text-center">CR — Receipt + Purchase</th></tr>
+            <tr><th>Voucher</th><th>Remaining Base</th><th>Rate</th><th class="text-right">Local Value</th></tr>
+        </thead>
+        <tbody>
+            ${CR_list.map(x => `
+                <tr>
+                    <td>${x.vno}</td>
+                    <td>${x.base.toFixed(2)}</td>
+                    <td>${x.rate.toFixed(4)}</td>
+                    <td class="text-right">${x.local.toFixed(2)}</td>
+                </tr>
+            `).join('')}
+            <tr class="font-weight-bold bg-light">
+                <td colspan="3">Total CR</td>
+                <td class="text-right">${totalCR.toFixed(2)}</td>
+            </tr>
+        </tbody>
+    </table>
 
-            <table class="table table-sm table-bordered">
-                <tbody>
-                    <tr class="font-weight-bold">
-                        <td>Local Net</td>
-                        <td class="text-right text-${localColor}">
-                            ${Math.abs(localNet).toFixed(2)} ${localSign}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
 
-        </div>
-    `;
+    <!-- DR TABLE -->
+    <table class="table table-sm table-bordered mb-2">
+        <thead class="thead-light">
+            <tr><th colspan="4" class="text-center">DR — Sale + Payment</th></tr>
+            <tr><th>Voucher</th><th>Remaining Base</th><th>Rate</th><th class="text-right">Local Value</th></tr>
+        </thead>
+        <tbody>
+            ${DR_list.map(x => `
+                <tr>
+                    <td>${x.vno}</td>
+                    <td>${x.base.toFixed(2)}</td>
+                    <td>${x.rate.toFixed(4)}</td>
+                    <td class="text-right">${x.local.toFixed(2)}</td>
+                </tr>
+            `).join('')}
+            <tr class="font-weight-bold bg-light">
+                <td colspan="3">Total DR</td>
+                <td class="text-right">${totalDR.toFixed(2)}</td>
+            </tr>
+        </tbody>
+    </table>
 
-    // Inject final HTML into UI
-    $('#local-net-balance').html(localBreakupHTML);
+
+    <!-- NET RESULT -->
+    <table class="table table-sm table-bordered">
+        <tbody>
+            <tr class="font-weight-bold">
+                <td>Local Net</td>
+                <td class="text-right text-${color}">
+                    ${Math.abs(localNet).toFixed(2)} ${sign}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+</div>
+`;
+
+$("#local-net-balance").html(html);
+
+
+
+
+
+
+
+
 }
 
 
