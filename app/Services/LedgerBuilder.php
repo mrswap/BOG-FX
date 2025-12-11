@@ -137,10 +137,16 @@ class LedgerBuilder
 
             // PRIORITY:
             // 1. Manual entered rate
-            // 2. Auto closing rate resolver
+            // 2. Auto closing rate resolver, ye lefger me automatic closing rate leta hai
+            /*
             $effectiveClosingRate = ($manualClosing !== null && $manualClosing !== '')
                 ? (float)$manualClosing
                 : (float)$closingRate;
+            */
+            // Client rule byepass kia :
+            // Only show unrealised when user ENTERS closing rate manually
+            $effectiveClosingRate = $manualClosing !== null ? (float)$manualClosing : null;
+
 
             $unrealised = 0.0;
 

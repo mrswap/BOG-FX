@@ -46,6 +46,8 @@ class TransactionService
             $tx = Transaction::create($data);
 
             // closing rate
+            //ise uncomment karo to rate resolver chal jayega
+            /*
             if (empty($tx->closing_rate)) {
                 $resolved = $this->rateResolver->getClosingRate($tx);
                 if (!is_null($resolved)) {
@@ -53,6 +55,7 @@ class TransactionService
                     $tx->save();
                 }
             }
+            */
 
             // update daily forex_rates (party wise avg)
             $this->updatePartyDailyRate($tx);
@@ -96,11 +99,13 @@ class TransactionService
             $tx->update($data);
 
             // closing rate update (if needed)
+            //ise uncomment karo to rate resolver chal jayega
+            /*
             if (empty($tx->closing_rate)) {
                 $tx->closing_rate = $this->rateResolver->getClosingRate($tx);
                 $tx->save();
             }
-
+            */
             // recompute party daily rate
             $this->updatePartyDailyRate($tx);
 
