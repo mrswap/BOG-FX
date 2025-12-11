@@ -260,14 +260,95 @@ class LedgerBuilder
                 'edit_url'   => route('sales.edit', $tx->id),
                 'delete_url' => route('forex.remittance.destroy', $tx->id),
 
-                'remaining_base' => $remainingBase,
-                'remaining_local_value' => $remainingBase * $effectiveClosingRate,
-                'direction' => $direction,
+
 
 
             ];
         }
+        //-----------------------------------------
+        // GLOBAL CR–DR BALANCING (CLIENT SPEC LOGIC)
+        //-----------------------------------------
+        $totalCR_base = 0;
+        $totalDR_base = 0;
 
-        return $rows;
+        $CR_rows = [];
+        $DR_rows = [];
+
+        foreach ($rows as $r) {
+            $baseDr = floatval(str_replace(',', '', $r['base_debit']  ?: 0));
+            $baseCr = floatval(str_replace(',', '', $r['base_credit'] ?: 0));
+            $rate   = floatval($r['exch_rate']);
+
+            if (in_array($r['vch_type'], ['Receipt', 'Purchase'])) {
+                $totalCR_base += $baseCr;
+                $CR_rows[] = [
+                    'vno'  => $r['vch_no'],
+                    'base' => $baseCr,
+                    'rate' => $rate,
+                ];
+            }
+
+            if (in_array($r['vch_type'], ['Sale', 'Payment'])) {
+                $totalDR_base += $baseDr;
+                $DR_rows[] = [
+                    'vno'  => $r['vch_no'],
+                    'base' => $baseDr,
+                    'rate' => $rate,
+                ];
+            }
+        }
+
+        //-------------------------------------
+        // STEP B: Compute Remaining Base
+        //-------------------------------------
+        $remainingCR = 0;
+        $remainingDR = 0;
+
+        if ($totalCR_base > $totalDR_base) {
+            $remainingCR = $totalCR_base - $totalDR_base;
+        } elseif ($totalDR_base > $totalCR_base) {
+            $remainingDR = $totalDR_base - $totalCR_base;
+        }
+
+        //-------------------------------------
+        // STEP C: Pick LAST voucher rate
+        //-------------------------------------
+        $appliedRate = 0;
+        $appliedVoucher = null;
+
+        if ($remainingCR > 0 && count($CR_rows) > 0) {
+            $last = end($CR_rows);
+            $appliedRate = $last['rate'];
+            $appliedVoucher = $last['vno'];
+        }
+
+        if ($remainingDR > 0 && count($DR_rows) > 0) {
+            $last = end($DR_rows);
+            $appliedRate = $last['rate'];
+            $appliedVoucher = $last['vno'];
+        }
+
+        //-------------------------------------
+        // STEP D: Compute Local Net
+        //-------------------------------------
+        $remaining_base_global = $remainingCR ?: $remainingDR;
+        $local_net = $remaining_base_global * $appliedRate;
+
+        // Store global result in payload
+        $globalSummary = [
+            'totalCR_base' => round($totalCR_base, 4),
+            'totalDR_base' => round($totalDR_base, 4),
+            'remaining_base' => round($remaining_base_global, 4),
+            'applied_rate' => round($appliedRate, 6),
+            'applied_voucher' => $appliedVoucher,
+            'local_net' => round($local_net, 4),
+            'sign' => $remainingCR > 0 ? 'Cr' : 'Dr'
+        ];
+
+        return [
+            'rows' => $rows,
+            'global_summary' => $globalSummary
+        ];
     }
+    
 }

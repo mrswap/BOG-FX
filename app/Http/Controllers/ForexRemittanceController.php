@@ -219,7 +219,9 @@ class ForexRemittanceController extends Controller
         ];
 
         // Use LedgerBuilder to get rows (already formatted)
-        $rows = $this->ledgerBuilder->buildForDataTable($opts);
+        $result = $this->ledgerBuilder->buildForDataTable($opts);
+        $rows   = $result['rows'];
+        $global = $result['global_summary'];
 
         // compute totals using the same logic as earlier (but from service rows)
         $totals = [
@@ -284,6 +286,7 @@ class ForexRemittanceController extends Controller
             'recordsFiltered' => count($rows),
             'data' => $rows,
             'totals' => $totals_payload,
+            'global' => $global
         ];
 
         Log::info('[forexRemittanceData] returning rows=' . count($rows));
@@ -311,10 +314,11 @@ class ForexRemittanceController extends Controller
         // -----------------------------
         // 3) Fetch ledger rows (same format)
         // -----------------------------
-        $rows = $this->ledgerBuilder->buildForDataTable([
+        $built = $this->ledgerBuilder->buildForDataTable([
             'allowed_tx_ids' => $allowedIds
         ]);
-
+        $rows = $built['rows'];                 // ⭐ SAFE rows
+        $global = $built['global_summary'];     // ⭐ USE THIS
         // -----------------------------
         // 4) Compute totals
         // -----------------------------
@@ -370,12 +374,14 @@ class ForexRemittanceController extends Controller
         // -----------------------------
         // 5) RETURN EXACT SAME FORMAT
         // -----------------------------
+
         return response()->json([
-            'draw'            => intval($request->input('draw', 1)),
+            'draw'            => intval($request->draw),
             'recordsTotal'    => count($rows),
             'recordsFiltered' => count($rows),
             'data'            => $rows,
             'totals'          => $totals_payload,
+            'global'          => $global   // ⭐ HERE
         ]);
     }
 
@@ -435,7 +441,10 @@ class ForexRemittanceController extends Controller
                     'allowed_tx_ids' => $allowedIds,   // ⭐ important
                 ];
 
-                $rows = $this->ledgerBuilder->buildForDataTable($opts);
+                $built = $this->ledgerBuilder->buildForDataTable($opts);
+
+                $rows = $built['rows'];                 // ⭐ SAFE rows
+                $global = $built['global_summary'];     // ⭐ USE THIS
             }
 
 
@@ -474,7 +483,6 @@ class ForexRemittanceController extends Controller
                 else $totals['unrealised_loss'] += abs($unreal);
             }
 
-
             return response()->json([
                 'draw' => intval($request->draw),
                 'recordsTotal' => count($rows),
@@ -485,7 +493,8 @@ class ForexRemittanceController extends Controller
                     'realised_loss' => $totals['realised_loss'],
                     'unrealised_gain' => $totals['unrealised_gain'],
                     'unrealised_loss' => $totals['unrealised_loss'],
-                ]
+                ],
+                'global' => $global
             ]);
         } catch (\Throwable $e) {
 
@@ -524,8 +533,9 @@ class ForexRemittanceController extends Controller
             // FETCH ALL ROWS FIRST
             // (full ledger rows)
             // ================================
-            $rows = $this->ledgerBuilder->buildForDataTable($opts);
-
+            $built = $this->ledgerBuilder->buildForDataTable($opts);
+            $rows = $built['rows'];                 // ⭐ SAFE rows
+            $global = $built['global_summary'];     // ⭐ USE THIS  
             // ======================================
             // FILTER rows BY CURRENCY (after LB)
             // because LB processes gain/loss correctly
@@ -578,17 +588,19 @@ class ForexRemittanceController extends Controller
                 else $totals['unrealised_loss'] += abs($unreal);
             }
 
+
             return response()->json([
                 'draw' => intval($request->draw),
                 'recordsTotal' => count($filtered),
                 'recordsFiltered' => count($filtered),
                 'data' => $filtered,
                 'totals' => [
-                    'realised_gain'   => round($totals['realised_gain'], 4),
-                    'realised_loss'   => round($totals['realised_loss'], 4),
+                    'realised_gain' => round($totals['realised_gain'], 4),
+                    'realised_loss' => round($totals['realised_loss'], 4),
                     'unrealised_gain' => round($totals['unrealised_gain'], 4),
                     'unrealised_loss' => round($totals['unrealised_loss'], 4),
-                ]
+                ],
+                'global' => $global
             ]);
         } catch (\Throwable $e) {
             \Log::error("Currency wise report error: " . $e->getMessage(), [

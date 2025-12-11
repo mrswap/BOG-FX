@@ -131,7 +131,7 @@
                         <th colspan="11" id="party-net-balance" class="text-left font-weight-bold net-balance-info">
                         </th>
                     </tr>
-                    
+
                     <tr>
                         <th colspan="6" class="text-right font-weight-bold">Local Currency Net</th>
                         <th colspan="11" id="local-net-balance" class="text-left font-weight-bold"></th>
@@ -433,106 +433,63 @@
                 $('#party-net-balance').html(partyHTML);
 
                 // ===============================================
-// CORRECT LOCAL CURRENCY NET BREAKDOWN (FINAL)
-// ===============================================
-let CR_list = [];
-let DR_list = [];
-let totalCR = 0;
-let totalDR = 0;
+                // CORRECT LOCAL CURRENCY NET BREAKDOWN (FINAL)
+                // ===============================================
+                let CR_list = [];
+                let DR_list = [];
+                let totalCR = 0;
+                let totalDR = 0;
 
-api.rows().every(function () {
-    let d = this.data();
+                api.rows().every(function() {
+                    let d = this.data();
 
-    let remBase = parseFloat(d.remaining_base || 0);
-    if (remBase <= 0) return;
+                    let remBase = parseFloat(d.remaining_base || 0);
+                    if (remBase <= 0) return;
 
-    let rate = parseFloat(d.exch_rate || 0);
-    let localVal = remBase * rate;
+                    let rate = parseFloat(d.exch_rate || 0);
+                    let localVal = remBase * rate;
 
-    // Categorize based on direction
-    if (d.direction === "CR") {
-        CR_list.push({ vno: d.vch_no, base: remBase, rate: rate, local: localVal });
-        totalCR += localVal;
-    } 
-    else if (d.direction === "DR") {
-        DR_list.push({ vno: d.vch_no, base: remBase, rate: rate, local: localVal });
-        totalDR += localVal;
-    }
-});
-
-// Net Result
-let localNet = totalDR - totalCR;
-let sign = localNet >= 0 ? "(Dr)" : "(Cr)";
-let color = localNet >= 0 ? "danger" : "success";
-
-// === HTML BUILD ===
-let html = `
-<div style="font-size: 13px;">
-
-
-    <!-- CR TABLE -->
-    <table class="table table-sm table-bordered mb-2">
-        <thead class="thead-light">
-            <tr><th colspan="4" class="text-center">CR — Receipt + Purchase</th></tr>
-            <tr><th>Voucher</th><th>Remaining Base</th><th>Rate</th><th class="text-right">Local Value</th></tr>
-        </thead>
-        <tbody>
-            ${CR_list.map(x => `
-                <tr>
-                    <td>${x.vno}</td>
-                    <td>${x.base.toFixed(2)}</td>
-                    <td>${x.rate.toFixed(4)}</td>
-                    <td class="text-right">${x.local.toFixed(2)}</td>
-                </tr>
-            `).join('')}
-            <tr class="font-weight-bold bg-light">
-                <td colspan="3">Total CR</td>
-                <td class="text-right">${totalCR.toFixed(2)}</td>
-            </tr>
-        </tbody>
-    </table>
+                    // Categorize based on direction
+                    if (d.direction === "CR") {
+                        CR_list.push({
+                            vno: d.vch_no,
+                            base: remBase,
+                            rate: rate,
+                            local: localVal
+                        });
+                        totalCR += localVal;
+                    } else if (d.direction === "DR") {
+                        DR_list.push({
+                            vno: d.vch_no,
+                            base: remBase,
+                            rate: rate,
+                            local: localVal
+                        });
+                        totalDR += localVal;
+                    }
+                });
 
 
-    <!-- DR TABLE -->
-    <table class="table table-sm table-bordered mb-2">
-        <thead class="thead-light">
-            <tr><th colspan="4" class="text-center">DR — Sale + Payment</th></tr>
-            <tr><th>Voucher</th><th>Remaining Base</th><th>Rate</th><th class="text-right">Local Value</th></tr>
-        </thead>
-        <tbody>
-            ${DR_list.map(x => `
-                <tr>
-                    <td>${x.vno}</td>
-                    <td>${x.base.toFixed(2)}</td>
-                    <td>${x.rate.toFixed(4)}</td>
-                    <td class="text-right">${x.local.toFixed(2)}</td>
-                </tr>
-            `).join('')}
-            <tr class="font-weight-bold bg-light">
-                <td colspan="3">Total DR</td>
-                <td class="text-right">${totalDR.toFixed(2)}</td>
-            </tr>
-        </tbody>
-    </table>
+                let netBase = totalBaseCR - totalBaseDR;
+                let baseSign = netBase >= 0 ? "(Cr)" : "(Dr)";
+                let baseColor = netBase >= 0 ? "success" : "danger";
 
+                let g = json.global; // ⭐ ADD THIS LINE HERE
 
-    <!-- NET RESULT -->
-    <table class="table table-sm table-bordered">
-        <tbody>
-            <tr class="font-weight-bold">
-                <td>Local Net</td>
-                <td class="text-right text-${color}">
-                    ${Math.abs(localNet).toFixed(2)} ${sign}
-                </td>
-            </tr>
-        </tbody>
-    </table>
+                let baseBreakupHTML = `
+                    ${Math.abs(netBase).toFixed(2)} USD 
+                    <strong class="text-${baseColor}">${baseSign}</strong>
 
-</div>
-`;
+                    <div style="font-size: 12px; margin-top: 3px;">
+                        <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
+                        &nbsp; | &nbsp;
+                        <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
+                        &nbsp; | &nbsp;
+                        <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
+                    </div>
+                `;
 
-$("#local-net-balance").html(html);
-
+                $('#party-net-balance').html(baseBreakupHTML);
             }
 
 
