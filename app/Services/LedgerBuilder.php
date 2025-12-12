@@ -17,6 +17,12 @@ class LedgerBuilder
         $this->rateResolver = $rateResolver;
     }
 
+    /**
+     * Main entry — builds rows and global summary for DataTable
+     *
+     * @param array $opts
+     * @return array ['rows' => [], 'global_summary' => []]
+     */
     public function buildForDataTable(array $opts = []): array
     {
         $q = Transaction::with(['party', 'baseCurrency', 'localCurrency'])
@@ -31,7 +37,6 @@ class LedgerBuilder
         if (!empty($opts['allowed_tx_ids'])) {
             $q->whereIn('id', $opts['allowed_tx_ids']);
         }
-
 
         if (!empty($opts['currency_id'])) {
             $cid = intval($opts['currency_id']);
@@ -56,11 +61,11 @@ class LedgerBuilder
 
         foreach ($txs as $tx) {
 
+            // =========================
+            // Setup
+            // =========================
             $partyName = $tx->party ? $tx->party->name : 'Unknown';
 
-            // =========================
-            // DR/CR Calculation
-            // =========================
             $baseDebit = $baseCredit = $localDebit = $localCredit = 0.0;
 
             switch ($tx->voucher_type) {
@@ -87,30 +92,21 @@ class LedgerBuilder
 
             $rowRate = (float)($tx->exchange_rate ?? 0.0);
 
-            // ===============================
             // Closing Rate Resolve
-            // ===============================
             $closingRate = (float)$this->rateResolver->getClosingRate($tx);
 
-            // ===============================
             // Realised Gain/Loss
-            // ===============================
             $isInvoice = in_array($tx->voucher_type, ['sale', 'purchase']);
 
             $realised = 0.0;
-
             if ($isInvoice) {
                 $realised = (float) ForexMatch::where('invoice_id', $tx->id)->sum('realised_amount');
             }
 
-            // ===============================
-            // REALISED BREAKUP (⭐ REQUIRED)
-            // ===============================
+            // Realised breakup
             $realisedBreakup = [];
-
             if ($isInvoice) {
                 $matches = ForexMatch::with('settlement')->where('invoice_id', $tx->id)->get();
-
                 foreach ($matches as $m) {
                     $realisedBreakup[] = [
                         'match_voucher' => $m->settlement ? $m->settlement->voucher_no : null,
@@ -122,9 +118,7 @@ class LedgerBuilder
                 }
             }
 
-            // ===============================
-            // Unrealised Gain/Loss
-            // ===============================
+            // Unrealised calculation
             $invoiceMatched    = (float)ForexMatch::where('invoice_id', $tx->id)->sum('matched_base');
             $settlementMatched = (float)ForexMatch::where('settlement_id', $tx->id)->sum('matched_base');
 
@@ -132,68 +126,46 @@ class LedgerBuilder
                 ? max(0.0, (float)$tx->base_amount - $invoiceMatched)
                 : max(0.0, (float)$tx->base_amount - $settlementMatched);
 
-            // ⭐ Manual Closing Rate Override Support
+            // Manual closing override support (client rule: only show unrealised when manual provided)
             $manualClosing = $tx->closing_rate_override ?? null;
-
-            // PRIORITY:
-            // 1. Manual entered rate
-            // 2. Auto closing rate resolver, ye lefger me automatic closing rate leta hai
-            /*
-            $effectiveClosingRate = ($manualClosing !== null && $manualClosing !== '')
-                ? (float)$manualClosing
-                : (float)$closingRate;
-            */
-            // Client rule byepass kia :
-            // Only show unrealised when user ENTERS closing rate manually
             $effectiveClosingRate = $manualClosing !== null ? (float)$manualClosing : null;
 
-
             $unrealised = 0.0;
-
             if ($remainingBase > 0) {
-
                 if ($isInvoice) {
                     $unrealised = $this->gainLossService->calcUnrealised(
                         $remainingBase,
-                        $effectiveClosingRate,   // ⭐ updated
+                        $effectiveClosingRate,
                         $rowRate,
                         'invoice'
                     );
                 } else {
                     $unrealised = $this->gainLossService->calcUnrealised(
                         $remainingBase,
-                        $effectiveClosingRate,   // ⭐ updated
+                        $effectiveClosingRate,
                         $rowRate,
                         'advance',
                         $rowRate,
-                        $manualClosing           // ⭐ updated
+                        $manualClosing
                     );
                 }
             }
 
-            // ===============================
-            // DIFF Calculation
-            // ===============================
+            // DIFF Calculation (unchanged)
             $diff = "";
-
             if ($isInvoice) {
                 if ($remainingBase == 0 && $invoiceMatched > 0) {
-
                     $matches = ForexMatch::with('settlement')->where('invoice_id', $tx->id)->get();
-
                     $totalBase = 0.0;
                     $weightedSettlement = 0.0;
-
                     foreach ($matches as $m) {
                         $settTx = $m->settlement;
                         $settRate = $settTx ? (float)$settTx->exchange_rate : null;
-
                         if ($settRate !== null) {
                             $weightedSettlement += (float)$m->matched_base * $settRate;
                             $totalBase += (float)$m->matched_base;
                         }
                     }
-
                     if ($totalBase > 0) {
                         $effectiveRate = $weightedSettlement / $totalBase;
                         $diff = round($effectiveRate - $rowRate, 6);
@@ -206,11 +178,9 @@ class LedgerBuilder
                     $diff = round($rowRate - $closingRate, 6);
                 }
             }
-            // Direction: what side does remaining belong to?
-            // Receipt & Purchase = CR side (they increase what party owes)
-            // Sale & Payment = DR side (they reduce what party owes)
-            $direction = null;
 
+            // Direction of remaining base
+            $direction = null;
             if ($remainingBase > 0) {
                 if (in_array($tx->voucher_type, ['receipt', 'purchase'])) {
                     $direction = 'CR';
@@ -219,10 +189,10 @@ class LedgerBuilder
                 }
             }
 
+            // remaining_local_value — valued using the voucher exchange rate (as per your rule)
+            $remaining_local_value = $remainingBase * $rowRate;
 
-            // ===============================
-            // ROW OUTPUT
-            // ===============================
+            // ROW OUTPUT (includes direction + remaining_base + remaining_local_value)
             $rows[] = [
                 'id'         => $tx->id,
                 'sn'         => $sn++,
@@ -253,102 +223,165 @@ class LedgerBuilder
 
                 'remarks' => $tx->remarks ?? '',
 
+                // New useful keys for client JS
+                'direction' => $direction,                    // 'CR' | 'DR' | null
+                'remaining_base' => round($remainingBase, 4), // numeric (not formatted string)
+                'remaining_local_value' => round($remaining_local_value, 4), // numeric
+
                 // ⭐ REALISED BREAKUP INCLUDED
                 'realised_breakup' => $realisedBreakup,
 
                 // ⭐ ACTION URLs
                 'edit_url'   => route('sales.edit', $tx->id),
                 'delete_url' => route('forex.remittance.destroy', $tx->id),
-
-
-
-
             ];
         }
-        //-----------------------------------------
-        // GLOBAL CR–DR BALANCING (CLIENT SPEC LOGIC)
-        //-----------------------------------------
-        $totalCR_base = 0;
-        $totalDR_base = 0;
 
-        $CR_rows = [];
-        $DR_rows = [];
-
-        foreach ($rows as $r) {
-            $baseDr = floatval(str_replace(',', '', $r['base_debit']  ?: 0));
-            $baseCr = floatval(str_replace(',', '', $r['base_credit'] ?: 0));
-            $rate   = floatval($r['exch_rate']);
-
-            if (in_array($r['vch_type'], ['Receipt', 'Purchase'])) {
-                $totalCR_base += $baseCr;
-                $CR_rows[] = [
-                    'vno'  => $r['vch_no'],
-                    'base' => $baseCr,
-                    'rate' => $rate,
-                ];
-            }
-
-            if (in_array($r['vch_type'], ['Sale', 'Payment'])) {
-                $totalDR_base += $baseDr;
-                $DR_rows[] = [
-                    'vno'  => $r['vch_no'],
-                    'base' => $baseDr,
-                    'rate' => $rate,
-                ];
-            }
-        }
-
-        //-------------------------------------
-        // STEP B: Compute Remaining Base
-        //-------------------------------------
-        $remainingCR = 0;
-        $remainingDR = 0;
-
-        if ($totalCR_base > $totalDR_base) {
-            $remainingCR = $totalCR_base - $totalDR_base;
-        } elseif ($totalDR_base > $totalCR_base) {
-            $remainingDR = $totalDR_base - $totalCR_base;
-        }
-
-        //-------------------------------------
-        // STEP C: Pick LAST voucher rate
-        //-------------------------------------
-        $appliedRate = 0;
-        $appliedVoucher = null;
-
-        if ($remainingCR > 0 && count($CR_rows) > 0) {
-            $last = end($CR_rows);
-            $appliedRate = $last['rate'];
-            $appliedVoucher = $last['vno'];
-        }
-
-        if ($remainingDR > 0 && count($DR_rows) > 0) {
-            $last = end($DR_rows);
-            $appliedRate = $last['rate'];
-            $appliedVoucher = $last['vno'];
-        }
-
-        //-------------------------------------
-        // STEP D: Compute Local Net
-        //-------------------------------------
-        $remaining_base_global = $remainingCR ?: $remainingDR;
-        $local_net = $remaining_base_global * $appliedRate;
-
-        // Store global result in payload
-        $globalSummary = [
-            'totalCR_base' => round($totalCR_base, 4),
-            'totalDR_base' => round($totalDR_base, 4),
-            'remaining_base' => round($remaining_base_global, 4),
-            'applied_rate' => round($appliedRate, 6),
-            'applied_voucher' => $appliedVoucher,
-            'local_net' => round($local_net, 4),
-            'sign' => $remainingCR > 0 ? 'Cr' : 'Dr'
-        ];
+        // Build global summary using new FIFO-based helper
+        $globalSummary = $this->buildGlobalSummaryFromRows($rows);
 
         return [
             'rows' => $rows,
             'global_summary' => $globalSummary
         ];
     }
-    
+
+    /**
+     * Build global CR/DR summary from already-built rows using FIFO matching.
+     * Returns an array matching previous 'global' shape plus detailed pieces.
+     *
+     * Logic:
+     * - Build CR list (receipts + purchases) and DR list (sales + payments) preserving row order.
+     * - FIFO-match base amounts between sides (consume opposite sides).
+     * - Any remaining on a side is valued using that voucher's own exchange rate (voucher.rate).
+     *
+     * @param array $rows
+     * @return array
+     */
+    protected function buildGlobalSummaryFromRows(array $rows): array
+    {
+        $CR = [];
+        $DR = [];
+
+        // Build ordered lists from rows (preserve input order)
+        foreach ($rows as $r) {
+            $baseDr = floatval(str_replace(',', '', $r['base_debit'] ?? 0));
+            $baseCr = floatval(str_replace(',', '', $r['base_credit'] ?? 0));
+            $rate   = floatval($r['exch_rate'] ?? 0);
+            $vno    = $r['vch_no'] ?? null;
+
+            if (in_array($r['vch_type'], ['Receipt', 'Purchase'])) {
+                if ($baseCr > 0) {
+                    $CR[] = [
+                        'vno' => $vno,
+                        'base' => $baseCr,
+                        'rate' => $rate
+                    ];
+                }
+            }
+
+            if (in_array($r['vch_type'], ['Sale', 'Payment'])) {
+                if ($baseDr > 0) {
+                    $DR[] = [
+                        'vno' => $vno,
+                        'base' => $baseDr,
+                        'rate' => $rate
+                    ];
+                }
+            }
+        }
+
+        // Keep copies for FIFO consumption
+        $A = $CR; // copy
+        $B = $DR; // copy
+
+        $i = 0; $j = 0;
+        while ($i < count($A) && $j < count($B)) {
+            if ($A[$i]['base'] == 0) { $i++; continue; }
+            if ($B[$j]['base'] == 0) { $j++; continue; }
+
+            $consume = min($A[$i]['base'], $B[$j]['base']);
+
+            $A[$i]['base'] -= $consume;
+            $B[$j]['base'] -= $consume;
+
+            if ($A[$i]['base'] == 0) $i++;
+            if ($B[$j]['base'] == 0) $j++;
+        }
+
+        // After FIFO matching, find remaining CR and DR totals and their local valuations
+        $remainingCR_base = 0.0;
+        $remainingCR_local = 0.0;
+        $appliedCR_voucher = null;
+        $appliedCR_rate = 0.0;
+
+        foreach ($A as $entry) {
+            if ($entry['base'] > 0) {
+                $remainingCR_base += $entry['base'];
+                $remainingCR_local += $entry['base'] * $entry['rate'];
+                // For applied voucher/rate we choose the last remaining voucher (similar to previous behaviour)
+                $appliedCR_voucher = $entry['vno'];
+                $appliedCR_rate = $entry['rate'];
+            }
+        }
+
+        $remainingDR_base = 0.0;
+        $remainingDR_local = 0.0;
+        $appliedDR_voucher = null;
+        $appliedDR_rate = 0.0;
+
+        foreach ($B as $entry) {
+            if ($entry['base'] > 0) {
+                $remainingDR_base += $entry['base'];
+                $remainingDR_local += $entry['base'] * $entry['rate'];
+                $appliedDR_voucher = $entry['vno'];
+                $appliedDR_rate = $entry['rate'];
+            }
+        }
+
+        // Total base sums (for compatibility with old shape)
+        $totalCR_base = array_reduce($CR, function($carry, $it) { return $carry + $it['base']; }, 0.0) + $remainingCR_base;
+        $totalDR_base = array_reduce($DR, function($carry, $it) { return $carry + $it['base']; }, 0.0) + $remainingDR_base;
+
+        // Decide net: earlier behavior reported local_net as remaining_base * appliedRate (single side).
+        // But your requested logic: local_net = CR_local - DR_local (side-wise valuation)
+        $CR_local_total = $remainingCR_local; // CR side remaining local valuation
+        $DR_local_total = $remainingDR_local; // DR side remaining local valuation
+
+        $net_local = $CR_local_total - $DR_local_total;
+
+        $sign = $net_local > 0 ? 'Cr' : ($net_local < 0 ? 'Dr' : 'Nil');
+        // For compatibility with older front-end keys, compute remaining_base_global (absolute)
+        $remaining_base_global = ($remainingCR_base ?: $remainingDR_base);
+
+        // As older code used 'applied_rate' and 'applied_voucher' pick the last remaining voucher from whichever side had remaining
+        $appliedRate = 0;
+        $appliedVoucher = null;
+        if ($remainingCR_base > 0) {
+            $appliedRate = $appliedCR_rate;
+            $appliedVoucher = $appliedCR_voucher;
+        } elseif ($remainingDR_base > 0) {
+            $appliedRate = $appliedDR_rate;
+            $appliedVoucher = $appliedDR_voucher;
+        }
+
+        return [
+            'totalCR_base' => round($totalCR_base, 4),
+            'totalDR_base' => round($totalDR_base, 4),
+            'remaining_base' => round($remaining_base_global, 4),
+            'applied_rate' => round($appliedRate, 6),
+            'applied_voucher' => $appliedVoucher,
+            // preserve older key name local_net but now store the *difference* (CR_local - DR_local)
+            'local_net' => round($net_local, 4),
+            'sign' => $sign,
+
+            // extra debug/clarity fields you can use in UI if needed
+            'cr_remaining_base' => round($remainingCR_base, 4),
+            'cr_remaining_local' => round($CR_local_total, 4),
+            'cr_applied_voucher' => $appliedCR_voucher,
+            'dr_remaining_base' => round($remainingDR_base, 4),
+            'dr_remaining_local' => round($DR_local_total, 4),
+            'dr_applied_voucher' => $appliedDR_voucher,
+        ];
+    }
 }
