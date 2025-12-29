@@ -237,6 +237,8 @@
         var forexTable = $('#forex-table').DataTable({
             processing: true,
             serverSide: true,
+            deferLoading: 0,
+
 
             ajax: {
                 url: "{{ route('report.party.data') }}",
@@ -268,7 +270,14 @@
                     className: 'text-center'
                 },
                 {
-                    data: 'date'
+                    data: 'date',
+                    render: function(val) {
+                        if (!val) return "";
+
+                        // Convert Y-m-d → d-m-Y
+                        let parts = val.split("-");
+                        return parts[2] + "-" + parts[1] + "-" + parts[0];
+                    }
                 },
                 {
                     data: 'particulars'

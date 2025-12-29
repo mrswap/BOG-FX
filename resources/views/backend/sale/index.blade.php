@@ -244,6 +244,8 @@
         var forexTable = $('#forex-table').DataTable({
             processing: true,
             serverSide: true,
+              deferLoading: 0,
+
 
             ajax: {
                 url: "{{ route('get.forex.remittance.data') }}",
@@ -274,8 +276,17 @@
                     className: 'text-center'
                 },
                 {
-                    data: 'date'
+
+                    data: 'date',
+                    render: function(val) {
+                        if (!val) return "";
+
+                        // Convert Y-m-d → d-m-Y
+                        let parts = val.split("-");
+                        return parts[2] + "-" + parts[1] + "-" + parts[0];
+                    }
                 },
+
                 {
                     data: 'particulars'
                 },
@@ -417,25 +428,25 @@
                 $('#total-local-debit').html(colSum(9).toFixed(2));
                 $('#total-local-credit').html(colSum(10).toFixed(2));
 
-                
-                let g = json.global;
 
-                // FIFO Local Net Fix
-                let fifoNet = Math.abs(g.net_local).toFixed(2);
-                let fifoSign = g.sign;
+                let netBase = totalBaseCR - totalBaseDR;
+                let baseSign = netBase >= 0 ? "(Cr)" : "(Dr)";
+                let baseColor = netBase >= 0 ? "success" : "danger";
+
+                let g = json.global; // ⭐ ADD THIS LINE HERE
 
                 let baseBreakupHTML = `
-                        ${Math.abs(netBase).toFixed(2)} USD 
-                                <strong class="text-${baseColor}">${baseSign}</strong>
+                    ${Math.abs(netBase).toFixed(2)} USD 
+                    <strong class="text-${baseColor}">${baseSign}</strong>
 
-                                <div style="font-size: 12px; margin-top: 3px;">
-                                    <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
-                                    &nbsp; | &nbsp;
-                                    <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
-                                    &nbsp; | &nbsp;
-                                    <strong>Net:</strong> ${fifoNet} ${fifoSign}
-                                </div>
-                            `;
+                    <div style="font-size: 12px; margin-top: 3px;">
+                        <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
+                        &nbsp; | &nbsp;
+                        <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
+                        &nbsp; | &nbsp;
+                        <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
+                    </div>
+                `;
 
                 $('#party-net-balance').html(baseBreakupHTML);
 

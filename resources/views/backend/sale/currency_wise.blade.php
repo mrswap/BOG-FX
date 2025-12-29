@@ -167,7 +167,7 @@
         //   DATE RANGE PICKER
         //////////////////////////////////////////
         $('input[name="starting_date"], input[name="ending_date"]').datepicker({
-            format: "yyyy-mm-dd",
+            format: "dd-mm-yyyy",
             autoclose: true,
             todayHighlight: true
         });
@@ -237,6 +237,7 @@
         var forexTable = $('#forex-table').DataTable({
             processing: true,
             serverSide: true,
+            deferLoading: 0,
 
             ajax: {
                 url: "{{ route('report.currency.data') }}",
@@ -270,7 +271,16 @@
                     className: 'text-center'
                 },
                 {
-                    data: 'date'
+
+
+                    data: 'date',
+                    render: function(val) {
+                        if (!val) return "";
+
+                        // Convert Y-m-d → d-m-Y
+                        let parts = val.split("-");
+                        return parts[2] + "-" + parts[1] + "-" + parts[0];
+                    }
                 },
                 {
                     data: 'particulars'
@@ -386,6 +396,9 @@
             //////////////////////////////////////////
             //   FOOTER TOTALS
             //////////////////////////////////////////
+            //////////////////////////////////////////
+            //   FOOTER TOTALS
+            //////////////////////////////////////////
             drawCallback: function(settings) {
 
                 var api = this.api();
@@ -394,80 +407,23 @@
 
                 function colSum(index) {
                     return api.column(index, {
-                            page: 'current'
-                        }).data()
-                        .reduce((a, b) => {
-                            let v = parseFloat((b || '').toString().replace(/[^0-9.-]+/g, ''));
-                            return a + (isNaN(v) ? 0 : v);
-                        }, 0);
+                        page: "current"
+                    }).data().reduce(function(a, b) {
+                        let val = parseFloat((b || "").toString().replace(/[^0-9.-]+/g, ""));
+                        return a + (isNaN(val) ? 0 : val);
+                    }, 0);
                 }
 
-                // ==============================
-                // BASE CURRENCY (NET BALANCE)
-                // ==============================
-                let baseDR = colSum(7);
-                let baseCR = colSum(8);
+                // ===========================================
+                // BASE CURRENCY TOTALS (USD)
+                // ===========================================
+                let totalBaseDR = colSum(7);
+                let totalBaseCR = colSum(8);
 
-                $('#total-base-debit').html(baseDR.toFixed(2));
-                $('#total-base-credit').html(baseCR.toFixed(2));
-
+                $('#total-base-debit').html(totalBaseDR.toFixed(2));
+                $('#total-base-credit').html(totalBaseCR.toFixed(2));
                 $('#total-local-debit').html(colSum(9).toFixed(2));
                 $('#total-local-credit').html(colSum(10).toFixed(2));
-
-                let netBase = baseCR - baseDR;
-                let baseSign = netBase >= 0 ? "(Cr)" : "(Dr)";
-                let baseCol = netBase >= 0 ? "success" : "danger";
-
-                let partyHTML = `
-        ${Math.abs(netBase).toFixed(2)} USD 
-        <strong class="text-${baseCol}">${baseSign}</strong>
-
-        <div style="font-size:12px; margin-top:4px;">
-            <span class="text-danger"><strong>DR:</strong> ${baseDR.toFixed(2)}</span>
-            &nbsp; | &nbsp;
-            <span class="text-success"><strong>CR:</strong> ${baseCR.toFixed(2)}</span>
-            &nbsp; | &nbsp;
-            <strong>Net:</strong> ${Math.abs(netBase).toFixed(2)} ${netBase >= 0 ? 'Cr' : 'Dr'}
-        </div>
-    `;
-                $('#party-net-balance').html(partyHTML);
-
-                // ===============================================
-                // CORRECT LOCAL CURRENCY NET BREAKDOWN (FINAL)
-                // ===============================================
-                let CR_list = [];
-                let DR_list = [];
-                let totalCR = 0;
-                let totalDR = 0;
-
-                api.rows().every(function() {
-                    let d = this.data();
-
-                    let remBase = parseFloat(d.remaining_base || 0);
-                    if (remBase <= 0) return;
-
-                    let rate = parseFloat(d.exch_rate || 0);
-                    let localVal = remBase * rate;
-
-                    // Categorize based on direction
-                    if (d.direction === "CR") {
-                        CR_list.push({
-                            vno: d.vch_no,
-                            base: remBase,
-                            rate: rate,
-                            local: localVal
-                        });
-                        totalCR += localVal;
-                    } else if (d.direction === "DR") {
-                        DR_list.push({
-                            vno: d.vch_no,
-                            base: remBase,
-                            rate: rate,
-                            local: localVal
-                        });
-                        totalDR += localVal;
-                    }
-                });
 
 
                 let netBase = totalBaseCR - totalBaseDR;
@@ -490,6 +446,11 @@
                 `;
 
                 $('#party-net-balance').html(baseBreakupHTML);
+
+
+
+
+
             }
 
 
