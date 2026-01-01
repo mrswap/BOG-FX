@@ -8,6 +8,11 @@
                     display: none !important;
                 }
             }
+
+            .bootstrap-select .dropdown-toggle:focus {
+                outline: 2px solid #4a90e2;
+                outline-offset: 2px;
+            }
         </style>
     @endpush
 
@@ -59,7 +64,9 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Party Type (optional)</label>
-                                    <select name="party_type" id="party_type" class="form-control">
+                                    <select name="party_type" id="party_type" class="form-control selectpicker"
+                                        data-live-search="true">
+
                                         <option value="">-- Any --</option>
                                         <option value="customer">Customer</option>
                                         <option value="supplier">Supplier</option>
@@ -89,7 +96,7 @@
                                 <div class="form-group">
                                     <label>Transaction Date *</label>
                                     <input type="date" name="transaction_date" class="form-control"
-                                        value="{{ date('Y-m-d') }}" required>
+                                        max="{{ date('Y-m-d') }}" value="{{ date('Y-m-d') }}" required>
                                 </div>
                             </div>
                         </div>
@@ -99,7 +106,9 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Base Currency *</label>
-                                    <select name="base_currency_id" id="base_currency_id" class="form-control" required>
+                                    <select name="base_currency_id" id="base_currency_id" class="form-control selectpicker"
+                                        data-live-search="true" required>
+
                                         @foreach ($currency_list as $currency)
                                             <option value="{{ $currency->id }}" data-rate="{{ $currency->exchange_rate }}">
                                                 {{ $currency->code }}
@@ -133,7 +142,9 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Local Currency *</label>
-                                    <select name="local_currency_id" id="local_currency_id" class="form-control" required>
+                                    <select name="local_currency_id" id="local_currency_id"
+                                        class="form-control selectpicker" data-live-search="true" required>
+
                                         @foreach ($currency_list as $currency)
                                             <option value="{{ $currency->id }}"
                                                 data-rate="{{ $currency->exchange_rate }}">
@@ -168,7 +179,9 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Voucher Type *</label>
-                                    <select name="voucher_type" id="voucher_type" class="form-control" required>
+                                    <select name="voucher_type" id="voucher_type" class="form-control selectpicker"
+                                        data-live-search="true" required>
+
                                         <option value="receipt">Receipt</option>
                                         <option value="payment">Payment</option>
                                         <option value="sale">Sale</option>
@@ -221,6 +234,78 @@
         $('#party_id_option').on('change', function() {
             const partyType = $(this).find('option:selected').data('type') || '';
             $('#party_type').val(partyType);
+        });
+    </script>
+
+
+    <script>
+        $(document).on('change', 'input[type="date"]', function() {
+            const val = $(this).val();
+            if (!val) return;
+
+            const year = parseInt(val.split('-')[0]);
+            const currentYear = new Date().getFullYear();
+
+            if (year < 1900 || year > currentYear + 1) {
+                alert('Invalid year selected');
+                $(this).val('');
+            }
+        });
+    </script>
+    <script>
+        $(document).on('keydown', '.bootstrap-select .dropdown-toggle', function(e) {
+
+            // Ignore control keys
+            if (
+                e.key.length === 1 && // alphabet / number
+                !e.ctrlKey &&
+                !e.metaKey &&
+                !e.altKey
+            ) {
+                e.preventDefault();
+
+                const select = $(this).closest('.bootstrap-select').find('select');
+
+                if (!select.prop('disabled')) {
+                    select.selectpicker('toggle');
+
+                    // focus search box after open
+                    setTimeout(() => {
+                        $('.bootstrap-select.open .bs-searchbox input').trigger('focus');
+                    }, 50);
+                }
+            }
+        });
+    </script>
+    <script>
+        $(document).on('blur change', 'input[type="date"]', function() {
+
+            let val = $(this).val();
+            if (!val) return;
+
+            let parts = val.split('-');
+            if (parts.length !== 3) return;
+
+            let year = parts[0];
+            let month = parts[1];
+            let day = parts[2];
+
+            // Expand 1–2 digit year → 2000s
+            if (year.length <= 2) {
+                year = (2000 + parseInt(year, 10)).toString();
+            }
+
+            let finalYear = parseInt(year, 10);
+
+            // Hard range check: ONLY 2000–2100
+            if (finalYear < 2000 || finalYear > 2100) {
+                alert('Year must be between 2000 and 2100');
+                $(this).val('');
+                return;
+            }
+
+            // Set corrected date back
+            $(this).val(`${year}-${month}-${day}`);
         });
     </script>
 @endpush

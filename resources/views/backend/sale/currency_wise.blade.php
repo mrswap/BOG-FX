@@ -163,22 +163,74 @@
 
 @push('scripts')
     <script>
-        //////////////////////////////////////////
-        //   DATE RANGE PICKER
-        //////////////////////////////////////////
-        $('input[name="starting_date"], input[name="ending_date"]').datepicker({
-            format: "dd-mm-yyyy",
-            autoclose: true,
-            todayHighlight: true
+        /////////////////////////////////////////////////
+        // DATE INPUT UX PATCH (DMY + 2000–2100 STRICT)
+        /////////////////////////////////////////////////
+
+        // 1️⃣ While typing: only numbers, auto hyphen, max 8 digits
+        $(document).on('input', 'input[name="starting_date"], input[name="ending_date"]', function() {
+
+            let val = $(this).val();
+
+            // allow digits only
+            val = val.replace(/\D/g, '');
+
+            // max ddmmyyyy (8 digits)
+            val = val.substring(0, 8);
+
+            let d = val.substring(0, 2);
+            let m = val.substring(2, 4);
+            let y = val.substring(4, 8);
+
+            let out = '';
+            if (d) out = d;
+            if (m) out += '-' + m;
+            if (y) out += '-' + y;
+
+            $(this).val(out);
         });
 
-        // Optional: ensure ToDate >= FromDate
-        $('input[name="starting_date"]').on('changeDate', function() {
-            $('input[name="ending_date"]').datepicker('setStartDate', $(this).val());
-        });
 
-        $('input[name="ending_date"]').on('changeDate', function() {
-            $('input[name="starting_date"]').datepicker('setEndDate', $(this).val());
+        // 2️⃣ On blur: validate + normalize year
+        $(document).on('blur', 'input[name="starting_date"], input[name="ending_date"]', function() {
+
+            let val = $(this).val();
+            if (!val) return;
+
+            let p = val.split('-');
+            if (p.length !== 3) {
+                $(this).val('');
+                return;
+            }
+
+            let d = parseInt(p[0], 10);
+            let m = parseInt(p[1], 10);
+            let y = p[2];
+
+            // expand 1–2 digit year → 2000+
+            if (y.length <= 2) {
+                y = (2000 + parseInt(y, 10)).toString();
+            }
+
+            y = parseInt(y, 10);
+
+            // hard validation
+            if (
+                d < 1 || d > 31 ||
+                m < 1 || m > 12 ||
+                y < 2000 || y > 2100
+            ) {
+                alert('Invalid date. Use dd-mm-yyyy (2000–2100)');
+                $(this).val('');
+                return;
+            }
+
+            // normalize format
+            $(this).val(
+                String(d).padStart(2, '0') + '-' +
+                String(m).padStart(2, '0') + '-' +
+                y
+            );
         });
 
         //////////////////////////////////////////

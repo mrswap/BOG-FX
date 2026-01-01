@@ -163,26 +163,79 @@
 
 @push('scripts')
     <script>
-        //////////////////////////////////////////
-        //   DATE RANGE PICKER
-        //////////////////////////////////////////
-        $('input[name="starting_date"], input[name="ending_date"]').datepicker({
-            format: "yyyy-mm-dd",
-            autoclose: true,
-            todayHighlight: true
+        /////////////////////////////////////////////////
+        // DATE INPUT UX PATCH (DMY + 2000–2100 STRICT)
+        /////////////////////////////////////////////////
+
+        // 1️⃣ While typing: only numbers, auto hyphen, max 8 digits
+        $(document).on('input', 'input[name="starting_date"], input[name="ending_date"]', function() {
+
+            let val = $(this).val();
+
+            // allow digits only
+            val = val.replace(/\D/g, '');
+
+            // max ddmmyyyy (8 digits)
+            val = val.substring(0, 8);
+
+            let d = val.substring(0, 2);
+            let m = val.substring(2, 4);
+            let y = val.substring(4, 8);
+
+            let out = '';
+            if (d) out = d;
+            if (m) out += '-' + m;
+            if (y) out += '-' + y;
+
+            $(this).val(out);
         });
 
-        // Optional: ensure ToDate >= FromDate
-        $('input[name="starting_date"]').on('changeDate', function() {
-            $('input[name="ending_date"]').datepicker('setStartDate', $(this).val());
+
+        // 2️⃣ On blur: validate + normalize year
+        $(document).on('blur', 'input[name="starting_date"], input[name="ending_date"]', function() {
+
+            let val = $(this).val();
+            if (!val) return;
+
+            let p = val.split('-');
+            if (p.length !== 3) {
+                $(this).val('');
+                return;
+            }
+
+            let d = parseInt(p[0], 10);
+            let m = parseInt(p[1], 10);
+            let y = p[2];
+
+            // expand 1–2 digit year → 2000+
+            if (y.length <= 2) {
+                y = (2000 + parseInt(y, 10)).toString();
+            }
+
+            y = parseInt(y, 10);
+
+            // hard validation
+            if (
+                d < 1 || d > 31 ||
+                m < 1 || m > 12 ||
+                y < 2000 || y > 2100
+            ) {
+                alert('Invalid date. Use dd-mm-yyyy (2000–2100)');
+                $(this).val('');
+                return;
+            }
+
+            // normalize format
+            $(this).val(
+                String(d).padStart(2, '0') + '-' +
+                String(m).padStart(2, '0') + '-' +
+                y
+            );
         });
 
-        $('input[name="ending_date"]').on('changeDate', function() {
-            $('input[name="starting_date"]').datepicker('setEndDate', $(this).val());
-        });
 
         //////////////////////////////////////////
-        //   FORMAT BREAKUP CHILD ROW
+        // FORMAT BREAKUP CHILD ROW
         //////////////////////////////////////////
         function formatBreakup(row) {
 
@@ -191,48 +244,48 @@
             }
 
             let html = `
-                <table class="table table-sm table-bordered mt-2 mb-2">
-                    <thead class="thead-light">
-                        <tr>
-                            <th>Against Vch</th>
-                            <th>Matched Base</th>
-                            <th>Invoice Rate</th>
-                            <th>Settlement Rate</th>
-                            <th>Realised</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                `;
+    <table class="table table-sm table-bordered mt-2 mb-2">
+        <thead class="thead-light">
+            <tr>
+                <th>Against Vch</th>
+                <th>Matched Base</th>
+                <th>Invoice Rate</th>
+                <th>Settlement Rate</th>
+                <th>Realised</th>
+            </tr>
+        </thead>
+        <tbody>
+            `;
 
             row.realised_breakup.forEach(b => {
                 let color = b.realised >= 0 ? 'text-success' : 'text-danger';
                 let sign = b.realised >= 0 ? '+' : '-';
 
                 html += `
-                    <tr>
-                        <td>${b.match_voucher}</td>
-                        <td>${Number(b.matched_base).toFixed(2)}</td>
-                        <td>${Number(b.inv_rate).toFixed(4)}</td>
-                        <td>${Number(b.settl_rate).toFixed(4)}</td>
-                        <td class="${color}">${sign}${Math.abs(b.realised).toFixed(2)}</td>
-                    </tr>
-                `;
+            <tr>
+                <td>${b.match_voucher}</td>
+                <td>${Number(b.matched_base).toFixed(2)}</td>
+                <td>${Number(b.inv_rate).toFixed(4)}</td>
+                <td>${Number(b.settl_rate).toFixed(4)}</td>
+                <td class="${color}">${sign}${Math.abs(b.realised).toFixed(2)}</td>
+            </tr>
+            `;
             });
 
             html += `
-                    <tr class="bg-light font-weight-bold">
-                        <td colspan="4" class="text-right">Total Realised</td>
-                        <td>${Number(row.realised).toFixed(2)}</td>
-                    </tr>
-                </tbody>
-                </table>`;
+            <tr class="bg-light font-weight-bold">
+                <td colspan="4" class="text-right">Total Realised</td>
+                <td>${Number(row.realised).toFixed(2)}</td>
+            </tr>
+        </tbody>
+    </table>`;
 
             return html;
         }
 
 
         //////////////////////////////////////////
-        //   DATATABLE INITIALIZATION
+        // DATATABLE INITIALIZATION
         //////////////////////////////////////////
         var forexTable = $('#forex-table').DataTable({
             processing: true,
@@ -254,7 +307,7 @@
             },
 
             //////////////////////////////////////////
-            //   COLUMNS (FIRST COL = EXPAND BUTTON)
+            // COLUMNS (FIRST COL = EXPAND BUTTON)
             //////////////////////////////////////////
             columns: [
 
@@ -357,11 +410,11 @@
                     orderable: false,
                     render: function(row) {
                         return `
-                <a href="${row.edit_url}" class="btn btn-sm btn-primary">Edit</a>
-                <button class="btn btn-sm btn-danger delete-forex" data-url="${row.delete_url}">
-                    Delete
-                </button>
-            `;
+    <a href="${row.edit_url}" class="btn btn-sm btn-primary">Edit</a>
+    <button class="btn btn-sm btn-danger delete-forex" data-url="${row.delete_url}">
+        Delete
+    </button>
+    `;
                     }
                 }
             ],
@@ -391,7 +444,7 @@
             ],
 
             //////////////////////////////////////////
-            //   FOOTER TOTALS
+            // FOOTER TOTALS
             //////////////////////////////////////////
             drawCallback: function(settings) {
 
@@ -427,17 +480,17 @@
                 let g = json.global; // ⭐ ADD THIS LINE HERE
 
                 let baseBreakupHTML = `
-                    ${Math.abs(netBase).toFixed(2)} USD 
-                    <strong class="text-${baseColor}">${baseSign}</strong>
+        ${Math.abs(netBase).toFixed(2)} USD
+        <strong class="text-${baseColor}">${baseSign}</strong>
 
-                    <div style="font-size: 12px; margin-top: 3px;">
-                        <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
-                        &nbsp; | &nbsp;
-                        <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
-                        &nbsp; | &nbsp;
-                        <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
-                    </div>
-                `;
+        <div style="font-size: 12px; margin-top: 3px;">
+            <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
+            &nbsp; | &nbsp;
+            <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
+            &nbsp; | &nbsp;
+            <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
+        </div>
+        `;
 
                 $('#party-net-balance').html(baseBreakupHTML);
 
@@ -457,7 +510,7 @@
         });
 
         //////////////////////////////////////////
-        //   EXPANDABLE CHILD ROW CLICK EVENT
+        // EXPANDABLE CHILD ROW CLICK EVENT
         //////////////////////////////////////////
         $('#forex-table tbody').on('click', 'td.details-control', function() {
 
@@ -475,7 +528,7 @@
 
 
         //////////////////////////////////////////
-        //   FILTER BUTTON
+        // FILTER BUTTON
         //////////////////////////////////////////
         $('#filter-btn').on('click', function(e) {
             e.preventDefault();
@@ -484,7 +537,7 @@
 
 
         //////////////////////////////////////////
-        //   DELETE FOREX
+        // DELETE FOREX
         //////////////////////////////////////////
         $(document).on("click", ".delete-forex", function() {
             let url = $(this).data("url");
