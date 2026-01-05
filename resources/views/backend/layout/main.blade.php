@@ -304,21 +304,7 @@
                                 </ul>
                             </li>
                         @endif
-                        @php
-                            $languages = array_map('basename', File::directories(resource_path('lang')));
-                        @endphp
-                        <li class="nav-item">
-                            <a rel="nofollow" title="{{ trans('file.language') }}" data-toggle="tooltip"
-                                class="nav-link dropdown-item"><i class="dripicons-web"></i></a>
-                            <ul class="right-sidebar">
-                                @foreach ($languages as $language)
-                                    <li>
-                                        <a href="{{ url('language_switch/' . $language) }}"
-                                            class="btn btn-link">{{ $language }}</a>
-                                    </li>
-                                @endforeach
-                            </ul>
-                        </li>
+                        
                         <li class="nav-item">
                             <a rel="nofollow" data-toggle="tooltip" class="nav-link dropdown-item"><i
                                     class="dripicons-user"></i> <span>{{ ucfirst(Auth::user()->name) }}</span> <i

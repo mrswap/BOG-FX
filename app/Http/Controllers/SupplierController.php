@@ -213,12 +213,11 @@ class SupplierController extends Controller
 
     public function destroy($id)
     {
-        $lims_supplier_data = Supplier::findOrFail($id);
-        $lims_supplier_data->is_active = false;
-        $lims_supplier_data->save();
-        $this->fileDelete(public_path('images/supplier/'), $lims_supplier_data->image);
-
-        return redirect('supplier')->with('not_permitted', 'Data deleted successfully');
+        $lims_supplier_data = Party::findOrFail($id);
+        $lims_supplier_data->delete();
+        //$this->fileDelete(public_path('images/supplier/'), $lims_supplier_data->image);
+        return redirect()->route('supplier.index')
+            ->with('success', 'Supplier deleted successfully');
     }
 
     public function importSupplier(Request $request)

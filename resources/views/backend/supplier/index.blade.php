@@ -18,7 +18,7 @@
   <div class="container-fluid">
     @if(in_array("suppliers-add", $all_permission))
       <a href="{{ route('supplier.create') }}" class="btn btn-info">
-        <i class="dripicons-plus"></i> {{ trans('file.Add Party') }}
+        <i class="dripicons-plus"></i> Add Party
       </a>
     @endif
   </div>
@@ -28,9 +28,7 @@
       <thead>
         <tr>
           <th class="not-exported"></th>
-          <th>{{ trans('file.Image') }}</th>
-          <th>{{ trans('file.Party Details') }}</th>
-          <th>{{ trans('file.Total Due') }}</th>
+          <th>Party Details</th>
           <th class="not-exported">{{ trans('file.action') }}</th>
         </tr>
       </thead>
@@ -38,13 +36,7 @@
         @foreach($parties as $key => $party)
         <tr data-id="{{ $party->id }}">
           <td>{{ $key+1 }}</td>
-          <td>
-            @if($party->image)
-              <img src="{{ url('images/party', $party->image) }}" height="80" width="80">
-            @else
-              <img src="{{ url('images/product/zummXD2dvAtI.png') }}" height="80" width="80">
-            @endif
-          </td>
+          
           <td>
             <strong>{{ $party->name }}</strong><br>
             {{ $party->company_name }}<br>
@@ -56,7 +48,6 @@
             @if($party->postal_code), {{ $party->postal_code }}@endif
             @if($party->country), {{ $party->country }}@endif
           </td>
-          <td>—</td>
           <td>
             <div class="btn-group">
               <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown">

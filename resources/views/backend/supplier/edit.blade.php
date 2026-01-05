@@ -11,7 +11,7 @@
       <div class="col-md-12">
         <div class="card">
           <div class="card-header d-flex align-items-center">
-            <h4>{{ trans('file.Update Party') }}</h4>
+            <h4>Update Party</h4>
           </div>
           <div class="card-body">
             {!! Form::open(['route' => ['supplier.update', $party->id], 'method' => 'put', 'files' => true]) !!}
@@ -19,7 +19,7 @@
 
               {{-- Party Type --}}
               <div class="col-md-6">
-                <label>{{ trans('file.Party Type') }} *</label>
+                <label>Party Type*</label>
                 <select name="type" required class="form-control selectpicker">
                   <option value="customer" {{ $party->type == 'customer' ? 'selected' : '' }}>Customer</option>
                   <option value="supplier" {{ $party->type == 'supplier' ? 'selected' : '' }}>Supplier</option>
@@ -77,10 +77,6 @@
                 <input type="text" name="country" value="{{ $party->country }}" class="form-control">
               </div>
 
-              <div class="col-md-6">
-                <label>{{ trans('file.Image') }}</label>
-                <input type="file" name="image" class="form-control">
-              </div>
 
               <div class="col-md-12 mt-3">
                 <button type="submit" class="btn btn-primary">{{ trans('file.submit') }}</button>

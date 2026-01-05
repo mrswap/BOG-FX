@@ -11,7 +11,7 @@
       <div class="col-md-12">
         <div class="card">
           <div class="card-header d-flex align-items-center">
-            <h4>{{ trans('file.Add Party') }}</h4>
+            <h4>Add Party</h4>
           </div>
           <div class="card-body">
             <p class="italic"><small>{{ trans('file.The field labels marked with * are required input fields') }}.</small></p>
@@ -20,7 +20,7 @@
 
               {{-- Party Type --}}
               <div class="col-md-4">
-                <label>{{ trans('file.Party Type') }} *</label>
+                <label>Party Type*</label>
                 <select name="type" required class="form-control selectpicker" title="Select Party Type">
                   <option value="customer">Customer</option>
                   <option value="supplier">Supplier</option>
@@ -76,11 +76,6 @@
               <div class="col-md-4">
                 <label>{{ trans('file.Country') }}</label>
                 <input type="text" name="country" class="form-control">
-              </div>
-
-              <div class="col-md-4">
-                <label>{{ trans('file.Image') }}</label>
-                <input type="file" name="image" class="form-control">
               </div>
 
               <div class="col-md-12 mt-3">
