@@ -50,7 +50,10 @@
 
                         <div class="col-md-3">
                             <label><strong>Invoice Number</label>
-                            <select name="invoice_id" class="form-control">
+                            <select name="invoice_id" id="invoice_id" class="form-control selectpicker"
+                                data-live-search="true" required>
+
+
                                 <option value="all">All</option>
                                 @foreach ($transaction as $txn)
                                     <option value="{{ $txn->id }}">{{ $txn->voucher_no }}</option>

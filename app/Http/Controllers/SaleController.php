@@ -1194,6 +1194,24 @@ class SaleController extends Controller
         ));
     }
 
+    //exchange rates
+    public function exchChangeRatesReport(Request $request)
+    {
+        $role = Role::find(Auth::user()->role_id);
+        if (!$role->hasPermissionTo('sales-add')) {
+            return redirect()->back()
+                ->with('not_permitted', 'Sorry! You are not allowed');
+        }
+
+        $baseCurrencies  = Currency::where('is_active', true)->orderBy('code')->get();
+        $localCurrencies = Currency::where('is_active', true)->orderBy('code')->get();
+
+        return view('backend.sale.exchange_rates', compact(
+            'baseCurrencies',
+            'localCurrencies'
+        ));
+    }
+
 
     public function getSoldItem($id)
     {

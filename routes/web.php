@@ -140,6 +140,17 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function () {
     [ForexRemittanceController::class, 'getCurrencyWiseReport'])
     ->name('report.currency.data');
 
+
+    
+    Route::get('/forex/reports/exchange-rates',
+    [SaleController::class, 'exchChangeRatesReport'])
+    ->name('forex.txn.report.exchange_rates');
+
+
+    
+    Route::post('/forex/reports/exchange-rates-data',
+    [ForexRemittanceController::class, 'exchChangeRatesReportData'])
+    ->name('forex.txn.report.data.exchange_rates');
 });
 
 Route::match(

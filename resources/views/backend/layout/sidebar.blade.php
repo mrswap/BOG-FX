@@ -54,6 +54,13 @@
                 </a>
             </li>
 
+            
+            <li>
+                <a href="{{ route('forex.txn.report.exchange_rates') }}">
+                    <i class="dripicons-gear"></i>Exchange Change Rate Report
+                </a>
+            </li>
+
         </ul>
     </li>
 

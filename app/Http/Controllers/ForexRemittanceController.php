@@ -612,4 +612,109 @@ class ForexRemittanceController extends Controller
             ], 500);
         }
     }
+
+    public function exchChangeRatesReportData(Request $request)
+    {
+        try {
+
+            // ===============================
+            // 1️⃣ DATE GUARD
+            // ===============================
+            if (empty($request->starting_date) || empty($request->ending_date)) {
+                return response()->json([
+                    'draw' => intval($request->draw),
+                    'recordsTotal' => 0,
+                    'recordsFiltered' => 0,
+                    'data' => []
+                ]);
+            }
+
+            $start = Carbon::createFromFormat('d-m-Y', $request->starting_date)
+                ->startOfDay()->toDateString();
+
+            $end = Carbon::createFromFormat('d-m-Y', $request->ending_date)
+                ->endOfDay()->toDateString();
+
+            // ===============================
+            // 2️⃣ QUERY
+            // ===============================
+            $q = Transaction::whereBetween('transaction_date', [$start, $end])
+                ->whereNotNull('exchange_rate');
+
+            if (!empty($request->base_currency_id)) {
+                $q->where('base_currency_id', $request->base_currency_id);
+            }
+
+            if (!empty($request->local_currency_id)) {
+                $q->where('local_currency_id', $request->local_currency_id);
+            }
+
+            $txs = $q->orderBy('transaction_date')
+                ->orderBy('id')
+                ->get();
+
+            // ===============================
+            // 3️⃣ GROUP BY DATE
+            // ===============================
+            $grouped = [];
+
+            foreach ($txs as $tx) {
+
+                $date = Carbon::parse($tx->transaction_date)->format('Y-m-d');
+
+                $grouped[$date][] = [
+                    'voucher_type' => ucfirst($tx->voucher_type),
+                    'voucher_no'   => $tx->voucher_no,
+                    'rate'         => (float)$tx->exchange_rate
+                ];
+            }
+
+            // ===============================
+            // 4️⃣ BUILD ROWS
+            // ===============================
+            $rows = [];
+            $sn = 1;
+
+            foreach ($grouped as $date => $items) {
+
+                $rates = array_column($items, 'rate');
+                $avg   = count($rates) ? array_sum($rates) / count($rates) : 0;
+
+                $rows[] = [
+                    'sn'      => $sn++,
+                    'date'    => Carbon::parse($date)->format('d-m-Y'),
+                    'entries' => array_map(function ($i) {
+                        return [
+                            'voucher_type' => $i['voucher_type'],
+                            'voucher_no'   => $i['voucher_no'],
+                            'rate'         => number_format($i['rate'], 6, '.', '')
+                        ];
+                    }, $items),
+                    'avg_rate' => number_format($avg, 6, '.', '')
+                ];
+            }
+
+            // ===============================
+            // 5️⃣ RESPONSE
+            // ===============================
+            return response()->json([
+                'draw'            => intval($request->draw),
+                'recordsTotal'    => count($rows),
+                'recordsFiltered' => count($rows),
+                'data'            => $rows
+            ]);
+        } catch (\Throwable $e) {
+
+            \Log::error('[ExchangeRateReport]', [
+                'msg' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'draw' => intval($request->draw),
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => []
+            ], 500);
+        }
+    }
 }
