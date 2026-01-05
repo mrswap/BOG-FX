@@ -110,6 +110,12 @@ class LedgerBuilder
                 foreach ($matches as $m) {
                     $realisedBreakup[] = [
                         'match_voucher' => $m->settlement ? $m->settlement->voucher_no : null,
+
+                        // ⭐ NEW
+                        'settlement_date' => $m->settlement && $m->settlement->transaction_date
+                            ? Carbon::parse($m->settlement->transaction_date)->format('d-m-Y')
+                            : null,
+
                         'matched_base'  => (float)$m->matched_base_amount,
                         'inv_rate'      => (float)$m->invoice_rate,
                         'settl_rate'    => (float)$m->settlement_rate,
@@ -295,10 +301,17 @@ class LedgerBuilder
         $A = $CR; // copy
         $B = $DR; // copy
 
-        $i = 0; $j = 0;
+        $i = 0;
+        $j = 0;
         while ($i < count($A) && $j < count($B)) {
-            if ($A[$i]['base'] == 0) { $i++; continue; }
-            if ($B[$j]['base'] == 0) { $j++; continue; }
+            if ($A[$i]['base'] == 0) {
+                $i++;
+                continue;
+            }
+            if ($B[$j]['base'] == 0) {
+                $j++;
+                continue;
+            }
 
             $consume = min($A[$i]['base'], $B[$j]['base']);
 
@@ -340,8 +353,12 @@ class LedgerBuilder
         }
 
         // Total base sums (for compatibility with old shape)
-        $totalCR_base = array_reduce($CR, function($carry, $it) { return $carry + $it['base']; }, 0.0) + $remainingCR_base;
-        $totalDR_base = array_reduce($DR, function($carry, $it) { return $carry + $it['base']; }, 0.0) + $remainingDR_base;
+        $totalCR_base = array_reduce($CR, function ($carry, $it) {
+            return $carry + $it['base'];
+        }, 0.0) + $remainingCR_base;
+        $totalDR_base = array_reduce($DR, function ($carry, $it) {
+            return $carry + $it['base'];
+        }, 0.0) + $remainingDR_base;
 
         // Decide net: earlier behavior reported local_net as remaining_base * appliedRate (single side).
         // But your requested logic: local_net = CR_local - DR_local (side-wise valuation)

@@ -210,12 +210,22 @@ class ForexRemittanceController extends Controller
     {
         Log::info("[forexRemittanceData] service-based V1 enter", ['request' => $request->all()]);
 
+        $startingDate = $request->starting_date
+            ? Carbon::createFromFormat('d-m-Y', trim($request->starting_date))
+            ->toDateString()
+            : null;
+
+        $endingDate = $request->ending_date
+            ? Carbon::createFromFormat('d-m-Y', trim($request->ending_date))
+            ->toDateString()
+            : null;
+
         // build filter options
         $opts = [
             'party_type' => $request->input('party_type') ?: null,
             'currency_id' => $request->input('currency_id') ? intval($request->input('currency_id')) : null,
-            'starting_date' => $request->input('starting_date') ?: null,
-            'ending_date' => $request->input('ending_date') ?: null,
+            'starting_date' => $startingDate, // ✅ Y-m-d
+            'ending_date'   => $endingDate,   // ✅ Y-m-d
         ];
 
         // Use LedgerBuilder to get rows (already formatted)
@@ -295,13 +305,22 @@ class ForexRemittanceController extends Controller
 
     public function getPartyWiseReport(Request $request)
     {
+        $startingDate = $request->starting_date
+            ? Carbon::createFromFormat('d-m-Y', trim($request->starting_date))
+            ->toDateString()
+            : null;
+
+        $endingDate = $request->ending_date
+            ? Carbon::createFromFormat('d-m-Y', trim($request->ending_date))
+            ->toDateString()
+            : null;
         // -----------------------------
         // 1) Build filter options
         // -----------------------------
         $opts = [
             'party_id'      => $request->input('party_id'),
-            'starting_date' => $request->input('starting_date'),
-            'ending_date'   => $request->input('ending_date'),
+            'starting_date' => $startingDate, // ✅ Y-m-d
+            'ending_date'   => $endingDate,   // ✅ Y-m-d
             'txn_group'     => $request->input('txn_group'),
         ];
 
@@ -389,9 +408,19 @@ class ForexRemittanceController extends Controller
     {
         try {
 
-            $start = $request->starting_date;
-            $end   = $request->ending_date;
+
+            $start = $request->starting_date
+                ? Carbon::createFromFormat('d-m-Y', trim($request->starting_date))
+                ->toDateString()
+                : null;
+
+            $end = $request->ending_date
+                ? Carbon::createFromFormat('d-m-Y', trim($request->ending_date))
+                ->toDateString()
+                : null;
+
             $invoiceId = $request->invoice_id;
+
 
             // -------------------------------------
             // CASE 1: ALL invoices → use normal LB
@@ -403,8 +432,11 @@ class ForexRemittanceController extends Controller
                     'ending_date'   => $end,
                     // no filter → all transactions
                 ];
+                $built = $this->ledgerBuilder->buildForDataTable($opts);
 
-                $rows = $this->ledgerBuilder->buildForDataTable($opts);
+                $rows   = $built['rows'];              // ✅ FIX
+                $global = $built['global_summary'];    // ✅ FIX
+
             } else {
 
                 // -------------------------------------
@@ -512,8 +544,16 @@ class ForexRemittanceController extends Controller
     {
         try {
 
-            $start = $request->starting_date;
-            $end   = $request->ending_date;
+            $start = $request->starting_date
+                ? Carbon::createFromFormat('d-m-Y', trim($request->starting_date))
+                ->toDateString()
+                : null;
+
+            $end = $request->ending_date
+                ? Carbon::createFromFormat('d-m-Y', trim($request->ending_date))
+                ->toDateString()
+                : null;
+
 
             $baseCurrencyId  = $request->base_currency_id;
             $localCurrencyId = $request->local_currency_id;

@@ -248,6 +248,7 @@
         <thead class="thead-light">
             <tr>
                 <th>Against Vch</th>
+                   <th>Settlement Date</th>
                 <th>Matched Base</th>
                 <th>Invoice Rate</th>
                 <th>Settlement Rate</th>
@@ -264,6 +265,7 @@
                 html += `
             <tr>
                 <td>${b.match_voucher}</td>
+                <td>${b.settlement_date ?? '-'}</td>
                 <td>${Number(b.matched_base).toFixed(2)}</td>
                 <td>${Number(b.inv_rate).toFixed(4)}</td>
                 <td>${Number(b.settl_rate).toFixed(4)}</td>
