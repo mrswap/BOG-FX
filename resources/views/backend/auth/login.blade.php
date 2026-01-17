@@ -5,9 +5,11 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>{{$general_setting->site_title}}</title>
     <meta name="description" content="">
+    
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="all,follow">
-    <link rel="manifest" href="{{url('manifest.json')}}">
+    <link rel="manifest" href="/manifest.json">
+
     @if(!config('database.connections.saleprosaas_landlord'))
     <link rel="icon" type="image/png" href="{{url('logo', $general_setting->site_logo)}}" />
     <!-- Bootstrap CSS-->
@@ -134,7 +136,7 @@
     
     if ('serviceWorker' in navigator ) {
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/salepro/service-worker.js').then(function(registration) {
+            navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
                 // Registration was successful
                 console.log('ServiceWorker registration successful with scope: ', registration.scope);
             }, function(err) {
