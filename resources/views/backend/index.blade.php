@@ -25,332 +25,336 @@
         }
     @endphp
 
-    <!-- Counts Section -->
+    <!-- Dashboard Counts Section -->
     <section class="dashboard-counts">
         <div class="container-fluid">
-            <div class="row">
 
-                <div class="col-md-12 form-group">
-                    <div class="row">
-                        <div class="col-md-12 form-group">
-                            <div class="row">
-                                <div class="col-md-12 form-group">
-                                    <div class="row">
+            <!-- ================= Dashboard Home ================= -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h4 class="mb-3">Dashboard</h4>
+                </div>
 
-                                        <!-- Currency Master -->
-                                        <div class="col-sm-3">
-                                            <a href="{{ route('currency.index') }}" class="text-decoration-none">
-                                                <div class="wrapper count-title">
-                                                    <div class="icon">
-                                                        <i class="dripicons-wallet" style="color:#20c997"></i>
-                                                    </div>
-                                                    <div>
-                                                        <div class="count-number" style="font-size:16px;">Currency</div>
-                                                        <div class="name">
-                                                            <strong style="color:#20c997">Master</strong>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </a>
-                                        </div>
-
-                                        <!-- Party List -->
-                                        <div class="col-sm-3">
-                                            <a href="{{ route('supplier.index') }}" class="text-decoration-none">
-                                                <div class="wrapper count-title">
-                                                    <div class="icon">
-                                                        <i class="dripicons-user-group" style="color:#fd7e14"></i>
-                                                    </div>
-                                                    <div>
-                                                        <div class="count-number" style="font-size:16px;">Party</div>
-                                                        <div class="name">
-                                                            <strong style="color:#fd7e14">List</strong>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </a>
-                                        </div>
-
-                                        <!-- Add Party -->
-                                        <div class="col-sm-3">
-                                            <a href="{{ route('supplier.create') }}" class="text-decoration-none">
-                                                <div class="wrapper count-title">
-                                                    <div class="icon">
-                                                        <i class="dripicons-user" style="color:#6f42c1"></i>
-                                                    </div>
-                                                    <div>
-                                                        <div class="count-number" style="font-size:16px;">Add</div>
-                                                        <div class="name">
-                                                            <strong style="color:#6f42c1">Party</strong>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </a>
-                                        </div>
-
-                                        <!-- Create Remittance -->
-                                        <div class="col-sm-3">
-                                            <a href="{{ route('sales.create') }}" class="text-decoration-none">
-                                                <div class="wrapper count-title">
-                                                    <div class="icon">
-                                                        <i class="dripicons-document-edit" style="color:#0d6efd"></i>
-                                                    </div>
-                                                    <div>
-                                                        <div class="count-number" style="font-size:16px;">Create</div>
-                                                        <div class="name">
-                                                            <strong style="color:#0d6efd">Remittance</strong>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </a>
-                                        </div>
-
-                                    </div>
+                <div class="col-12">
+                    <a href="{{ url('/dashboard') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-meter" style="color:#733686"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Dashboard</div>
+                                <div class="name">
+                                    <strong style="color:#733686">Home</strong>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-12 form-group">
-                            <div class="row">
-                                <!-- All Remittance List -->
-                                <div class="col-sm-3">
-                                    <a href="{{ route('sales.index') }}" class="text-decoration-none">
-                                        <div class="wrapper count-title">
-                                            <div class="icon">
-                                                <i class="dripicons-list" style="color:#6f42c1"></i>
-                                            </div>
-                                            <div>
-                                                <div class="count-number" style="font-size:16px;">All Remittance
-                                                </div>
-                                                <div class="name">
-                                                    <strong style="color:#6f42c1">List</strong>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </div>
+                    </a>
+                </div>
+            </div>
 
-                                <!-- Party Wise Report -->
-                                <div class="col-sm-3">
-                                    <a href="{{ route('forex.txn.report.party') }}" class="text-decoration-none">
-                                        <div class="wrapper count-title">
-                                            <div class="icon">
-                                                <i class="dripicons-user" style="color:#ff8952"></i>
-                                            </div>
-                                            <div>
-                                                <div class="count-number" style="font-size:16px;">Party Wise</div>
-                                                <div class="name">
-                                                    <strong style="color:#ff8952">Report</strong>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </div>
+            <!-- ================= Fx Inwards / Outwards ================= -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h4 class="mb-3">Fx Inwards – Outwards</h4>
+                </div>
 
-                                <!-- Currency Wise Report -->
-                                <div class="col-sm-3">
-                                    <a href="{{ route('forex.txn.report.currency') }}" class="text-decoration-none">
-                                        <div class="wrapper count-title">
-                                            <div class="icon">
-                                                <i class="dripicons-wallet" style="color:#00c689"></i>
-                                            </div>
-                                            <div>
-                                                <div class="count-number" style="font-size:16px;">Currency Wise
-                                                </div>
-                                                <div class="name">
-                                                    <strong style="color:#00c689">Report</strong>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </div>
-
-                                <!-- Invoice Wise Report -->
-                                <div class="col-sm-3">
-                                    <a href="{{ route('forex.txn.report.invoice') }}" class="text-decoration-none">
-                                        <div class="wrapper count-title">
-                                            <div class="icon">
-                                                <i class="dripicons-document" style="color:#297ff9"></i>
-                                            </div>
-                                            <div>
-                                                <div class="count-number" style="font-size:16px;">Invoice Wise
-                                                </div>
-                                                <div class="name">
-                                                    <strong style="color:#297ff9">Report</strong>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </div>
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('currency.index') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-wallet" style="color:#20c997"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Currency</div>
+                                <div class="name"><strong style="color:#20c997">Master</strong></div>
                             </div>
                         </div>
+                    </a>
+                </div>
 
-                        <div class="col-md-12 form-group">
-                            <div class="row">
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('supplier.index') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-user-group" style="color:#fd7e14"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Party</div>
+                                <div class="name"><strong style="color:#fd7e14">List</strong></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
 
-                                <!-- INWARDS -->
-                                <div class="col-sm-4">
-                                    <div class="wrapper count-title">
-                                        <div class="icon">
-                                            <i class="dripicons-download" style="color:#20c997"></i>
-                                        </div>
-                                        <div>
-                                            <div class="count-number">
-                                                {{ number_format($inwards, 4, '.', ',') }}
-                                            </div>
-                                            <div class="name">
-                                                <strong style="color:#20c997">Inwards</strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('supplier.create') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-user" style="color:#6f42c1"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Add</div>
+                                <div class="name"><strong style="color:#6f42c1">Party</strong></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
 
-                                <!-- OUTWARDS -->
-                                <div class="col-sm-4">
-                                    <div class="wrapper count-title">
-                                        <div class="icon">
-                                            <i class="dripicons-upload" style="color:#fd7e14"></i>
-                                        </div>
-                                        <div>
-                                            <div class="count-number">
-                                                {{ number_format($outwards, 4, '.', ',') }}
-                                            </div>
-                                            <div class="name">
-                                                <strong style="color:#fd7e14">Outwards</strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('sales.create') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-document-edit" style="color:#0d6efd"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Create</div>
+                                <div class="name"><strong style="color:#0d6efd">Remittance</strong></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
 
-                                <!-- TOTAL GAIN / LOSS -->
-                                <div class="col-sm-4">
-                                    <div class="wrapper count-title">
-                                        <div class="icon">
-                                            <i class="dripicons-graph-line"
-                                                style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}"></i>
-                                        </div>
-                                        <div>
-                                            <div class="count-number">
-                                                {{ number_format(abs($totalGainLoss), 4, '.', ',') }}
-                                            </div>
-                                            <div class="name">
-                                                <strong style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}">
-                                                    {{ $totalGainLoss >= 0 ? 'Total Gain' : 'Total Loss' }}
-                                                </strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+            <!-- ================= Forex Reports ================= -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h4 class="mb-3">Forex Reports</h4>
+                </div>
+
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('sales.index') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-list" style="color:#6f42c1"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">All Remittance</div>
+                                <div class="name"><strong style="color:#6f42c1">List</strong></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('forex.txn.report.party') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-user" style="color:#ff8952"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Party Wise</div>
+                                <div class="name"><strong style="color:#ff8952">Report</strong></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('forex.txn.report.currency') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-wallet" style="color:#00c689"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Currency Wise</div>
+                                <div class="name"><strong style="color:#00c689">Report</strong></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('forex.txn.report.invoice') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-document" style="color:#297ff9"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Invoice Wise</div>
+                                <div class="name"><strong style="color:#297ff9">Report</strong></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-3 mb-3">
+                    <a href="{{ route('forex.txn.report.exchange_rates') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-graph-line" style="color:#0d6efd"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">Exchange Rate</div>
+                                <div class="name"><strong style="color:#0d6efd">Report</strong></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- ================= Forex Data ================= -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h4 class="mb-3">Forex Data</h4>
+                </div>
+
+                <div class="col-sm-4 mb-3">
+                    <div class="wrapper count-title">
+                        <div class="icon">
+                            <i class="dripicons-download" style="color:#20c997"></i>
+                        </div>
+                        <div>
+                            <div class="count-number">{{ number_format($inwards, 4, '.', ',') }}</div>
+                            <div class="name"><strong style="color:#20c997">Inwards</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-sm-4 mb-3">
+                    <div class="wrapper count-title">
+                        <div class="icon">
+                            <i class="dripicons-upload" style="color:#fd7e14"></i>
+                        </div>
+                        <div>
+                            <div class="count-number">{{ number_format($outwards, 4, '.', ',') }}</div>
+                            <div class="name"><strong style="color:#fd7e14">Outwards</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-sm-4 mb-3">
+                    <div class="wrapper count-title">
+                        <div class="icon">
+                            <i class="dripicons-graph-line"
+                                style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}"></i>
+                        </div>
+                        <div>
+                            <div class="count-number">{{ number_format(abs($totalGainLoss), 4, '.', ',') }}</div>
+                            <div class="name">
+                                <strong style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}">
+                                    {{ $totalGainLoss >= 0 ? 'Total Gain' : 'Total Loss' }}
+                                </strong>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6 mt-4">
-                    <div class="card line-chart-example">
+            </div>
+
+            <!-- ================= Charts & Recent Transactions ================= -->
+            <div class="row mt-4">
+
+                <!-- ===== Cash Flow Chart ===== -->
+                <div class="col-md-6 mb-4">
+                    <div class="card line-chart-example h-100">
                         <div class="card-header d-flex align-items-center">
-                            <h4>{{ trans('file.Cash Flow') }}</h4>
+                            <h4 class="mb-0">{{ trans('file.Cash Flow') }}</h4>
                         </div>
                         <div class="card-body">
-                            <canvas id="cashFlow" data-color = "{{ $color }}"
-                                data-color_rgba = "{{ $color_rgba }}"
-                                data-recieved = "{{ json_encode($payment_recieved) }}"
-                                data-sent = "{{ json_encode($payment_sent) }}" data-month = "{{ json_encode($month) }}"
+                            <canvas id="cashFlow" data-color="{{ $color }}"
+                                data-color_rgba="{{ $color_rgba }}"
+                                data-recieved="{{ json_encode($payment_recieved) }}"
+                                data-sent="{{ json_encode($payment_sent) }}" data-month="{{ json_encode($month) }}"
                                 data-label1="{{ trans('file.Payment Recieved') }}"
-                                data-label2="{{ trans('file.Payment Sent') }}"></canvas>
+                                data-label2="{{ trans('file.Payment Sent') }}">
+                            </canvas>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6 mt-4">
-                    <div class="card">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h4>{{ trans('file.Recent Transaction') }}</h4>
-                                <div class="right-column">
-                                    <div class="badge badge-primary">{{ trans('file.latest') }} 5</div>
+
+                <!-- ===== Recent Transactions ===== -->
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0">{{ trans('file.Recent Transaction') }}</h4>
+                            <span class="badge badge-primary">{{ trans('file.latest') }} 5</span>
+                        </div>
+
+                        <ul class="nav nav-tabs px-3 pt-2" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="#sale-latest" role="tab" data-toggle="tab">
+                                    Transactions
+                                </a>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content p-3">
+                            <!-- Sales -->
+                            <div role="tabpanel" class="tab-pane fade show active" id="sale-latest">
+                                <div class="table-responsive">
+                                    <table id="recent-sale" class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ trans('file.date') }}</th>
+                                                <th>{{ trans('file.reference') }}</th>
+                                                <th>{{ trans('file.status') }}</th>
+                                                <th>Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
                                 </div>
                             </div>
-                            <ul class="nav nav-tabs" role="tablist">
-                                <li class="nav-item">
-                                    <a class="nav-link active" href="#sale-latest" role="tab"
-                                        data-toggle="tab">Transactions</a>
-                                </li>
-                            </ul>
 
-                            <div class="tab-content">
-                                <div role="tabpanel" class="tab-pane fade show active" id="sale-latest">
-                                    <div class="table-responsive">
-                                        <table id="recent-sale" class="table">
-                                            <thead>
-                                                <tr>
-                                                    <th>{{ trans('file.date') }}</th>
-                                                    <th>{{ trans('file.reference') }}</th>
-                                                    <th>{{ trans('file.status') }}</th>
-                                                    <th>Amount</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <div role="tabpanel" class="tab-pane fade" id="purchase-latest">
-                                    <div class="table-responsive">
-                                        <table id="recent-purchase" class="table">
-                                            <thead>
-                                                <tr>
-                                                    <th>{{ trans('file.date') }}</th>
-                                                    <th>{{ trans('file.reference') }}</th>
-                                                    <th>{{ trans('file.status') }}</th>
-                                                    <th>{{ trans('file.grand total') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <div role="tabpanel" class="tab-pane fade" id="quotation-latest">
-                                    <div class="table-responsive">
-                                        <table id="recent-quotation" class="table">
-                                            <thead>
-                                                <tr>
-                                                    <th>{{ trans('file.date') }}</th>
-                                                    <th>{{ trans('file.reference') }}</th>
-                                                    <th>{{ trans('file.customer') }}</th>
-                                                    <th>{{ trans('file.status') }}</th>
-                                                    <th>{{ trans('file.grand total') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <div role="tabpanel" class="tab-pane fade" id="payment-latest">
-                                    <div class="table-responsive">
-                                        <table id="recent-payment" class="table">
-                                            <thead>
-                                                <tr>
-                                                    <th>{{ trans('file.date') }}</th>
-                                                    <th>{{ trans('file.reference') }}</th>
-                                                    <th>{{ trans('file.Amount') }}</th>
-                                                    <th>{{ trans('file.Paid By') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                            </tbody>
-                                        </table>
-                                    </div>
+                            <!-- Purchase -->
+                            <div role="tabpanel" class="tab-pane fade" id="purchase-latest">
+                                <div class="table-responsive">
+                                    <table id="recent-purchase" class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ trans('file.date') }}</th>
+                                                <th>{{ trans('file.reference') }}</th>
+                                                <th>{{ trans('file.status') }}</th>
+                                                <th>{{ trans('file.grand total') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
                                 </div>
                             </div>
+
+                            <!-- Quotation -->
+                            <div role="tabpanel" class="tab-pane fade" id="quotation-latest">
+                                <div class="table-responsive">
+                                    <table id="recent-quotation" class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ trans('file.date') }}</th>
+                                                <th>{{ trans('file.reference') }}</th>
+                                                <th>{{ trans('file.customer') }}</th>
+                                                <th>{{ trans('file.status') }}</th>
+                                                <th>{{ trans('file.grand total') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Payments -->
+                            <div role="tabpanel" class="tab-pane fade" id="payment-latest">
+                                <div class="table-responsive">
+                                    <table id="recent-payment" class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ trans('file.date') }}</th>
+                                                <th>{{ trans('file.reference') }}</th>
+                                                <th>{{ trans('file.Amount') }}</th>
+                                                <th>{{ trans('file.Paid By') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
 
             </div>
-        </div>
 
+
+        </div>
     </section>
 @endsection
 
