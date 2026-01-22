@@ -48,6 +48,11 @@ class LedgerBuilder
             }
         }
 
+        if (!empty($opts['party_id'])) {
+            $q->where('party_id', intval($opts['party_id']));
+        }
+
+
         if (!empty($opts['starting_date']) && !empty($opts['ending_date'])) {
             $start = Carbon::createFromFormat('Y-m-d', $opts['starting_date'])->toDateString();
             $end   = Carbon::createFromFormat('Y-m-d', $opts['ending_date'])->toDateString();
@@ -240,6 +245,9 @@ class LedgerBuilder
                 // ⭐ ACTION URLs
                 'edit_url'   => route('sales.edit', $tx->id),
                 'delete_url' => route('forex.remittance.destroy', $tx->id),
+                'attachment' => $tx->attachment
+                    ? url($tx->attachment)
+                    : null,
             ];
         }
 

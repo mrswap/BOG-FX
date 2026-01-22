@@ -56,7 +56,7 @@
                     <h4>Create Forex Remittance</h4>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('forex.remittance.store') }}" method="POST">
+                    <form action="{{ route('forex.remittance.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
 
                         <div class="row">
@@ -205,6 +205,12 @@
                             <label>Remarks</label>
                             <textarea name="remarks" class="form-control" rows="3"></textarea>
                         </div>
+                        <div class="form-group">
+                            <label>Attachment (Invoice / Proof)</label>
+                            <input type="file" name="attachment" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                            <small class="text-muted">Allowed: PDF, JPG, PNG (Max 5MB)</small>
+                        </div>
+
 
                         <button type="submit" class="btn btn-primary">Save Remittance</button>
                     </form>

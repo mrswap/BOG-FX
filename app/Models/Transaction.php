@@ -11,7 +11,7 @@ class Transaction extends Model
     protected $fillable = [
         'party_id','party_type','transaction_date','base_currency_id','base_amount',
         'closing_rate','local_currency_id','exchange_rate','local_amount',
-        'voucher_type','voucher_no','remarks',
+        'voucher_type','voucher_no','remarks','attachment'
     ];
 
     protected $casts = [

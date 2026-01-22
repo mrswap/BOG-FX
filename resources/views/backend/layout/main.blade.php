@@ -198,7 +198,7 @@
 
 <body
     class="@if ($theme == 'dark') dark-mode dripicons-brightness-low @endif  @if (Route::current()->getName() == 'sale.pos') pos-page @endif"
-    onload="myFunction()">
+    data-loaded="0">
     <div id="loader"></div>
     <!-- Side Navbar -->
     <nav class="side-navbar shrink d-print-none">
@@ -304,7 +304,7 @@
                                 </ul>
                             </li>
                         @endif
-                        
+
                         <li class="nav-item">
                             <a rel="nofollow" data-toggle="tooltip" class="nav-link dropdown-item"><i
                                     class="dripicons-user"></i> <span>{{ ucfirst(Auth::user()->name) }}</span> <i
@@ -1226,6 +1226,7 @@
             $('nav.side-navbar').removeClass('shrink');
         }
 
+        /**
         function myFunction() {
             setTimeout(showPage, 100);
         }
@@ -1234,8 +1235,18 @@
             document.getElementById("loader").style.display = "none";
             document.getElementById("content").style.display = "block";
         }
+        **/
 
-        $("div.alert").delay(4000).slideUp(30000);
+        $(document).ready(function() {
+            $("#loader").fadeOut(200);
+            $("#content").fadeIn(200);
+        });
+
+
+        //$("div.alert").delay(4000).slideUp(30000);
+        setTimeout(function() {
+            $("div.alert").fadeOut(500);
+        }, 3500);
 
         function confirmDelete() {
             if (confirm("Are you sure want to delete?")) {
@@ -1326,7 +1337,7 @@
         });
 
         $("a#customer-report-link").click(function(e) {
-           
+
         });
 
         $("a#customer-group-report-link").click(function(e) {

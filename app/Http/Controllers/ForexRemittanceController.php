@@ -36,6 +36,17 @@ class ForexRemittanceController extends Controller
         ]);
         $data = $this->validateRequest($request);
 
+        if ($request->hasFile('attachment')) {
+
+            $file = $request->file('attachment');
+
+            $name = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+            $file->move(public_path('attachment'), $name);
+
+            $data['attachment'] = 'attachment/' . $name;
+        }
+
         // compute local_amount if not provided
         if (empty($data['local_amount']) && isset($data['base_amount'], $data['exchange_rate'])) {
             $data['local_amount'] = round($data['base_amount'] * $data['exchange_rate'], 4);
@@ -82,6 +93,20 @@ class ForexRemittanceController extends Controller
         ]);
 
         $data = $this->validateRequest($request, $transaction->id);
+
+        if ($request->hasFile('attachment')) {
+
+            if ($transaction->attachment && file_exists(public_path($transaction->attachment))) {
+                unlink(public_path($transaction->attachment));
+            }
+
+            $file = $request->file('attachment');
+            $name = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $file->move(public_path('attachment'), $name);
+
+            $data['attachment'] = 'attachment/' . $name;
+        }
+
 
         if (empty($data['local_amount']) && isset($data['base_amount'], $data['exchange_rate'])) {
             $data['local_amount'] = round($data['base_amount'] * $data['exchange_rate'], 4);
@@ -191,6 +216,8 @@ class ForexRemittanceController extends Controller
             'voucher_type' => ['required', Rule::in(['sale', 'purchase', 'receipt', 'payment'])],
             'voucher_no' => ['required', 'string', 'max:255'],
             'remarks' => ['nullable', 'string'],
+            'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+
         ];
 
         // ensure voucher_no uniqueness except for current record (on update)
@@ -544,6 +571,8 @@ class ForexRemittanceController extends Controller
     {
         try {
 
+            $partyId = $request->party_id;
+
             $start = $request->starting_date
                 ? Carbon::createFromFormat('d-m-Y', trim($request->starting_date))
                 ->toDateString()
@@ -567,6 +596,8 @@ class ForexRemittanceController extends Controller
                 // Custom filters we will interpret below
                 'base_currency_id'  => $baseCurrencyId,
                 'local_currency_id' => $localCurrencyId,
+                'party_id'      => $request->input('party_id'),
+
             ];
 
             // ================================
@@ -595,6 +626,11 @@ class ForexRemittanceController extends Controller
 
                 // local currency match
                 if ($localCurrencyId && $tx->local_currency_id != $localCurrencyId) {
+                    continue;
+                }
+
+                // party filter
+                if ($partyId && $tx->party_id != $partyId) {
                     continue;
                 }
 

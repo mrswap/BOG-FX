@@ -103,6 +103,8 @@
                         <th>Diff</th>
                         <th>Realised</th>
                         <th>Unrealised</th>
+                        <th>Attachment</th>
+
                         <th>Remarks</th>
                         <th class="text-center">Action</th>
                     </tr>
@@ -405,6 +407,16 @@
                         let color = num > 0 ? 'info' : 'warning';
                         let sign = num > 0 ? '+' : '-';
                         return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
+                    }
+                },
+                {
+                    data: 'attachment',
+                    className: 'text-center',
+                    render: function(val) {
+                        if (!val) return '-';
+                        return `<a href="${val}" target="_blank" class="btn btn-sm btn-info">
+                    View
+                </a>`;
                     }
                 },
 

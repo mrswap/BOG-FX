@@ -35,18 +35,18 @@
                     {!! Form::open(['route' => 'forex.txn.report.currency', 'method' => 'post']) !!}
                     <div class="row mt-2">
 
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label><strong>From Date</strong></label>
                             <input type="text" name="starting_date" autocomplete="off" class="form-control datepicker"
                                 required>
                         </div>
 
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label><strong>To Date</strong></label>
                             <input type="text" name="ending_date" autocomplete="off" class="form-control datepicker"
                                 required>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label><strong>Base Currency</strong></label>
                             <select name="base_currency_id" class="form-control">
                                 <option value="">All</option>
@@ -56,13 +56,25 @@
                             </select>
                         </div>
 
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label><strong>Local Currency</strong></label>
                             <select name="local_currency_id" class="form-control">
                                 <option value="">All</option>
                                 @foreach ($currency_list as $currency)
                                     <option value="{{ $currency->id }}">{{ $currency->code }}</option>
                                 @endforeach
+                            </select>
+                        </div>
+
+
+                        <div class="col-md-2">
+                            <label><strong>Party</strong></label>
+                            <select name="party_id" class="form-control selectpicker" data-live-search="true">
+                                <option value="">All</option>
+                                @foreach ($parties as $p)
+                                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                                @endforeach
+                                
                             </select>
                         </div>
 
@@ -300,10 +312,9 @@
 
                     d.starting_date = $('input[name=starting_date]').val();
                     d.ending_date = $('input[name=ending_date]').val();
-
+                    d.party_id = $('select[name=party_id]').val();
                     d.base_currency_id = $('select[name=base_currency_id]').val();
                     d.local_currency_id = $('select[name=local_currency_id]').val();
-
                     d._token = "{{ csrf_token() }}";
                 }
             },
