@@ -222,6 +222,14 @@
                 <nav class="navbar">
                     <a id="toggle-btn" href="#" class="menu-btn"><i class="fa fa-bars"> </i></a>
 
+                    <a href="{{ route('supplier.create') }}" class="btn btn-primary px-4 py-2" style="line-height: 1.5 !important;">
+                        Create Party
+                    </a>
+
+                    <a href="{{ route('sales.create') }}" class="btn btn-primary px-4 py-2"  style="line-height: 1.5 !important;">
+                        Create Remittance
+                    </a>
+
                     <ul class="nav-menu list-unstyled d-flex flex-md-row align-items-md-center">
                         <?php
                         $empty_database_permission_active = $role_has_permissions_list->where('name', 'empty_database')->first();

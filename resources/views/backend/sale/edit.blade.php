@@ -93,7 +93,9 @@
                                 <div class="form-group">
                                     <label>Transaction Date *</label>
                                     <input type="date" name="transaction_date" class="form-control"
-                                        value="{{ $transaction->transaction_date }}" required>
+                                        value="{{ \Carbon\Carbon::parse($transaction->transaction_date)->format('Y-m-d') }}"
+                                        required>
+
                                 </div>
                             </div>
 
