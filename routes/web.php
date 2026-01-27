@@ -85,6 +85,7 @@ Route::prefix('forex/remittance')->group(function () {
     Route::get('/create', [App\Http\Controllers\ForexRemittanceController::class, 'create'])->name('forex.remittance.create');
     Route::post('/store', [App\Http\Controllers\ForexRemittanceController::class, 'store'])->name('forex.remittance.store');
     Route::get('/{id}/show', [App\Http\Controllers\ForexRemittanceController::class, 'show'])->name('forex.remittance.show');
+
     Route::delete(
         '/forex/remittance/{transaction}',
         [ForexRemittanceController::class, 'destroy']
@@ -95,6 +96,28 @@ Route::prefix('forex/remittance')->group(function () {
     Route::put('/forex/remittance/{transaction}', [ForexRemittanceController::class, 'update'])
         ->name('forex.remittance.update');
 });
+
+use App\Http\Controllers\ShippingBillController;
+
+Route::group(['middleware' => ['common', 'auth', 'active']], function () {
+
+    Route::controller(ShippingBillController::class)->group(function () {
+
+        Route::get('shipping-bill', 'index')->name('shipping.bill.index');
+        Route::get('shipping-bill/create', 'create')->name('shipping.bill.create');
+        Route::post('shipping-bill/store', 'store')->name('shipping.bill.store');
+
+        Route::get('shipping-bill/{id}/edit', 'edit')->name('shipping.bill.edit');
+        Route::post('shipping-bill/update/{id}', 'update')->name('shipping.bill.update');
+
+        Route::post('shipping-bill/status', 'updateStatus')->name('shipping.bill.status');
+
+        Route::delete('shipping-bill/{id}', 'destroy')
+            ->name('shipping.bill.destroy');
+    });
+});
+
+
 
 Route::group(['middleware' => ['common', 'auth', 'active']], function () {
 

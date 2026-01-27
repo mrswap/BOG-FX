@@ -17,8 +17,16 @@
             <li id="supplier-list-menu"><a href="{{ route('supplier.index') }}">Party List</a></li>
             <li id="supplier-create-menu"><a href="{{ route('supplier.create') }}">Add Party</a></li>
 
-            
+
             <li id="sale-create-menu"><a href="{{ route('sales.create') }}">Create Remitance </a></li>
+
+
+            <!-- ✅ NEW -->
+            <li id="shipping-bill-menu">
+                <a href="{{ route('shipping.bill.index') }}">
+                    Shipping Bills
+                </a>
+            </li>
         </ul>
     </li>
 
@@ -33,7 +41,7 @@
         <ul id="forexReportMenu" class="collapse list-unstyled">
 
             <li><a href="{{ route('sales.index') }}">All Remitance List</a></li>
-             <li>
+            <li>
                 <a href="{{ route('forex.txn.report.party') }}">
                     <i class="dripicons-user"></i> Party Wise Report
                 </a>
@@ -46,7 +54,7 @@
             </li>
 
 
-            
+
 
             <li>
                 <a href="{{ route('forex.txn.report.invoice') }}">
@@ -54,7 +62,7 @@
                 </a>
             </li>
 
-            
+
             <li>
                 <a href="{{ route('forex.txn.report.exchange_rates') }}">
                     <i class="dripicons-gear"></i>Exchange Change Rate Report

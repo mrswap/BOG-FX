@@ -29,13 +29,12 @@
     <section class="dashboard-counts">
         <div class="container-fluid">
 
-            <!-- ================= Dashboard Home ================= -->
+            <!-- ================= Fx Inwards / Outwards ================= -->
             <div class="row mb-4">
                 <div class="col-12">
-                    <h4 class="mb-3">Dashboard</h4>
+                    <h4 class="mb-3">Fx Inwards – Outwards</h4>
                 </div>
-
-                <div class="col-12">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ url('/dashboard') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -50,15 +49,7 @@
                         </div>
                     </a>
                 </div>
-            </div>
-
-            <!-- ================= Fx Inwards / Outwards ================= -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <h4 class="mb-3">Fx Inwards – Outwards</h4>
-                </div>
-
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('currency.index') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -72,7 +63,7 @@
                     </a>
                 </div>
 
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('supplier.index') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -86,7 +77,7 @@
                     </a>
                 </div>
 
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('supplier.create') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -100,7 +91,7 @@
                     </a>
                 </div>
 
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('sales.create') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -113,7 +104,27 @@
                         </div>
                     </a>
                 </div>
+                <div class="col-sm-2 mb-3">
+                    <a href="{{ route('shipping.bill.index') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-archive" style="color:#733686"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">
+                                    Shipping Bills
+                                </div>
+                                <div class="name">
+                                    <strong style="color:#733686">Export Data</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
             </div>
+
+
 
             <!-- ================= Forex Reports ================= -->
             <div class="row mb-4">
@@ -121,7 +132,7 @@
                     <h4 class="mb-3">Forex Reports</h4>
                 </div>
 
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('sales.index') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -135,7 +146,7 @@
                     </a>
                 </div>
 
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('forex.txn.report.party') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -149,7 +160,7 @@
                     </a>
                 </div>
 
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('forex.txn.report.currency') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -163,7 +174,7 @@
                     </a>
                 </div>
 
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('forex.txn.report.invoice') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -177,7 +188,7 @@
                     </a>
                 </div>
 
-                <div class="col-sm-3 mb-3">
+                <div class="col-sm-2 mb-3">
                     <a href="{{ route('forex.txn.report.exchange_rates') }}" class="text-decoration-none">
                         <div class="wrapper count-title">
                             <div class="icon">
@@ -193,6 +204,7 @@
             </div>
 
             <!-- ================= Forex Data ================= -->
+            <!--
             <div class="row mb-4">
                 <div class="col-12">
                     <h4 class="mb-3">Forex Data</h4>
@@ -239,7 +251,7 @@
                     </div>
                 </div>
             </div>
-
+            -->
             <!-- ================= Charts & Recent Transactions ================= -->
             <div class="row mt-4">
 
