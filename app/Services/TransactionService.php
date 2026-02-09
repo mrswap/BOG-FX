@@ -61,19 +61,9 @@ class TransactionService
             $this->updatePartyDailyRate($tx);
 
             // BACKDATE CHECK → REBUILD whole bucket
-            $maxDate = Transaction::where('party_id', $tx->party_id)
-                ->where('id', '!=', $tx->id)
-                ->max('transaction_date');
+            // ALWAYS rebuild bucket after insert (safe and correct FIFO)
+            $this->rebuildBucket($tx->party_id);
 
-            if ($maxDate && $tx->transaction_date < $maxDate) {
-
-                // FULL REBUILD (correct FIFO)
-                $this->rebuildBucket($tx->party_id);
-            } else {
-
-                // normal
-                $this->matchingEngine->process($tx);
-            }
 
             DB::commit();
             return $tx;
@@ -164,6 +154,11 @@ class TransactionService
      */
     protected function rebuildBucket(int $partyId): void
     {
+        \Log::info("FIFO rebuild triggered", [
+            'party_id' => $partyId,
+            'count' => count($txs)
+        ]);
+
         // delete all matches
         ForexMatch::where('party_id', $partyId)->delete();
 
