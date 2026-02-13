@@ -137,6 +137,7 @@
                         <th>Realised</th>
                         <th>Unrealised</th>
                         <th>Remarks</th>
+                        <th>Manual Remark</th>
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
@@ -163,17 +164,16 @@
                         <th id="total-realised"></th>
                         <th id="total-unrealised"></th>
                         <th id="final-gain-loss"></th>
-
+                        <th></th>
                         <th></th> <!-- remarks -->
-                        <!-- ❌ REMOVE THIS: <th></th> action -->
                     </tr>
                     <tr>
-                        <th colspan="6" class="text-right font-weight-bold">Net Balance</th>
+                        <th colspan="7" class="text-right font-weight-bold">Net Balance</th>
                         <th colspan="11" id="party-net-balance" class="text-left font-weight-bold net-balance-info">
                         </th>
                     </tr>
                     <tr>
-                        <th colspan="6" class="text-right font-weight-bold">Local Currency Net</th>
+                        <th colspan="7" class="text-right font-weight-bold">Local Currency Net</th>
                         <th colspan="11" id="local-net-balance" class="text-left font-weight-bold"></th>
                     </tr>
 
@@ -284,18 +284,18 @@
             }
 
             let html = `
-    <table class="table table-sm table-bordered mt-2 mb-2">
-        <thead class="thead-light">
-            <tr>
-                <th>Against Vch</th>
-                   <th>Settlement Date</th>
-                <th>Matched Base</th>
-                <th>Invoice Rate</th>
-                <th>Settlement Rate</th>
-                <th>Realised</th>
-            </tr>
-        </thead>
-        <tbody>
+                    <table class="table table-sm table-bordered mt-2 mb-2">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Against Vch</th>
+                                <th>Settlement Date</th>
+                                <th>Matched Base</th>
+                                <th>Invoice Rate</th>
+                                <th>Settlement Rate</th>
+                                <th>Realised</th>
+                            </tr>
+                        </thead>
+                        <tbody>
             `;
 
             row.realised_breakup.forEach(b => {
@@ -315,12 +315,12 @@
             });
 
             html += `
-            <tr class="bg-light font-weight-bold">
-                <td colspan="4" class="text-right">Total Realised</td>
-                <td>${Number(row.realised).toFixed(2)}</td>
-            </tr>
-        </tbody>
-    </table>`;
+                <tr   tr class="bg-light font-weight-bold">
+                            <td colspan="4" class="text-right">Total Realised</td>
+                            <td>${Number(row.realised).toFixed(2)}</td>
+                        </tr>
+                    </tbody>
+                </table>`;
 
             return html;
         }
@@ -445,6 +445,21 @@
                 {
                     data: 'remarks'
                 },
+                {
+                    data: 'manual_remark',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        let val = data ? data : '';
+                        return `
+                                <input type="text"
+                                    class="form-control form-control-sm manual-remark-input"
+                                    data-id="${row.id}"
+                                    value="${val}"
+                                    placeholder="Enter remark..." />
+                            `;
+                    }
+                },
+
 
                 {
                     data: null,
@@ -452,11 +467,11 @@
                     orderable: false,
                     render: function(row) {
                         return `
-    <a href="${row.edit_url}" class="btn btn-sm btn-primary">Edit</a>
-    <button class="btn btn-sm btn-danger delete-forex" data-url="${row.delete_url}">
-        Delete
-    </button>
-    `;
+                            <a href="${row.edit_url}" class="btn btn-sm btn-primary">Edit</a>
+                            <button class="btn btn-sm btn-danger delete-forex" data-url="${row.delete_url}">
+                                Delete
+                            </button>
+                            `;
                     }
                 }
             ],
@@ -541,17 +556,17 @@
                 // BASE BREAKUP HTML
                 // =============================
                 let baseBreakupHTML = `
-        ${Math.abs(netBase).toFixed(2)} USD 
-        <strong class="text-${baseColor}">(${baseSign})</strong>
+                        ${Math.abs(netBase).toFixed(2)} USD 
+                        <strong class="text-${baseColor}">(${baseSign})</strong>
 
-        <div style="font-size: 13px; margin-top: 4px;">
-            <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
-            &nbsp; | &nbsp;
-            <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
-            &nbsp; | &nbsp;
-            <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
-        </div>
-    `;
+                        <div style="font-size: 13px; margin-top: 4px;">
+                            <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
+                            &nbsp; | &nbsp;
+                            <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
+                            &nbsp; | &nbsp;
+                            <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
+                        </div>
+                    `;
 
                 $('#party-net-balance').html(baseBreakupHTML);
 
@@ -566,19 +581,19 @@
                     $('#sum-local-cr').html(totalLocalCR.toFixed(2));
 
                     $('#sum-net-balance').html(`
-            Net Balance:
-            <strong class="text-${baseColor}">
-                ${Math.abs(netBase).toFixed(2)} USD (${baseSign})
-            </strong>
-        `);
+                    Net Balance:
+                    <strong class="text-${baseColor}">
+                        ${Math.abs(netBase).toFixed(2)} USD (${baseSign})
+                    </strong>
+                            `);
 
                     $('#sum-net-breakup').html(`
-            <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
-            &nbsp; | &nbsp;
-            <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
-            &nbsp; | &nbsp;
-            <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
-        `);
+                        <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
+                        &nbsp; | &nbsp;
+                        <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
+                        &nbsp; | &nbsp;
+                        <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
+                    `);
                 }
 
             }
@@ -636,6 +651,31 @@
                 forexTable.ajax.reload();
             }).fail(function() {
                 alert("Delete failed");
+            });
+        });
+        
+        $(document).on('blur', '.manual-remark-input', function() {
+
+            let input = $(this);
+            let id = input.data('id');
+            let remark = input.val();
+
+            $.ajax({
+                url: "{{ route('transactions.update.manual.remark') }}",
+                type: "POST",
+                data: {
+                    _token: "{{ csrf_token() }}",
+                    id: id,
+                    manual_remark: remark
+                },
+                success: function() {
+                    input.addClass('border-success');
+                    setTimeout(() => input.removeClass('border-success'), 1500);
+                },
+                error: function() {
+                    input.addClass('border-danger');
+                    setTimeout(() => input.removeClass('border-danger'), 2000);
+                }
             });
         });
     </script>

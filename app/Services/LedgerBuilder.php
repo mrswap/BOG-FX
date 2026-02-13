@@ -297,6 +297,9 @@ class LedgerBuilder
                 'attachment' => $tx->attachment
                     ? url($tx->attachment)
                     : null,
+
+                'manual_remark' => $tx->manual_remark,
+
             ];
         }
 

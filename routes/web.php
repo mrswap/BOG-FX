@@ -77,6 +77,9 @@ use App\Http\Controllers\ForexRemittanceController;
 
 
 
+Route::post('/transactions/update-manual-remark', 
+    [ForexRemittanceController::class, 'updateManualRemark']
+)->name('transactions.update.manual.remark');
 
 // Forex Remittance Routes
 Route::prefix('forex/remittance')->group(function () {

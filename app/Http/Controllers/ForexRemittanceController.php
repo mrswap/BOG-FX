@@ -785,4 +785,22 @@ class ForexRemittanceController extends Controller
             ], 500);
         }
     }
+
+    public function updateManualRemark(Request $request)
+    {
+        try {
+
+            $tx = Transaction::findOrFail($request->id);
+
+            $tx->manual_remark = $request->manual_remark;
+            $tx->save();
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+
+            \Log::error("Manual remark update error: " . $e->getMessage());
+
+            return response()->json(['error' => true], 500);
+        }
+    }
 }
