@@ -137,7 +137,7 @@
                         <th>Realised</th>
                         <th>Unrealised</th>
                         <th>Remarks</th>
-                        <th>Manual Remark</th>
+                        <th>Value as per invoice</th>
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
@@ -653,7 +653,7 @@
                 alert("Delete failed");
             });
         });
-        
+
         $(document).on('blur', '.manual-remark-input', function() {
 
             let input = $(this);

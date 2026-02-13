@@ -146,7 +146,7 @@
                         <th>Attachment</th>
 
                         <th>Remarks</th>
-                        <th>Manual Remark</th>
+                        <th>Value as per invoice</th>
 
                         <th class="text-center">Action</th>
                     </tr>
