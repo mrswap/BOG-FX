@@ -21,13 +21,25 @@ class ShippingBill extends Model
         'insurance',
 
         'igst_value',
-        'igst_rate',
 
         'ddb',
         'rodtep',
 
         'status',
-        'created_by'
+        'created_by',
+
+        'taxable_amount',
+        'net_amount',
+
+        'ddb_date',
+        'rodtep_date',
+        'status_date',
+
+        'ddb_status',
+        'rodtep_status',
+
+
+
     ];
 
     protected $casts = [
@@ -40,10 +52,18 @@ class ShippingBill extends Model
         'insurance'           => 'float',
 
         'igst_value'          => 'float',
-        'igst_rate'           => 'float',
 
         'ddb'                 => 'float',
         'rodtep'              => 'float',
+
+        'taxable_amount' => 'float',
+        'net_amount'     => 'float',
+
+        'ddb_date'     => 'date',
+        'rodtep_date'  => 'date',
+        'status_date'  => 'date',
+
+
     ];
 
     public function transaction()

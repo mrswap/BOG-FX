@@ -255,6 +255,12 @@ class ForexRemittanceController extends Controller
             'ending_date'   => $endingDate,   // ✅ Y-m-d
         ];
 
+
+        $orderColumnIndex = request('order.0.column');
+        $orderDirection   = request('order.0.dir', 'asc');
+        $opts['order_column'] = $orderColumnIndex;
+        $opts['order_dir']    = $orderDirection;
+
         // Use LedgerBuilder to get rows (already formatted)
         $result = $this->ledgerBuilder->buildForDataTable($opts);
         $rows   = $result['rows'];
@@ -351,6 +357,12 @@ class ForexRemittanceController extends Controller
             'txn_group'     => $request->input('txn_group'),
         ];
 
+        $orderColumnIndex = request('order.0.column');
+        $orderDirection   = request('order.0.dir', 'asc');
+        $opts['order_column'] = $orderColumnIndex;
+        $opts['order_dir']    = $orderDirection;
+
+
         // -----------------------------
         // 2) Get allowed transaction IDs
         // -----------------------------
@@ -360,9 +372,10 @@ class ForexRemittanceController extends Controller
         // -----------------------------
         // 3) Fetch ledger rows (same format)
         // -----------------------------
-        $built = $this->ledgerBuilder->buildForDataTable([
-            'allowed_tx_ids' => $allowedIds
-        ]);
+        $opts['allowed_tx_ids'] = $allowedIds;
+
+        $built = $this->ledgerBuilder->buildForDataTable($opts);
+
         $rows = $built['rows'];                 // ⭐ SAFE rows
         $global = $built['global_summary'];     // ⭐ USE THIS
         // -----------------------------
@@ -459,6 +472,11 @@ class ForexRemittanceController extends Controller
                     'ending_date'   => $end,
                     // no filter → all transactions
                 ];
+                $orderColumnIndex = request('order.0.column');
+                $orderDirection   = request('order.0.dir', 'asc');
+                $opts['order_column'] = $orderColumnIndex;
+                $opts['order_dir']    = $orderDirection;
+
                 $built = $this->ledgerBuilder->buildForDataTable($opts);
 
                 $rows   = $built['rows'];              // ✅ FIX
@@ -499,6 +517,10 @@ class ForexRemittanceController extends Controller
                     'ending_date'   => $end,
                     'allowed_tx_ids' => $allowedIds,   // ⭐ important
                 ];
+                $orderColumnIndex = request('order.0.column');
+                $orderDirection   = request('order.0.dir', 'asc');
+                $opts['order_column'] = $orderColumnIndex;
+                $opts['order_dir']    = $orderDirection;
 
                 $built = $this->ledgerBuilder->buildForDataTable($opts);
 
@@ -571,8 +593,9 @@ class ForexRemittanceController extends Controller
     {
         try {
 
-            $partyId = $request->party_id;
-
+            // ================================
+            // DATE PARSING
+            // ================================
             $start = $request->starting_date
                 ? Carbon::createFromFormat('d-m-Y', trim($request->starting_date))
                 ->toDateString()
@@ -583,102 +606,75 @@ class ForexRemittanceController extends Controller
                 ->toDateString()
                 : null;
 
-
+            $partyId         = $request->party_id;
             $baseCurrencyId  = $request->base_currency_id;
             $localCurrencyId = $request->local_currency_id;
 
             // ================================
-            // BUILD FILTER OPTIONS FOR LB
+            // BUILD OPTIONS FOR LEDGER BUILDER
             // ================================
             $opts = [
-                'starting_date' => $start,
-                'ending_date'   => $end,
-                // Custom filters we will interpret below
+                'starting_date'     => $start,
+                'ending_date'       => $end,
+                'party_id'          => $partyId,
                 'base_currency_id'  => $baseCurrencyId,
                 'local_currency_id' => $localCurrencyId,
-                'party_id'      => $request->input('party_id'),
-
             ];
 
+            // DataTable Sorting
+            $opts['order_column'] = $request->input('order.0.column');
+            $opts['order_dir']    = $request->input('order.0.dir', 'asc');
+
             // ================================
-            // FETCH ALL ROWS FIRST
-            // (full ledger rows)
+            // FETCH SORTED + FILTERED DATA
             // ================================
-            $built = $this->ledgerBuilder->buildForDataTable($opts);
-            $rows = $built['rows'];                 // ⭐ SAFE rows
-            $global = $built['global_summary'];     // ⭐ USE THIS  
-            // ======================================
-            // FILTER rows BY CURRENCY (after LB)
-            // because LB processes gain/loss correctly
-            // ======================================
-            $filtered = [];
-
-            foreach ($rows as $r) {
-
-                $tx = Transaction::find($r['id']);
-
-                if (!$tx) continue;
-
-                // base currency match
-                if ($baseCurrencyId && $tx->base_currency_id != $baseCurrencyId) {
-                    continue;
-                }
-
-                // local currency match
-                if ($localCurrencyId && $tx->local_currency_id != $localCurrencyId) {
-                    continue;
-                }
-
-                // party filter
-                if ($partyId && $tx->party_id != $partyId) {
-                    continue;
-                }
-
-                $filtered[] = $r;
-            }
-
-            // If no filters applied → keep all rows
-            if (!$baseCurrencyId && !$localCurrencyId) {
-                $filtered = $rows;
-            }
+            $built  = $this->ledgerBuilder->buildForDataTable($opts);
+            $rows   = $built['rows'];
+            $global = $built['global_summary'];
 
             // ================================
             // FOOTER TOTALS
             // ================================
             $totals = [
-                'realised_gain'     => 0.0,
-                'realised_loss'     => 0.0,
-                'unrealised_gain'   => 0.0,
-                'unrealised_loss'   => 0.0,
+                'realised_gain'   => 0.0,
+                'realised_loss'   => 0.0,
+                'unrealised_gain' => 0.0,
+                'unrealised_loss' => 0.0,
             ];
 
-            foreach ($filtered as $r) {
+            foreach ($rows as $r) {
 
-                $real = floatval($r['realised']);
+                $real   = floatval($r['realised']);
                 $unreal = floatval($r['unrealised']);
 
-                if ($real >= 0) $totals['realised_gain'] += $real;
-                else $totals['realised_loss'] += abs($real);
+                if ($real >= 0) {
+                    $totals['realised_gain'] += $real;
+                } else {
+                    $totals['realised_loss'] += abs($real);
+                }
 
-                if ($unreal >= 0) $totals['unrealised_gain'] += $unreal;
-                else $totals['unrealised_loss'] += abs($unreal);
+                if ($unreal >= 0) {
+                    $totals['unrealised_gain'] += $unreal;
+                } else {
+                    $totals['unrealised_loss'] += abs($unreal);
+                }
             }
 
-
             return response()->json([
-                'draw' => intval($request->draw),
-                'recordsTotal' => count($filtered),
-                'recordsFiltered' => count($filtered),
-                'data' => $filtered,
+                'draw'            => intval($request->draw),
+                'recordsTotal'    => count($rows),
+                'recordsFiltered' => count($rows),
+                'data'            => $rows,
                 'totals' => [
-                    'realised_gain' => round($totals['realised_gain'], 4),
-                    'realised_loss' => round($totals['realised_loss'], 4),
+                    'realised_gain'   => round($totals['realised_gain'], 4),
+                    'realised_loss'   => round($totals['realised_loss'], 4),
                     'unrealised_gain' => round($totals['unrealised_gain'], 4),
                     'unrealised_loss' => round($totals['unrealised_loss'], 4),
                 ],
                 'global' => $global
             ]);
         } catch (\Throwable $e) {
+
             \Log::error("Currency wise report error: " . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);
@@ -689,6 +685,7 @@ class ForexRemittanceController extends Controller
         }
     }
 
+
     public function exchChangeRatesReportData(Request $request)
     {
         try {
@@ -696,26 +693,21 @@ class ForexRemittanceController extends Controller
             // ===============================
             // 1️⃣ DATE GUARD
             // ===============================
-            if (empty($request->starting_date) || empty($request->ending_date)) {
-                return response()->json([
-                    'draw' => intval($request->draw),
-                    'recordsTotal' => 0,
-                    'recordsFiltered' => 0,
-                    'data' => []
-                ]);
+
+            $start = $request->starting_date
+                ? Carbon::createFromFormat('d-m-Y', $request->starting_date)->startOfDay()
+                : null;
+
+            $end = $request->ending_date
+                ? Carbon::createFromFormat('d-m-Y', $request->ending_date)->endOfDay()
+                : null;
+
+            $q = Transaction::whereNotNull('exchange_rate');
+
+            if ($start && $end) {
+                $q->whereBetween('transaction_date', [$start, $end]);
             }
 
-            $start = Carbon::createFromFormat('d-m-Y', $request->starting_date)
-                ->startOfDay()->toDateString();
-
-            $end = Carbon::createFromFormat('d-m-Y', $request->ending_date)
-                ->endOfDay()->toDateString();
-
-            // ===============================
-            // 2️⃣ QUERY
-            // ===============================
-            $q = Transaction::whereBetween('transaction_date', [$start, $end])
-                ->whereNotNull('exchange_rate');
 
             if (!empty($request->base_currency_id)) {
                 $q->where('base_currency_id', $request->base_currency_id);

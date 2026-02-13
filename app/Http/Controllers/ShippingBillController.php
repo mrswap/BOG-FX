@@ -32,17 +32,27 @@ class ShippingBillController extends Controller
             'shipping_bill_date'  => 'required|date',
             'port'                => 'required|string|max:191',
 
-            // Optional but safe
             'fob_value'           => 'nullable|numeric',
             'freight'             => 'nullable|numeric',
             'insurance'           => 'nullable|numeric',
             'igst_value'          => 'nullable|numeric',
-            'igst_rate'           => 'nullable|numeric',
+            'taxable_amount'      => 'nullable|numeric',
+
             'ddb'                 => 'nullable|numeric',
+            'ddb_date'            => 'nullable|date',
+
             'rodtep'              => 'nullable|numeric',
+            'rodtep_date'         => 'nullable|date',
+            'ddb_status'    => 'required|in:pending,received',
+            'rodtep_status' => 'required|in:pending,received',
+
         ]);
 
         $txn = Transaction::findOrFail($request->transaction_id);
+
+        $taxable = $request->taxable_amount ?? 0;
+        $igst    = $request->igst_value ?? 0;
+        $net     = $taxable + $igst;
 
         ShippingBill::create([
             'transaction_id'       => $txn->id,
@@ -58,13 +68,23 @@ class ShippingBillController extends Controller
             'freight'              => $request->freight ?? 0,
             'insurance'            => $request->insurance ?? 0,
 
-            'igst_value'           => $request->igst_value ?? 0,
-            'igst_rate'            => $request->igst_rate ?? 0,
+            'igst_value'           => $igst,
+            'taxable_amount'       => $taxable,
+            'net_amount'           => $net,
 
             'ddb'                  => $request->ddb ?? 0,
+            'ddb_date'             => $request->ddb_date,
+
             'rodtep'               => $request->rodtep ?? 0,
+            'rodtep_date'          => $request->rodtep_date,
 
             'status'               => 'pending',
+            'status_date'          => now(),
+
+            'ddb_status'    => $request->ddb_status,
+            'rodtep_status' => $request->rodtep_status,
+
+
             'created_by'           => Auth::id(),
         ]);
 
@@ -72,6 +92,7 @@ class ShippingBillController extends Controller
             ->route('shipping.bill.index')
             ->with('success', 'Shipping Bill Added Successfully');
     }
+
 
     public function edit($id)
     {
@@ -93,14 +114,29 @@ class ShippingBillController extends Controller
             'insurance'          => 'nullable|numeric',
 
             'igst_value'         => 'nullable|numeric',
-            'igst_rate'          => 'nullable|numeric',
+            'taxable_amount'     => 'nullable|numeric',
 
             'ddb'                => 'nullable|numeric',
-            'rodtep'             => 'nullable|numeric',
+            'ddb_date'           => 'nullable|date',
 
-            // ✅ status validation
+            'rodtep'             => 'nullable|numeric',
+            'rodtep_date'        => 'nullable|date',
+
             'status'             => 'required|in:pending,paid',
+
+            'ddb_status'    => 'required|in:pending,received',
+            'rodtep_status' => 'required|in:pending,received',
+
         ]);
+
+        $taxable = $request->taxable_amount ?? 0;
+        $igst    = $request->igst_value ?? 0;
+        $net     = $taxable + $igst;
+
+        // ✅ Only change status_date if status changed
+        $statusDate = $bill->status != $request->status
+            ? now()
+            : $bill->status_date;
 
         $bill->update([
             'shipping_bill_no'   => $request->shipping_bill_no,
@@ -111,20 +147,29 @@ class ShippingBillController extends Controller
             'freight'            => $request->freight ?? 0,
             'insurance'          => $request->insurance ?? 0,
 
-            'igst_value'         => $request->igst_value ?? 0,
-            'igst_rate'          => $request->igst_rate ?? 0,
+            'igst_value'         => $igst,
+            'taxable_amount'     => $taxable,
+            'net_amount'         => $net,
 
             'ddb'                => $request->ddb ?? 0,
-            'rodtep'             => $request->rodtep ?? 0,
+            'ddb_date'           => $request->ddb_date,
 
-            // ✅ status update
+            'rodtep'             => $request->rodtep ?? 0,
+            'rodtep_date'        => $request->rodtep_date,
+
             'status'             => $request->status,
+            'status_date'        => $statusDate,
+
+            'ddb_status'    => $request->ddb_status,
+            'rodtep_status' => $request->rodtep_status,
+
         ]);
 
         return redirect()
             ->route('shipping.bill.index')
             ->with('success', 'Shipping Bill Updated Successfully');
     }
+
 
 
     public function updateStatus(Request $request)

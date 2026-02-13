@@ -28,13 +28,21 @@ class ForexMatch extends Model
         'invoice_id',
         'settlement_id',
         'matched_base',
+        'matched_base_amount',
+        'invoice_rate',
+        'settlement_rate',
         'realised_amount',
     ];
 
+
     protected $casts = [
         'matched_base' => 'float',
+        'matched_base_amount' => 'float',
+        'invoice_rate' => 'float',
+        'settlement_rate' => 'float',
         'realised_amount' => 'float',
     ];
+
 
     /**
      * Relations

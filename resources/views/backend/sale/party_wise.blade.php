@@ -77,6 +77,46 @@
             </div>
 
         </div>
+        <div class="card mb-3 shadow-sm">
+            <div class="card-body">
+
+                <div class="row text-center mb-3">
+
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Base DR</h6>
+                        <h5 id="sum-base-dr" class="text-danger">0.00</h5>
+                    </div>
+
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Base CR</h6>
+                        <h5 id="sum-base-cr" class="text-success">0.00</h5>
+                    </div>
+
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Local DR</h6>
+                        <h5 id="sum-local-dr" class="text-danger">0.00</h5>
+                    </div>
+
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Local CR</h6>
+                        <h5 id="sum-local-cr" class="text-success">0.00</h5>
+                    </div>
+
+                </div>
+
+                <hr>
+
+                <div class="text-center">
+
+                    <h5 id="sum-net-balance"></h5>
+
+                    <div style="font-size:14px;" id="sum-net-breakup"></div>
+
+                </div>
+
+            </div>
+        </div>
+
         <div class="table-responsive mt-3">
             <table id="forex-table" class="table table-bordered" style="width:100%">
                 <thead class="thead-dark">
@@ -446,57 +486,100 @@
             ],
 
             //////////////////////////////////////////
-            // FOOTER TOTALS
+            //   FOOTER TOTALS + TOP SUMMARY
             //////////////////////////////////////////
             drawCallback: function(settings) {
 
                 var api = this.api();
                 var json = api.ajax.json();
-                if (!json || !json.totals) return;
+
+                if (!json) return;
 
                 function colSum(index) {
                     return api.column(index, {
-                        page: "current"
-                    }).data().reduce(function(a, b) {
-                        let val = parseFloat((b || "").toString().replace(/[^0-9.-]+/g, ""));
-                        return a + (isNaN(val) ? 0 : val);
-                    }, 0);
+                            page: 'current'
+                        })
+                        .data()
+                        .reduce(function(a, b) {
+                            let val = parseFloat((b || '').toString().replace(/[^0-9.-]+/g, ""));
+                            return a + (isNaN(val) ? 0 : val);
+                        }, 0);
                 }
 
-                // ===========================
-                // BASE CURRENCY TOTALS (USD)
-                // ===========================
+                // =============================
+                // COLUMN TOTALS
+                // =============================
                 let totalBaseDR = colSum(7);
                 let totalBaseCR = colSum(8);
+                let totalLocalDR = colSum(9);
+                let totalLocalCR = colSum(10);
 
+                // =============================
+                // FOOTER UPDATE
+                // =============================
                 $('#total-base-debit').html(totalBaseDR.toFixed(2));
                 $('#total-base-credit').html(totalBaseCR.toFixed(2));
-                $('#total-local-debit').html(colSum(9).toFixed(2));
-                $('#total-local-credit').html(colSum(10).toFixed(2));
+                $('#total-local-debit').html(totalLocalDR.toFixed(2));
+                $('#total-local-credit').html(totalLocalCR.toFixed(2));
 
-
+                // =============================
+                // NET BASE CALCULATION
+                // =============================
                 let netBase = totalBaseCR - totalBaseDR;
-                let baseSign = netBase >= 0 ? "(Cr)" : "(Dr)";
+                let baseSign = netBase >= 0 ? "Cr" : "Dr";
                 let baseColor = netBase >= 0 ? "success" : "danger";
 
-                let g = json.global; // ⭐ ADD THIS LINE HERE
+                // =============================
+                // GLOBAL JSON (SAFE ACCESS)
+                // =============================
+                let g = json.global || {
+                    local_net: 0,
+                    sign: "Nil"
+                };
 
+                // =============================
+                // BASE BREAKUP HTML
+                // =============================
                 let baseBreakupHTML = `
-        ${Math.abs(netBase).toFixed(2)} USD
-        <strong class="text-${baseColor}">${baseSign}</strong>
+        ${Math.abs(netBase).toFixed(2)} USD 
+        <strong class="text-${baseColor}">(${baseSign})</strong>
 
-        <div style="font-size: 12px; margin-top: 3px;">
+        <div style="font-size: 13px; margin-top: 4px;">
             <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
             &nbsp; | &nbsp;
             <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
             &nbsp; | &nbsp;
             <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
         </div>
-        `;
+    `;
 
                 $('#party-net-balance').html(baseBreakupHTML);
 
+                // =============================
+                // TOP SUMMARY UPDATE (IF EXISTS)
+                // =============================
+                if ($('#sum-base-dr').length) {
 
+                    $('#sum-base-dr').html(totalBaseDR.toFixed(2));
+                    $('#sum-base-cr').html(totalBaseCR.toFixed(2));
+                    $('#sum-local-dr').html(totalLocalDR.toFixed(2));
+                    $('#sum-local-cr').html(totalLocalCR.toFixed(2));
+
+                    $('#sum-net-balance').html(`
+            Net Balance:
+            <strong class="text-${baseColor}">
+                ${Math.abs(netBase).toFixed(2)} USD (${baseSign})
+            </strong>
+        `);
+
+                    $('#sum-net-breakup').html(`
+            <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
+            &nbsp; | &nbsp;
+            <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
+            &nbsp; | &nbsp;
+            <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
+        `);
+                }
 
             }
 

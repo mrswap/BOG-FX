@@ -25,9 +25,30 @@ class LedgerBuilder
      */
     public function buildForDataTable(array $opts = []): array
     {
-        $q = Transaction::with(['party', 'baseCurrency', 'localCurrency'])
-            ->orderBy('transaction_date', 'asc')
-            ->orderBy('id', 'asc');
+        $q = Transaction::with(['party', 'baseCurrency', 'localCurrency']);
+
+        // ===========================
+        // DATATABLE SERVER-SIDE SORT
+        // ===========================
+        $columnMap = [
+            2 => 'transaction_date',
+            4 => 'voucher_type',
+            5 => 'voucher_no',
+            6 => 'exchange_rate',
+            11 => 'closing_rate',
+        ];
+
+        $orderColumn = $opts['order_column'] ?? null;
+        $orderDir    = $opts['order_dir'] ?? 'asc';
+
+
+        if (isset($columnMap[$orderColumn])) {
+            $q->orderBy($columnMap[$orderColumn], $orderDir);
+        } else {
+            // default sorting
+            $q->orderBy('transaction_date', 'asc')
+                ->orderBy('id', 'asc');
+        }
 
         if (!empty($opts['party_type'])) {
             $q->where('party_type', $opts['party_type']);
@@ -53,11 +74,39 @@ class LedgerBuilder
         }
 
 
+        if (!empty($opts['base_currency_id'])) {
+            $q->where('base_currency_id', $opts['base_currency_id']);
+        }
+
+        if (!empty($opts['local_currency_id'])) {
+            $q->where('local_currency_id', $opts['local_currency_id']);
+        }
+
+
         if (!empty($opts['starting_date']) && !empty($opts['ending_date'])) {
             $start = Carbon::createFromFormat('Y-m-d', $opts['starting_date'])->toDateString();
             $end   = Carbon::createFromFormat('Y-m-d', $opts['ending_date'])->toDateString();
             $q->whereBetween('transaction_date', [$start, $end]);
         }
+
+
+        // ================================
+        // Currency Filter (Base OR Local)
+        // ================================
+        if (!empty($opts['base_currency_id']) || !empty($opts['local_currency_id'])) {
+
+            $q->where(function ($query) use ($opts) {
+
+                if (!empty($opts['base_currency_id'])) {
+                    $query->where('base_currency_id', $opts['base_currency_id']);
+                }
+
+                if (!empty($opts['local_currency_id'])) {
+                    $query->orWhere('local_currency_id', $opts['local_currency_id']);
+                }
+            });
+        }
+
 
         $txs = $q->get();
 

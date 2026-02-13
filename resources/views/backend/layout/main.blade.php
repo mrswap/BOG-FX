@@ -200,33 +200,91 @@
     class="@if ($theme == 'dark') dark-mode dripicons-brightness-low @endif  @if (Route::current()->getName() == 'sale.pos') pos-page @endif"
     data-loaded="0">
     <div id="loader"></div>
-    <!-- Side Navbar -->
-    <nav class="side-navbar shrink d-print-none">
-        <span class="brand-big">
-            @if ($general_setting->site_logo)
-                <a href="{{ url('/') }}"><img src="{{ url('logo', $general_setting->site_logo) }}"
-                        width="115"></a>
-            @else
-                <a href="{{ url('/') }}">
-                    <h1 class="d-inline">{{ $general_setting->site_title }}</h1>
-                </a>
-            @endif
-        </span>
-        @include('backend.layout.sidebar')
-    </nav>
 
-    <div class="page">
+    <div class="page" style="margin-left:0 !important; width:100% !important;">
+
         <!-- navbar-->
         @if (Route::current()->getName() != 'sale.pos')
             <header class="container-fluid">
                 <nav class="navbar">
-                    <a id="toggle-btn" href="#" class="menu-btn"><i class="fa fa-bars"> </i></a>
+                    <a href="{{ url('/dashboard') }}" class="menu-btn">
+                        <i class="fa fa-bars"></i>
+                    </a>
 
-                    <a href="{{ route('supplier.create') }}" class="btn btn-primary px-4 py-2" style="line-height: 1.5 !important;">
+                    <a href="{{ url('/dashboard') }}" class="btn btn-primary px-4 py-2"
+                        style="line-height: 1.5 !important;">
+                        Dashboard
+                    </a>
+
+                    <li class="nav-item dropdown mr-2">
+                        <a class="btn btn-outline-primary dropdown-toggle px-3 py-2" href="#"
+                            data-toggle="dropdown" style="line-height:1.5 !important;">
+                            Fx Inward-Outward
+                        </a>
+
+
+                        <div class="dropdown-menu">
+
+                            <a class="dropdown-item" href="{{ route('currency.index') }}">
+                                Currency
+                            </a>
+
+                            <a class="dropdown-item" href="{{ route('supplier.index') }}">
+                                Party List
+                            </a>
+
+                            <a class="dropdown-item" href="{{ route('supplier.create') }}">
+                                Add Party
+                            </a>
+
+                            <a class="dropdown-item" href="{{ route('sales.create') }}">
+                                Create Remittance
+                            </a>
+
+                            <a class="dropdown-item" href="{{ route('shipping.bill.index') }}">
+                                Shipping Bills
+                            </a>
+
+                        </div>
+                    </li>
+                    <li class="nav-item dropdown mr-2">
+                        <a class="btn btn-outline-success dropdown-toggle px-3 py-2" href="#"
+                            data-toggle="dropdown" style="line-height:1.5 !important;">
+                            Forex Reports
+                        </a>
+
+                        <div class="dropdown-menu">
+
+                            <a class="dropdown-item" href="{{ route('sales.index') }}">
+                                All Remittance List
+                            </a>
+
+                            <a class="dropdown-item" href="{{ route('forex.txn.report.party') }}">
+                                Party Wise Report
+                            </a>
+
+                            <a class="dropdown-item" href="{{ route('forex.txn.report.currency') }}">
+                                Currency Wise Report
+                            </a>
+
+                            <a class="dropdown-item" href="{{ route('forex.txn.report.invoice') }}">
+                                Invoice Wise Report
+                            </a>
+
+                            <a class="dropdown-item" href="{{ route('forex.txn.report.exchange_rates') }}">
+                                Exchange Change Rate Report
+                            </a>
+
+                        </div>
+                    </li>
+
+                    <a href="{{ route('supplier.create') }}" class="btn btn-primary px-4 py-2"
+                        style="line-height: 1.5 !important;">
                         Create Party
                     </a>
 
-                    <a href="{{ route('sales.create') }}" class="btn btn-primary px-4 py-2"  style="line-height: 1.5 !important;">
+                    <a href="{{ route('sales.create') }}" class="btn btn-primary px-4 py-2"
+                        style="line-height: 1.5 !important;">
                         Create Remittance
                     </a>
 
@@ -620,7 +678,8 @@
                                     title="Select Income Category...">
                                     @foreach ($lims_income_category_list as $income_category)
                                         <option value="{{ $income_category->id }}">
-                                            {{ $income_category->name . ' (' . $income_category->code . ')' }}</option>
+                                            {{ $income_category->name . ' (' . $income_category->code . ')' }}
+                                        </option>
                                     @endforeach
                                 </select>
                             </div>
@@ -1229,10 +1288,6 @@
         });
 
         var alert_product = <?php echo json_encode($alert_product); ?>;
-
-        if ($(window).outerWidth() > 1199) {
-            $('nav.side-navbar').removeClass('shrink');
-        }
 
         /**
         function myFunction() {
