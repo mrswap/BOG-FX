@@ -147,8 +147,11 @@ class LedgerBuilder
             $rowRate = (float)($tx->exchange_rate ?? 0.0);
 
             // Closing Rate Resolve
-            $closingRate = (float)$this->rateResolver->getClosingRate($tx);
-
+            if (in_array($tx->voucher_type, ['receipt', 'payment'])) {
+                $closingRate = (float)$tx->exchange_rate;
+            } else {
+                $closingRate = (float)$this->rateResolver->getClosingRate($tx);
+            }
             // Realised Gain/Loss
             $isInvoice = in_array($tx->voucher_type, ['sale', 'purchase']);
 
@@ -182,10 +185,13 @@ class LedgerBuilder
             $invoiceMatched    = (float)ForexMatch::where('invoice_id', $tx->id)->sum('matched_base');
             $settlementMatched = (float)ForexMatch::where('settlement_id', $tx->id)->sum('matched_base');
 
-            $remainingBase = $isInvoice
-                ? max(0.0, (float)$tx->base_amount - $invoiceMatched)
-                : max(0.0, (float)$tx->base_amount - $settlementMatched);
-
+            if ($tx->voucher_type === 'receipt' && $tx->advance_remaining !== null) {
+                $remainingBase = (float) $tx->advance_remaining;
+            } else {
+                $remainingBase = $isInvoice
+                    ? max(0.0, (float)$tx->base_amount - $invoiceMatched)
+                    : max(0.0, (float)$tx->base_amount - $settlementMatched);
+            }
             // Manual closing override support (client rule: only show unrealised when manual provided)
             $manualClosing = $tx->closing_rate_override ?? null;
             $effectiveClosingRate = $manualClosing !== null ? (float)$manualClosing : null;
@@ -415,11 +421,11 @@ class LedgerBuilder
         // Total base sums (for compatibility with old shape)
         $totalCR_base = array_reduce($CR, function ($carry, $it) {
             return $carry + $it['base'];
-        }, 0.0) + $remainingCR_base;
+        }, 0.0);
+
         $totalDR_base = array_reduce($DR, function ($carry, $it) {
             return $carry + $it['base'];
-        }, 0.0) + $remainingDR_base;
-
+        }, 0.0);
         // Decide net: earlier behavior reported local_net as remaining_base * appliedRate (single side).
         // But your requested logic: local_net = CR_local - DR_local (side-wise valuation)
         $CR_local_total = $remainingCR_local; // CR side remaining local valuation

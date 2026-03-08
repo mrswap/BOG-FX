@@ -21,14 +21,15 @@ class MatchingEngine
     public function process(Transaction $tx)
     {
         DB::transaction(function () use ($tx) {
-            if ($tx->isInvoice()) {
-                $this->matchInvoice($tx);
-            } else {
-                $this->matchSettlement($tx);
-            }
+
+            $partyTxs = Transaction::where('party_id', $tx->party_id)
+                ->orderBy('transaction_date')
+                ->orderBy('id')
+                ->get();
+
+            $this->rebuildForParty($partyTxs);
         });
     }
-
     /**
      * ========== MATCH INVOICE ==========
      * Invoice = sale/purchase
@@ -172,14 +173,10 @@ class MatchingEngine
 
             // 2) Reset advance_remaining on all settlement transactions BEFORE matching
             // This avoids stale advance values interfering with rebuild.
-            foreach ($txsArr as $t) {
-                if ($t->isSettlement()) {
-                    // Only update if not null to avoid unnecessary writes
-                    if (!is_null($t->advance_remaining)) {
-                        $t->advance_remaining = null;
-                        $t->save();
-                    }
-                }
+            if (!is_null($partyId)) {
+                \App\Models\Transaction::where('party_id', $partyId)
+                    ->whereIn('voucher_type', ['receipt', 'payment'])
+                    ->update(['advance_remaining' => null]);
             }
 
             // 3) Rebuild matches fresh (FIFO) with support for consuming earlier payment-advances
@@ -191,68 +188,56 @@ class MatchingEngine
             $openInvoices = [];
             $openAdvances = [];
 
+            usort($txsArr, function ($a, $b) {
+                return [$a->transaction_date, $a->id] <=> [$b->transaction_date, $b->id];
+            });
             foreach ($txsArr as $tx) {
 
                 if ($tx->isInvoice()) {
-                    // Invoice processing
+
                     $invRemaining = (float)$tx->base_amount;
 
-                    // --- NEW: If this is a PURCHASE, first try to consume earlier PAYMENT advances (FIFO)
-                    if ($tx->voucher_type === 'purchase' && !empty($openAdvances)) {
-                        $ai = 0;
-                        while ($invRemaining > 0 && $ai < count($openAdvances)) {
-                            $advEntry = &$openAdvances[$ai];
+                    $ai = 0;
 
-                            // skip exhausted advances
-                            if ($advEntry['remaining'] <= 0) {
-                                $ai++;
-                                continue;
-                            }
+                    while ($invRemaining > 0 && $ai < count($openAdvances)) {
 
-                            $advTx = $advEntry['tx'];
+                        $advEntry = &$openAdvances[$ai];
 
-                            // Only consider payment-type advances (restrict to purchase-payment flow)
-                            if ($advTx->voucher_type !== 'payment') {
-                                $ai++;
-                                continue;
-                            }
-
-                            $toMatch = min($invRemaining, $advEntry['remaining']);
-                            if ($toMatch <= 0) {
-                                $ai++;
-                                continue;
-                            }
-
-                            // compute realised using GainLossService (invoice vs settlement/advance)
-                            $realised = $this->gainLossService->calcRealised(
-                                $toMatch,
-                                (float)$tx->exchange_rate,         // invoice rate
-                                (float)$advTx->exchange_rate,     // advance (settlement) rate
-                                $tx->voucher_type
-                            );
-
-                            $matches[] = [
-                                'party_id'          => $tx->party_id,
-                                'invoice_id'        => $tx->id,
-                                'settlement_id'     => $advTx->id,
-                                'matched_base'      => $toMatch,
-                                'matched_base_amount' => $toMatch,
-                                'invoice_rate'      => (float)$tx->exchange_rate,
-                                'settlement_rate'   => (float)$advTx->exchange_rate,
-                                'realised_amount'   => $realised,
-                                'created_at'        => now(),
-                                'updated_at'        => now(),
-                            ];
-
-                            // decrement counters
-                            $invRemaining -= $toMatch;
-                            $advEntry['remaining'] -= $toMatch;
-
-                            if ($advEntry['remaining'] <= 0) $ai++;
+                        if ($advEntry['remaining'] <= 0) {
+                            $ai++;
+                            continue;
                         }
+
+                        $advTx = $advEntry['tx'];
+
+                        $toMatch = min($invRemaining, $advEntry['remaining']);
+
+                        $realised = $this->gainLossService->calcRealised(
+                            $toMatch,
+                            (float)$tx->exchange_rate,
+                            (float)$advTx->exchange_rate,
+                            $tx->voucher_type
+                        );
+
+                        $matches[] = [
+                            'party_id' => $tx->party_id,
+                            'invoice_id' => $tx->id,
+                            'settlement_id' => $advTx->id,
+                            'matched_base' => $toMatch,
+                            'matched_base_amount' => $toMatch,
+                            'invoice_rate' => (float)$tx->exchange_rate,
+                            'settlement_rate' => (float)$advTx->exchange_rate,
+                            'realised_amount' => $realised,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+
+                        $invRemaining -= $toMatch;
+                        $advEntry['remaining'] -= $toMatch;
+
+                        if ($advEntry['remaining'] <= 0) $ai++;
                     }
 
-                    // If invoice still has remaining after consuming advances, add to invoice queue
                     if ($invRemaining > 0) {
                         $openInvoices[] = [
                             'tx' => $tx,
@@ -262,9 +247,8 @@ class MatchingEngine
 
                     continue;
                 }
-
                 // Settlement processing (unchanged main flow)
-                $settRemaining = (float)$tx->base_amount;
+                $settRemaining = (float) ($tx->advance_remaining ?? $tx->base_amount);
                 $i = 0;
 
                 // First match settlement to any open invoices (older invoices) — existing behavior
