@@ -154,30 +154,29 @@ class TransactionService
      */
     protected function rebuildBucket(int $partyId): void
     {
-        \Log::info("FIFO rebuild triggered", [
-            'party_id' => $partyId,
-            'count' => count($txs)
-        ]);
-
         // delete all matches
         ForexMatch::where('party_id', $partyId)->delete();
 
         // get ordered transactions
         $txs = Transaction::where('party_id', $partyId)
             ->orderByRaw("
-                    transaction_date ASC,
-                    CASE 
-                        WHEN voucher_type IN ('sale','purchase') THEN 0 
-                        ELSE 1 
-                    END ASC,
-                    id ASC")
-
+            transaction_date ASC,
+            CASE 
+                WHEN voucher_type IN ('sale','purchase') THEN 0 
+                ELSE 1 
+            END ASC,
+            id ASC
+        ")
             ->get();
 
-        // NEW PURE REBUILD (no per-transaction incremental matching)
+        \Log::info("FIFO rebuild triggered", [
+            'party_id' => $partyId,
+            'count' => $txs->count()
+        ]);
+
+        // rebuild
         $this->matchingEngine->rebuildForParty($txs);
     }
-
 
 
     /**
