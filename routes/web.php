@@ -99,6 +99,10 @@ Route::prefix('forex/remittance')->group(function () {
     Route::put('/forex/remittance/{transaction}', [ForexRemittanceController::class, 'update'])
         ->name('forex.remittance.update');
 });
+// routes/web.php
+
+Route::get('/forex/open-vouchers', [\App\Http\Controllers\ForexRemittanceController::class, 'getOpenVouchers'])
+    ->name('forex.remittance.open-vouchers');
 
 use App\Http\Controllers\ShippingBillController;
 

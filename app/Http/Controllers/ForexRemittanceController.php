@@ -31,42 +31,134 @@ class ForexRemittanceController extends Controller
      */
     public function store(Request $request)
     {
-        \Log::info('Forex transaction store data: ', [
+        \Log::info('Forex transaction store data:', [
             'request_data' => $request->all()
         ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Request
+        |--------------------------------------------------------------------------
+        */
+
         $data = $this->validateRequest($request);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Clean Manual Matches
+        |--------------------------------------------------------------------------
+        */
+
+        if (!empty($data['manual_matches'])) {
+
+            $data['manual_matches'] = collect(
+                $data['manual_matches']
+            )
+                ->filter(function ($row) {
+
+                    return
+                        !empty($row['transaction_id'])
+                        &&
+                        !empty($row['amount'])
+                        &&
+                        (float) $row['amount'] > 0;
+                })
+                ->values()
+                ->toArray();
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Attachment Upload
+        |--------------------------------------------------------------------------
+        */
 
         if ($request->hasFile('attachment')) {
 
             $file = $request->file('attachment');
 
-            $name = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $name =
+                time()
+                . '_'
+                . uniqid()
+                . '.'
+                . $file->getClientOriginalExtension();
 
-            $file->move(public_path('attachment'), $name);
+            $file->move(
+                public_path('attachment'),
+                $name
+            );
 
-            $data['attachment'] = 'attachment/' . $name;
+            $data['attachment'] =
+                'attachment/' . $name;
         }
 
-        // compute local_amount if not provided
-        if (empty($data['local_amount']) && isset($data['base_amount'], $data['exchange_rate'])) {
-            $data['local_amount'] = round($data['base_amount'] * $data['exchange_rate'], 4);
+        /*
+        |--------------------------------------------------------------------------
+        | Auto Calculate Local Amount
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            empty($data['local_amount'])
+            &&
+            isset(
+                $data['base_amount'],
+                $data['exchange_rate']
+            )
+        ) {
+
+            $data['local_amount'] = round(
+                (float) $data['base_amount']
+                    *
+                    (float) $data['exchange_rate'],
+                4
+            );
         }
 
-        // Use DB transaction for safety
         DB::beginTransaction();
+
         try {
+
+            /*
+        |--------------------------------------------------------------------------
+        | Create Transaction
+        |--------------------------------------------------------------------------
+        */
+
             $tx = $this->txService->create($data);
+
             DB::commit();
-            return back()->with('success', "Transaction saved ({$tx->voucher_no})");
+
+            return back()->with(
+                'success',
+                "Transaction saved ({$tx->voucher_no})"
+            );
         } catch (\Throwable $e) {
+
             DB::rollBack();
-            \Log::error('Forex transaction store error: ' . $e->getMessage(), [
-                'payload' => $data,
-                'trace' => $e->getTraceAsString()
-            ]);
-            return back()->withInput()->withErrors(['error' => 'Unable to save transaction. See logs.']);
+
+            \Log::error(
+                'Forex transaction store error: '
+                    . $e->getMessage(),
+                [
+                    'payload' => $data,
+                    'trace' => $e->getTraceAsString()
+                ]
+            );
+
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'error' =>
+                    'Unable to save transaction. See logs.'
+                ]);
         }
     }
+
+
+
+
 
     /**
      * Show edit form
@@ -79,81 +171,216 @@ class ForexRemittanceController extends Controller
         return view('forex.transactions.edit', compact('transaction', 'parties', 'currencies'));
     }
 
-    /**
-     * Update transaction (clears matches + rebuilds bucket)
-     */
-    /**
-     * Update transaction (clears matches + rebuilds bucket)
-     */
-    public function update(Request $request, Transaction $transaction)
-    {
 
-        \Log::info('Forex transaction update data: ', [
-            'request_data' => $request->all()
-        ]);
 
-        $data = $this->validateRequest($request, $transaction->id);
+
+
+    /**
+     * Update transaction
+     */
+    public function update(
+        Request $request,
+        Transaction $transaction
+    ) {
+
+        \Log::info(
+            'Forex transaction update data:',
+            [
+                'transaction_id' => $transaction->id,
+                'request_data' => $request->all()
+            ]
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Request
+        |--------------------------------------------------------------------------
+        */
+
+        $data = $this->validateRequest(
+            $request,
+            $transaction->id
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Clean Manual Matches
+        |--------------------------------------------------------------------------
+        */
+
+        if (!empty($data['manual_matches'])) {
+
+            $data['manual_matches'] = collect(
+                $data['manual_matches']
+            )
+                ->filter(function ($row) {
+
+                    return
+                        !empty($row['transaction_id'])
+                        &&
+                        !empty($row['amount'])
+                        &&
+                        (float) $row['amount'] > 0;
+                })
+                ->values()
+                ->toArray();
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Attachment Upload
+        |--------------------------------------------------------------------------
+        */
 
         if ($request->hasFile('attachment')) {
 
-            if ($transaction->attachment && file_exists(public_path($transaction->attachment))) {
-                unlink(public_path($transaction->attachment));
+            /*
+        |--------------------------------------------------------------------------
+        | Delete old attachment
+        |--------------------------------------------------------------------------
+        */
+
+            if (
+                $transaction->attachment
+                &&
+                file_exists(
+                    public_path($transaction->attachment)
+                )
+            ) {
+
+                unlink(
+                    public_path($transaction->attachment)
+                );
             }
 
-            $file = $request->file('attachment');
-            $name = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            $file->move(public_path('attachment'), $name);
+            /*
+        |--------------------------------------------------------------------------
+        | Upload new attachment
+        |--------------------------------------------------------------------------
+        */
 
-            $data['attachment'] = 'attachment/' . $name;
+            $file = $request->file('attachment');
+
+            $name =
+                time()
+                . '_'
+                . uniqid()
+                . '.'
+                . $file->getClientOriginalExtension();
+
+            $file->move(
+                public_path('attachment'),
+                $name
+            );
+
+            $data['attachment'] =
+                'attachment/' . $name;
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Auto Calculate Local Amount
+        |--------------------------------------------------------------------------
+        */
 
-        if (empty($data['local_amount']) && isset($data['base_amount'], $data['exchange_rate'])) {
-            $data['local_amount'] = round($data['base_amount'] * $data['exchange_rate'], 4);
+        if (
+            empty($data['local_amount'])
+            &&
+            isset(
+                $data['base_amount'],
+                $data['exchange_rate']
+            )
+        ) {
+
+            $data['local_amount'] = round(
+                (float) $data['base_amount']
+                    *
+                    (float) $data['exchange_rate'],
+                4
+            );
         }
 
         try {
-            $updated = $this->txService->update($transaction, $data);
+
+            $updated = $this->txService->update(
+                $transaction,
+                $data
+            );
 
             return redirect()
                 ->route('sales.index')
-                ->with('success', "Transaction updated ({$updated->voucher_no})");
+                ->with(
+                    'success',
+                    "Transaction updated ({$updated->voucher_no})"
+                );
         } catch (\Throwable $e) {
 
-            \Log::error('Forex transaction update error: ' . $e->getMessage(), [
-                'tx_id' => $transaction->id,
-                'payload' => $data,
-                'trace' => $e->getTraceAsString()
-            ]);
+            \Log::error(
+                'Forex transaction update error: '
+                    . $e->getMessage(),
+                [
+                    'transaction_id' => $transaction->id,
+                    'payload' => $data,
+                    'trace' => $e->getTraceAsString()
+                ]
+            );
 
-            return back()->withInput()->withErrors(['error' => 'Unable to update transaction. See logs.']);
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'error' =>
+                    'Unable to update transaction. See logs.'
+                ]);
         }
     }
 
+
+
+
+
     /**
-     * Delete a transaction (clear matches + rebuild)
+     * Delete transaction
      */
-    public function destroy(Transaction $transaction)
-    {
+    public function destroy(
+        Transaction $transaction
+    ) {
+
         DB::beginTransaction();
+
         try {
-            $this->txService->delete($transaction);
+
+            $this->txService->delete(
+                $transaction
+            );
+
             DB::commit();
 
             return redirect()
                 ->route('sales.index')
-                ->with('success', "Transaction deleted");
+                ->with(
+                    'success',
+                    'Transaction deleted'
+                );
         } catch (\Throwable $e) {
+
             DB::rollBack();
 
-            \Log::error('Forex transaction delete error: ' . $e->getMessage(), [
-                'tx_id' => $transaction->id,
-                'trace' => $e->getTraceAsString()
-            ]);
+            \Log::error(
+                'Forex transaction delete error: '
+                    . $e->getMessage(),
+                [
+                    'transaction_id' => $transaction->id,
+                    'trace' => $e->getTraceAsString()
+                ]
+            );
 
-            return back()->withErrors(['error' => 'Unable to delete transaction. See logs.']);
+            return back()->withErrors([
+                'error' =>
+                'Unable to delete transaction. See logs.'
+            ]);
         }
     }
+
 
 
     /**
@@ -802,5 +1029,211 @@ class ForexRemittanceController extends Controller
 
             return response()->json(['error' => true], 500);
         }
+    }
+
+    public function getOpenVouchers(Request $request)
+    {
+        $partyId = $request->party_id;
+        $voucherType = $request->voucher_type;
+
+        if (!$partyId || !$voucherType) {
+            return response()->json([]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Determine opposite voucher types
+        |--------------------------------------------------------------------------
+        */
+
+        $targetVoucherTypes = [];
+
+        switch ($voucherType) {
+
+            case 'receipt':
+                $targetVoucherTypes = ['sale'];
+                break;
+
+            case 'sale':
+                $targetVoucherTypes = ['receipt'];
+                break;
+
+            case 'payment':
+                $targetVoucherTypes = ['purchase'];
+                break;
+
+            case 'purchase':
+                $targetVoucherTypes = ['payment'];
+                break;
+
+            default:
+                return response()->json([]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Fetch transactions
+        |--------------------------------------------------------------------------
+        */
+
+        $transactions = \App\Models\Transaction::with([
+            'matchesAsInvoice',
+            'matchesAsSettlement'
+        ])
+            ->where('party_id', $partyId)
+            ->whereIn('voucher_type', $targetVoucherTypes)
+            ->orderBy('transaction_date', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $result = [];
+
+        foreach ($transactions as $txn) {
+
+            /*
+            |--------------------------------------------------------------------------
+            | Calculate matched amount
+            |--------------------------------------------------------------------------
+            */
+
+            if (in_array($txn->voucher_type, ['sale', 'purchase'])) {
+
+                // invoice side
+                $matched = (float) $txn->matchesAsInvoice->sum('matched_base');
+            } else {
+
+                // settlement side
+                $matched = (float) $txn->matchesAsSettlement->sum('matched_base');
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Remaining
+            |--------------------------------------------------------------------------
+            */
+
+            $remaining = round(
+                (float) $txn->base_amount - $matched,
+                4
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Status
+            |--------------------------------------------------------------------------
+            */
+
+            $status = 'Open';
+
+            if ($matched <= 0) {
+
+                $status = 'Open';
+            } elseif ($matched >= (float) $txn->base_amount) {
+
+                $status = 'Settled';
+            } else {
+
+                $status = 'Partial';
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Push response
+            |--------------------------------------------------------------------------
+            */
+
+            $result[] = [
+
+                'id' => $txn->id,
+
+                'voucher_no' => $txn->voucher_no,
+
+                'voucher_type' => ucfirst($txn->voucher_type),
+
+                'transaction_date' => optional(
+                    $txn->transaction_date
+                )->format('d-m-Y'),
+
+                'exchange_rate' => round(
+                    (float) $txn->exchange_rate,
+                    4
+                ),
+
+                'base_amount' => round(
+                    (float) $txn->base_amount,
+                    4
+                ),
+
+                'matched_amount' => round(
+                    $matched,
+                    4
+                ),
+
+                //'remaining_amount' => round(
+                //    max($remaining, 0),
+                //    4
+                //),
+                'remaining_amount' => round(
+                    $remaining,
+                    4
+                ),
+
+                'status' => $status,
+
+                /*
+            |--------------------------------------------------------------------------
+            | Extra useful flags
+            |--------------------------------------------------------------------------
+            */
+
+                'is_fully_settled' => $remaining <= 0,
+
+                'is_partial' => (
+                    $matched > 0
+                    &&
+                    $remaining > 0
+                ),
+
+                //'can_allocate' => $remaining > 0,
+                'can_allocate' => true,
+            ];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | FIFO priority
+        |--------------------------------------------------------------------------
+        |
+        | Open first
+        | Partial second
+        | Settled last
+        |
+        */
+
+        usort($result, function ($a, $b) {
+
+            $priority = [
+                'Open' => 1,
+                'Partial' => 2,
+                'Settled' => 3,
+            ];
+
+            if (
+                $priority[$a['status']]
+                ==
+                $priority[$b['status']]
+            ) {
+
+                return strcmp(
+                    $a['transaction_date'],
+                    $b['transaction_date']
+                );
+            }
+
+            return $priority[$a['status']]
+                <=> $priority[$b['status']];
+        });
+
+        return response()->json($result);
     }
 }

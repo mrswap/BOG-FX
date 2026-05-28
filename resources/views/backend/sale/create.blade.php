@@ -198,7 +198,17 @@
                                 </div>
                             </div>
 
+
+
+
+                            <div id="manual-settlement-box" style="display:none;">
+                            </div>
+
+
+
                         </div>
+
+
 
                         {{-- Remarks --}}
                         <div class="form-group">
@@ -224,94 +234,453 @@
 
 @push('scripts')
     <script>
-        // Auto-calc Converted Amount
+        /*
+                            |--------------------------------------------------------------------------
+                            | AUTO CALCULATE LOCAL AMOUNT
+                            |--------------------------------------------------------------------------
+                            */
+
         function calculateConverted() {
-            const amount = parseFloat($('#base_amount').val()) || 0;
-            const rate = parseFloat($('#exchange_rate').val()) ||
-                parseFloat($('#local_currency_id option:selected').data('rate')) ||
+
+            const amount =
+                parseFloat($('#base_amount').val()) || 0;
+
+            const rate =
+                parseFloat($('#exchange_rate').val()) ||
+                parseFloat(
+                    $('#local_currency_id option:selected').data('rate')
+                ) ||
                 1;
-            $('#local_amount').val((amount * rate).toFixed(2));
+
+            $('#local_amount').val(
+                (amount * rate).toFixed(2)
+            );
         }
 
-        $('#base_amount, #exchange_rate').on('input', calculateConverted);
-        $('#local_currency_id').on('change', calculateConverted);
+        $(document).on(
+            'input',
+            '#base_amount, #exchange_rate',
+            calculateConverted
+        );
 
-        // Auto-fill party_type when a party is selected
-        $('#party_id_option').on('change', function() {
-            const partyType = $(this).find('option:selected').data('type') || '';
-            $('#party_type').val(partyType);
-        });
+        $(document).on(
+            'change',
+            '#local_currency_id',
+            calculateConverted
+        );
     </script>
 
-
     <script>
-        $(document).on('change', 'input[type="date"]', function() {
-            const val = $(this).val();
-            if (!val) return;
+        /*
+                            |--------------------------------------------------------------------------
+                            | AUTO SET PARTY TYPE
+                            |--------------------------------------------------------------------------
+                            */
 
-            const year = parseInt(val.split('-')[0]);
-            const currentYear = new Date().getFullYear();
+        $(document).on(
+            'change',
+            '#party_id_option',
+            function() {
 
-            if (year < 1900 || year > currentYear + 1) {
-                alert('Invalid year selected');
-                $(this).val('');
+                const partyType =
+                    $(this)
+                    .find('option:selected')
+                    .data('type') || '';
+
+                $('#party_type')
+                    .val(partyType)
+                    .selectpicker('refresh');
             }
-        });
+        );
     </script>
+
     <script>
-        $(document).on('keydown', '.bootstrap-select .dropdown-toggle', function(e) {
+        /*
+                            |--------------------------------------------------------------------------
+                            | DATE VALIDATION
+                            |--------------------------------------------------------------------------
+                            */
 
-            // Ignore control keys
-            if (
-                e.key.length === 1 && // alphabet / number
-                !e.ctrlKey &&
-                !e.metaKey &&
-                !e.altKey
-            ) {
-                e.preventDefault();
+        $(document).on(
+            'blur change',
+            'input[type="date"]',
+            function() {
 
-                const select = $(this).closest('.bootstrap-select').find('select');
+                let val = $(this).val();
 
-                if (!select.prop('disabled')) {
-                    select.selectpicker('toggle');
+                if (!val) return;
 
-                    // focus search box after open
-                    setTimeout(() => {
-                        $('.bootstrap-select.open .bs-searchbox input').trigger('focus');
-                    }, 50);
+                let parts = val.split('-');
+
+                if (parts.length !== 3) return;
+
+                let year = parts[0];
+                let month = parts[1];
+                let day = parts[2];
+
+                if (year.length <= 2) {
+
+                    year = (
+                        2000 + parseInt(year, 10)
+                    ).toString();
                 }
+
+                let finalYear = parseInt(year, 10);
+
+                if (
+                    finalYear < 2000 ||
+                    finalYear > 2100
+                ) {
+
+                    alert(
+                        'Year must be between 2000 and 2100'
+                    );
+
+                    $(this).val('');
+
+                    return;
+                }
+
+                $(this).val(
+                    `${year}-${month}-${day}`
+                );
             }
-        });
+        );
     </script>
+
     <script>
-        $(document).on('blur change', 'input[type="date"]', function() {
+        /*
+                            |--------------------------------------------------------------------------
+                            | LOAD MANUAL SETTLEMENTS
+                            |--------------------------------------------------------------------------
+                            */
 
-            let val = $(this).val();
-            if (!val) return;
+        function loadManualSettlements() {
 
-            let parts = val.split('-');
-            if (parts.length !== 3) return;
+            const partyId =
+                $('#party_id_option').val();
 
-            let year = parts[0];
-            let month = parts[1];
-            let day = parts[2];
+            const voucherType =
+                $('#voucher_type').val();
 
-            // Expand 1–2 digit year → 2000s
-            if (year.length <= 2) {
-                year = (2000 + parseInt(year, 10)).toString();
-            }
+            if (!partyId || !voucherType) {
 
-            let finalYear = parseInt(year, 10);
+                $('#manual-settlement-box')
+                    .hide()
+                    .html('');
 
-            // Hard range check: ONLY 2000–2100
-            if (finalYear < 2000 || finalYear > 2100) {
-                alert('Year must be between 2000 and 2100');
-                $(this).val('');
                 return;
             }
 
-            // Set corrected date back
-            $(this).val(`${year}-${month}-${day}`);
+            $.ajax({
+
+                url: "{{ route('forex.remittance.open-vouchers') }}",
+
+                type: "GET",
+
+                data: {
+                    party_id: partyId,
+                    voucher_type: voucherType
+                },
+
+                success: function(response) {
+
+                    if (!response.length) {
+
+                        $('#manual-settlement-box')
+                            .html(`
+                                <div class="alert alert-warning mt-3">
+                                    No opposite vouchers found.
+                                </div>
+                            `)
+                            .show();
+
+                        return;
+                    }
+
+                    let html = `
+                        <div class="card mt-3">
+
+                            <div class="card-header bg-info text-white">
+
+                                <strong>
+                                    Manual Settlement Allocation
+                                </strong>
+
+                                <small class="float-right">
+                                    Manual selection gets priority over FIFO
+                                </small>
+
+                            </div>
+
+                            <div class="card-body p-0">
+
+                                <div class="table-responsive">
+
+                                    <table class="table table-bordered table-sm mb-0">
+
+                                        <thead class="thead-light">
+
+                                            <tr>
+
+                                                <th width="60">
+                                                    Select
+                                                </th>
+
+                                                <th>
+                                                    Voucher
+                                                </th>
+
+                                                <th>
+                                                    Date
+                                                </th>
+
+                                                <th class="text-right">
+                                                    Original
+                                                </th>
+
+                                                <th class="text-right">
+                                                    Settled
+                                                </th>
+
+                                                <th class="text-right">
+                                                    Open
+                                                </th>
+
+                                                <th width="180">
+                                                    Settle Amount
+                                                </th>
+
+                                            </tr>
+
+                                        </thead>
+
+                                        <tbody>
+                    `;
+
+                    response.forEach((item, index) => {
+
+                        html += `
+                            <tr>
+
+                                <td class="text-center">
+
+                                    <input
+                                        type="checkbox"
+                                        class="manual-match-checkbox"
+                                        data-index="${index}"
+                                    >
+
+                                </td>
+
+                                <td>
+
+                                    <strong>
+                                        ${item.voucher_no}
+                                    </strong>
+
+                                    <input
+                                        type="hidden"
+                                        name="manual_matches[${index}][transaction_id]"
+                                        value="${item.id}"
+                                    >
+
+                                </td>
+
+                                <td>
+                                    ${item.transaction_date}
+                                </td>
+
+                                <td class="text-right">
+                                    ${parseFloat(item.base_amount).toFixed(4)}
+                                </td>
+
+                                <td class="text-right">
+                                    ${parseFloat(item.matched_amount).toFixed(4)}
+                                </td>
+
+                                <td class="text-right text-primary font-weight-bold">
+                                    ${parseFloat(item.remaining_amount).toFixed(4)}
+                                </td>
+
+                                <td>
+
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        min="0"
+                                        class="form-control form-control-sm settlement-amount"
+                                        name="manual_matches[${index}][amount]"
+                                        placeholder="0.0000"
+                                        disabled
+                                        autocomplete="off"
+                                    >
+
+                                </td>
+
+                            </tr>
+                        `;
+                    });
+
+                    html += `
+                                        </tbody>
+
+                                    </table>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+                    `;
+
+                    $('#manual-settlement-box')
+                        .html(html)
+                        .show();
+                },
+
+                error: function() {
+
+                    $('#manual-settlement-box')
+                        .html(`
+                            <div class="alert alert-danger mt-3">
+                                Failed to load settlement vouchers.
+                            </div>
+                        `)
+                        .show();
+                }
+            });
+        }
+    </script>
+
+    <script>
+        /*
+                            |--------------------------------------------------------------------------
+                            | LOAD ON PARTY / VOUCHER CHANGE
+                            |--------------------------------------------------------------------------
+                            */
+
+        $(document).on(
+            'change',
+            '#party_id_option, #voucher_type',
+            function() {
+
+                loadManualSettlements();
+            }
+        );
+    </script>
+
+    <script>
+        /*
+                            |--------------------------------------------------------------------------
+                            | ENABLE / DISABLE SETTLEMENT INPUT
+                            |--------------------------------------------------------------------------
+                            */
+
+        $(document).on(
+            'change',
+            '.manual-match-checkbox',
+            function() {
+
+                const row =
+                    $(this).closest('tr');
+
+                const input =
+                    row.find('.settlement-amount');
+
+                if ($(this).is(':checked')) {
+
+                    input
+                        .prop('disabled', false)
+                        .focus();
+
+                } else {
+
+                    input
+                        .prop('disabled', true)
+                        .val('');
+                }
+            }
+        );
+    </script>
+
+    <script>
+        /*
+                            |--------------------------------------------------------------------------
+                            | PREVENT TOTAL EXCEEDING BASE AMOUNT
+                            |--------------------------------------------------------------------------
+                            */
+
+        $(document).on(
+            'input',
+            '.settlement-amount',
+            function() {
+
+                const totalBase =
+                    parseFloat($('#base_amount').val()) || 0;
+
+                let used = 0;
+
+                $('.settlement-amount').each(function() {
+
+                    if (!$(this).prop('disabled')) {
+
+                        used +=
+                            parseFloat($(this).val()) || 0;
+                    }
+                });
+
+                if (used > totalBase) {
+
+                    alert(
+                        'Settlement total cannot exceed Base Amount'
+                    );
+
+                    $(this).val('');
+                }
+            }
+        );
+    </script>
+
+    <script>
+        /*
+                            |--------------------------------------------------------------------------
+                            | BOOTSTRAP SELECT FIX
+                            |--------------------------------------------------------------------------
+                            */
+
+        $(document).on(
+            'keydown',
+            '.bootstrap-select .dropdown-toggle',
+            function(e) {
+
+                if (
+                    e.key.length === 1 &&
+                    !e.ctrlKey &&
+                    !e.metaKey &&
+                    !e.altKey
+                ) {
+
+                    e.stopPropagation();
+                }
+            }
+        );
+    </script>
+
+    <script>
+        /*
+                            |--------------------------------------------------------------------------
+                            | INITIAL LOAD
+                            |--------------------------------------------------------------------------
+                            */
+
+        $(document).ready(function() {
+
+            $('.selectpicker').selectpicker();
+
+            calculateConverted();
+
+            loadManualSettlements();
         });
     </script>
 @endpush

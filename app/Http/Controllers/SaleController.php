@@ -2325,59 +2325,164 @@ class SaleController extends Controller
     public function edit($id)
     {
         $role = Role::find(Auth::user()->role_id);
+
         if (!$role->hasPermissionTo('sales-edit')) {
-            return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
+
+            return redirect()
+                ->back()
+                ->with(
+                    'not_permitted',
+                    'Sorry! You are not allowed to access this module'
+                );
         }
 
-        $transaction = Transaction::findOrFail($id);
+        /*
+    |--------------------------------------------------------------------------
+    | Transaction
+    |--------------------------------------------------------------------------
+    */
 
-        // Same data as create()
-        $lims_customer_list = Customer::with('currency')->where('is_active', true)->get();
+        $transaction = Transaction::with([
+            'matchesAsInvoice',
+            'matchesAsSettlement'
+        ])->findOrFail($id);
+
+        /*
+    |--------------------------------------------------------------------------
+    | Existing Manual Matches
+    |--------------------------------------------------------------------------
+    */
+
+        $existingMatches = [];
+
+        if (
+            in_array(
+                $transaction->voucher_type,
+                ['sale', 'purchase']
+            )
+        ) {
+
+            foreach ($transaction->matchesAsInvoice as $match) {
+
+                $existingMatches[] = [
+                    'transaction_id' => $match->settlement_id,
+                    'amount' => $match->matched_base,
+                ];
+            }
+        } else {
+
+            foreach ($transaction->matchesAsSettlement as $match) {
+
+                $existingMatches[] = [
+                    'transaction_id' => $match->invoice_id,
+                    'amount' => $match->matched_base,
+                ];
+            }
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | Same Existing Data
+    |--------------------------------------------------------------------------
+    */
+
+        $lims_customer_list = Customer::with('currency')
+            ->where('is_active', true)
+            ->get();
 
         if (Auth::user()->role_id > 2) {
+
             $lims_warehouse_list = Warehouse::where([
                 ['is_active', true],
                 ['id', Auth::user()->warehouse_id]
             ])->get();
+
             $lims_biller_list = Biller::where([
                 ['is_active', true],
                 ['id', Auth::user()->biller_id]
             ])->get();
         } else {
-            $lims_warehouse_list = Warehouse::where('is_active', true)->get();
-            $lims_biller_list = Biller::where('is_active', true)->get();
+
+            $lims_warehouse_list = Warehouse::where(
+                'is_active',
+                true
+            )->get();
+
+            $lims_biller_list = Biller::where(
+                'is_active',
+                true
+            )->get();
         }
 
-        $lims_tax_list = Tax::where('is_active', true)->get();
+        $lims_tax_list = Tax::where(
+            'is_active',
+            true
+        )->get();
+
         $lims_pos_setting_data = PosSetting::latest()->first();
-        $lims_reward_point_setting_data = RewardPointSetting::latest()->first();
-        $options = $lims_pos_setting_data ? explode(',', $lims_pos_setting_data->payment_options) : [];
 
-        $currency_list = Currency::where('is_active', true)->get();
+        $lims_reward_point_setting_data =
+            RewardPointSetting::latest()->first();
+
+        $options = $lims_pos_setting_data
+            ? explode(',', $lims_pos_setting_data->payment_options)
+            : [];
+
+        $currency_list = Currency::where(
+            'is_active',
+            true
+        )->get();
+
         $numberOfInvoice = Sale::count();
-        $custom_fields = CustomField::where('belongs_to', 'sale')->get();
-        $lims_customer_group_all = CustomerGroup::where('is_active', true)->get();
-        $party = Party::where('is_active', true)->get();
-        $forex_suppliers = Supplier::where('is_active', true)->get();
 
-        return view('backend.sale.edit', compact(
-            'transaction',
-            'currency_list',
-            'party',
-            'lims_customer_list',
-            'lims_warehouse_list',
-            'lims_biller_list',
-            'lims_pos_setting_data',
-            'lims_tax_list',
-            'lims_reward_point_setting_data',
-            'options',
-            'numberOfInvoice',
-            'custom_fields',
-            'lims_customer_group_all',
-            'forex_suppliers'
-        ));
+        $custom_fields = CustomField::where(
+            'belongs_to',
+            'sale'
+        )->get();
+
+        $lims_customer_group_all = CustomerGroup::where(
+            'is_active',
+            true
+        )->get();
+
+        $party = Party::where(
+            'is_active',
+            true
+        )->get();
+
+        $forex_suppliers = Supplier::where(
+            'is_active',
+            true
+        )->get();
+
+        /*
+    |--------------------------------------------------------------------------
+    | Return View
+    |--------------------------------------------------------------------------
+    */
+
+        return view(
+            'backend.sale.edit',
+            compact(
+                'transaction',
+                'currency_list',
+                'party',
+                'lims_customer_list',
+                'lims_warehouse_list',
+                'lims_biller_list',
+                'lims_pos_setting_data',
+                'lims_tax_list',
+                'lims_reward_point_setting_data',
+                'options',
+                'numberOfInvoice',
+                'custom_fields',
+                'lims_customer_group_all',
+                'forex_suppliers',
+                'existingMatches'
+            )
+        );
     }
-
+    
     public function update(Request $request, $id)
     {
         $data = $request->except('document');
