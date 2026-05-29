@@ -14,6 +14,9 @@ use App\Models\ForexMatch;
 use App\Models\ForexRate;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use App\Models\Ledger;
+
+
 
 class ForexRemittanceController extends Controller
 {
@@ -31,25 +34,38 @@ class ForexRemittanceController extends Controller
      */
     public function store(Request $request)
     {
-        \Log::info('Forex transaction store data:', [
+        \Log::info('==================================================');
+        \Log::info('FOREX STORE START');
+        \Log::info('==================================================');
+
+        \Log::info('STEP 1: Incoming Request', [
             'request_data' => $request->all()
         ]);
 
         /*
-    |--------------------------------------------------------------------------
-    | Validate Request
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | Validate Request
+        |--------------------------------------------------------------------------
+        */
 
         $data = $this->validateRequest($request);
 
+        \Log::info('STEP 2: Validated Data', [
+            'validated_data' => $data
+        ]);
+
         /*
-    |--------------------------------------------------------------------------
-    | Clean Manual Matches
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | Clean Manual Matches
+        |--------------------------------------------------------------------------
+        */
 
         if (!empty($data['manual_matches'])) {
+
+            \Log::info('STEP 3A: Raw Manual Matches', [
+                'manual_matches_before_clean' =>
+                $data['manual_matches']
+            ]);
 
             $data['manual_matches'] = collect(
                 $data['manual_matches']
@@ -65,15 +81,25 @@ class ForexRemittanceController extends Controller
                 })
                 ->values()
                 ->toArray();
+
+            \Log::info('STEP 3B: Cleaned Manual Matches', [
+                'manual_matches_after_clean' =>
+                $data['manual_matches']
+            ]);
+        } else {
+
+            \Log::warning('STEP 3C: No Manual Matches Received');
         }
 
         /*
-    |--------------------------------------------------------------------------
-    | Attachment Upload
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | Attachment Upload
+        |--------------------------------------------------------------------------
+        */
 
         if ($request->hasFile('attachment')) {
+
+            \Log::info('STEP 4: Attachment Upload Started');
 
             $file = $request->file('attachment');
 
@@ -91,13 +117,17 @@ class ForexRemittanceController extends Controller
 
             $data['attachment'] =
                 'attachment/' . $name;
+
+            \Log::info('STEP 5: Attachment Uploaded', [
+                'attachment' => $data['attachment']
+            ]);
         }
 
         /*
-    |--------------------------------------------------------------------------
-    | Auto Calculate Local Amount
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | Auto Calculate Local Amount
+        |--------------------------------------------------------------------------
+        */
 
         if (
             empty($data['local_amount'])
@@ -114,11 +144,17 @@ class ForexRemittanceController extends Controller
                     (float) $data['exchange_rate'],
                 4
             );
+
+            \Log::info('STEP 6: Local Amount Auto Calculated', [
+                'local_amount' => $data['local_amount']
+            ]);
         }
 
         DB::beginTransaction();
 
         try {
+
+            \Log::info('STEP 7: DB Transaction Started');
 
             /*
         |--------------------------------------------------------------------------
@@ -128,7 +164,38 @@ class ForexRemittanceController extends Controller
 
             $tx = $this->txService->create($data);
 
+            \Log::info('STEP 8: Transaction Created', [
+                'transaction' => $tx->toArray()
+            ]);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Verify Matches
+            |--------------------------------------------------------------------------
+            */
+
+            $matches = ForexMatch::where(
+                'invoice_id',
+                $tx->id
+            )
+                ->orWhere(
+                    'settlement_id',
+                    $tx->id
+                )
+                ->get();
+
+            \Log::info('STEP 9: Matches After Create', [
+                'count' => $matches->count(),
+                'matches' => $matches->toArray()
+            ]);
+
             DB::commit();
+
+            \Log::info('STEP 10: DB Commit Successful');
+
+            \Log::info('==================================================');
+            \Log::info('FOREX STORE SUCCESS');
+            \Log::info('==================================================');
 
             return back()->with(
                 'success',
@@ -139,13 +206,16 @@ class ForexRemittanceController extends Controller
             DB::rollBack();
 
             \Log::error(
-                'Forex transaction store error: '
-                    . $e->getMessage(),
+                'FOREX STORE ERROR: ' . $e->getMessage(),
                 [
                     'payload' => $data,
                     'trace' => $e->getTraceAsString()
                 ]
             );
+
+            \Log::info('==================================================');
+            \Log::info('FOREX STORE FAILED');
+            \Log::info('==================================================');
 
             return back()
                 ->withInput()
@@ -155,6 +225,7 @@ class ForexRemittanceController extends Controller
                 ]);
         }
     }
+
 
 
 
@@ -192,10 +263,10 @@ class ForexRemittanceController extends Controller
         );
 
         /*
-|--------------------------------------------------------------------------
-| Validate Request
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | Validate Request
+        |--------------------------------------------------------------------------
+        */
 
         $data = $this->validateRequest(
             $request,
@@ -210,10 +281,10 @@ class ForexRemittanceController extends Controller
         );
 
         /*
-|--------------------------------------------------------------------------
-| Clean Manual Matches
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | Clean Manual Matches
+        |--------------------------------------------------------------------------
+        */
 
         if (!empty($data['manual_matches'])) {
 
@@ -253,10 +324,10 @@ class ForexRemittanceController extends Controller
         }
 
         /*
-|--------------------------------------------------------------------------
-| EXISTING MATCHES BEFORE UPDATE
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | EXISTING MATCHES BEFORE UPDATE
+        |--------------------------------------------------------------------------
+        */
 
         try {
 
@@ -284,10 +355,10 @@ class ForexRemittanceController extends Controller
         }
 
         /*
-|--------------------------------------------------------------------------
-| Attachment Upload
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | Attachment Upload
+        |--------------------------------------------------------------------------
+        */
 
         if ($request->hasFile('attachment')) {
 
@@ -296,10 +367,10 @@ class ForexRemittanceController extends Controller
             );
 
             /*
-    |--------------------------------------------------------------------------
-    | Delete old attachment
-    |--------------------------------------------------------------------------
-    */
+            |--------------------------------------------------------------------------
+            | Delete old attachment
+            |--------------------------------------------------------------------------
+            */
 
             if (
                 $transaction->attachment
@@ -322,10 +393,10 @@ class ForexRemittanceController extends Controller
             }
 
             /*
-    |--------------------------------------------------------------------------
-    | Upload new attachment
-    |--------------------------------------------------------------------------
-    */
+            |--------------------------------------------------------------------------
+            | Upload new attachment
+            |--------------------------------------------------------------------------
+            */
 
             $file = $request->file('attachment');
 
@@ -353,10 +424,10 @@ class ForexRemittanceController extends Controller
         }
 
         /*
-|--------------------------------------------------------------------------
-| Auto Calculate Local Amount
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | Auto Calculate Local Amount
+        |--------------------------------------------------------------------------
+        */
 
         if (
             empty($data['local_amount'])
@@ -383,10 +454,10 @@ class ForexRemittanceController extends Controller
         }
 
         /*
-|--------------------------------------------------------------------------
-| BEFORE UPDATE SNAPSHOT
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | BEFORE UPDATE SNAPSHOT
+        |--------------------------------------------------------------------------
+        */
 
         \Log::info(
             'STEP 7: Transaction Before Update',
@@ -404,10 +475,10 @@ class ForexRemittanceController extends Controller
             );
 
             /*
-    |--------------------------------------------------------------------------
-    | Update Transaction
-    |--------------------------------------------------------------------------
-    */
+            |--------------------------------------------------------------------------
+            | Update Transaction
+            |--------------------------------------------------------------------------
+            */
 
             $updated = $this->txService->update(
                 $transaction,
@@ -422,10 +493,10 @@ class ForexRemittanceController extends Controller
             );
 
             /*
-    |--------------------------------------------------------------------------
-    | MATCHES AFTER UPDATE
-    |--------------------------------------------------------------------------
-    */
+            |--------------------------------------------------------------------------
+            | MATCHES AFTER UPDATE
+            |--------------------------------------------------------------------------
+            */
 
             $matchesAfter = ForexMatch::where(function ($q) use ($updated) {
 
@@ -442,10 +513,10 @@ class ForexRemittanceController extends Controller
             );
 
             /*
-    |--------------------------------------------------------------------------
-    | PARTY FULL MATCH SNAPSHOT
-    |--------------------------------------------------------------------------
-    */
+            |--------------------------------------------------------------------------
+            | PARTY FULL MATCH SNAPSHOT
+            |--------------------------------------------------------------------------
+            */
 
             $partyMatches = ForexMatch::where(
                 'party_id',
@@ -462,10 +533,10 @@ class ForexRemittanceController extends Controller
             );
 
             /*
-    |--------------------------------------------------------------------------
-    | PARTY TRANSACTION ORDER
-    |--------------------------------------------------------------------------
-    */
+            |--------------------------------------------------------------------------
+            | PARTY TRANSACTION ORDER
+            |--------------------------------------------------------------------------
+            */
 
             $partyTxs = Transaction::where(
                 'party_id',
@@ -553,44 +624,62 @@ class ForexRemittanceController extends Controller
         }
     }
 
+
+
+
+
+
     /**
      * Delete transaction
      */
-    public function destroy(
-        Transaction $transaction
-    ) {
-
+    public function destroy(Transaction $transaction)
+    {
         DB::beginTransaction();
 
         try {
 
+            \Log::info('==================================================');
+            \Log::info('FOREX DELETE START');
+            \Log::info('==================================================');
+
+            \Log::info('DELETE REQUEST RECEIVED', [
+                'transaction_id' => $transaction->id,
+                'voucher_no'     => $transaction->voucher_no,
+                'voucher_type'   => $transaction->voucher_type,
+                'party_id'       => $transaction->party_id,
+            ]);
+
             /*
         |--------------------------------------------------------------------------
-        | Delete Transaction
+        | Delete via Service
         |--------------------------------------------------------------------------
         */
 
-            $this->txService->delete(
-                $transaction
-            );
+            $this->txService->delete($transaction);
 
             DB::commit();
+
+            \Log::info('FOREX DELETE SUCCESS', [
+                'transaction_id' => $transaction->id
+            ]);
 
             return redirect()
                 ->route('sales.index')
                 ->with(
                     'success',
-                    'Transaction deleted'
+                    'Transaction deleted successfully'
                 );
         } catch (\Throwable $e) {
 
             DB::rollBack();
 
             \Log::error(
-                'Forex transaction delete error: '
-                    . $e->getMessage(),
+                'FOREX DELETE ERROR',
                 [
                     'transaction_id' => $transaction->id,
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
                     'trace' => $e->getTraceAsString()
                 ]
             );
@@ -601,6 +690,10 @@ class ForexRemittanceController extends Controller
             ]);
         }
     }
+
+
+
+
 
 
     /**
@@ -687,23 +780,35 @@ class ForexRemittanceController extends Controller
             'attachment' => 'nullable|file',
 
             /*
-    |--------------------------------------------------------------------------
-    | MANUAL MATCHES
-    |--------------------------------------------------------------------------
-    */
+            |--------------------------------------------------------------------------
+            | MANUAL MATCHES
+            |--------------------------------------------------------------------------
+            */
 
             'manual_matches' => 'nullable|array',
 
+
+            /*
+            |--------------------------------------------------------------------------
+                | MANUAL MATCHES (OPTIONAL)
+                |--------------------------------------------------------------------------
+                |
+                | Empty rows should be ignored.
+                | FIFO should continue automatically.
+                |
+            */
+
             'manual_matches.*.transaction_id' => [
-                'required',
+                'nullable',
                 'exists:transactions,id'
             ],
 
             'manual_matches.*.amount' => [
-                'required',
+                'nullable',
                 'numeric',
                 'min:0.0001'
             ],
+
 
         ]);
     }
