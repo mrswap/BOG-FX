@@ -30,10 +30,29 @@
         <div class="container-fluid">
 
             <div class="card mt-3">
-                <h3 class="text-center mt-3">Filter Forex Remittances</h3>
+                <h3 class="text-center mt-3">Party Wise Report</h3>
                 <div class="card-body">
                     {!! Form::open(['route' => 'sales.index', 'method' => 'get']) !!}
                     <div class="row mt-2">
+
+                        <div class="col-md-3">
+                            <label><strong>Select Party</strong></label>
+                            <select name="party_id" class="form-control">
+                                <option value="">All</option>
+                                @foreach ($party_list as $p)
+                                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label><strong>Transaction Type</strong></label>
+                            <select name="txn_group" class="form-control">
+                                <option value="">All</option>
+                                <option value="customer_side">Sale + Receipt</option>
+                                <option value="supplier_side">Purchase + Payment</option>
+                            </select>
+                        </div>
 
                         <div class="col-md-3">
                             <label><strong>From Date</strong></label>
@@ -48,24 +67,6 @@
                         </div>
 
 
-                        <div class="col-md-3">
-                            <label><strong>Transaction Type</strong></label>
-                            <select name="txn_group" class="form-control">
-                                <option value="">All</option>
-                                <option value="customer_side">Sale + Receipt</option>
-                                <option value="supplier_side">Purchase + Payment</option>
-                            </select>
-                        </div>
-
-                        <div class="col-md-3">
-                            <label><strong>Select Party</strong></label>
-                            <select name="party_id" class="form-control">
-                                <option value="">All</option>
-                                @foreach ($party_list as $p)
-                                    <option value="{{ $p->id }}">{{ $p->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
 
                         <div class="col-md-2 mt-4 pt-2">
                             <button class="btn btn-primary" type="submit" id="filter-btn">Submit</button>
@@ -503,6 +504,9 @@
             //////////////////////////////////////////
             //   FOOTER TOTALS + TOP SUMMARY
             //////////////////////////////////////////
+            //////////////////////////////////////////
+            // FOOTER TOTALS + TOP SUMMARY
+            //////////////////////////////////////////
             drawCallback: function(settings) {
 
                 var api = this.api();
@@ -510,14 +514,28 @@
 
                 if (!json) return;
 
+                //////////////////////////////////////////
+                // SAFE COLUMN SUM
+                //////////////////////////////////////////
                 function colSum(index) {
+
                     return api.column(index, {
                             page: 'current'
                         })
                         .data()
                         .reduce(function(a, b) {
-                            let val = parseFloat((b || '').toString().replace(/[^0-9.-]+/g, ""));
+
+                            // badge/html remove
+                            let text = $('<div>').html(b).text();
+
+                            let val = parseFloat(
+                                (text || '')
+                                .toString()
+                                .replace(/[^0-9.-]+/g, "")
+                            );
+
                             return a + (isNaN(val) ? 0 : val);
+
                         }, 0);
                 }
 
@@ -526,26 +544,93 @@
                 // =============================
                 let totalBaseDR = colSum(7);
                 let totalBaseCR = colSum(8);
+
                 let totalLocalDR = colSum(9);
                 let totalLocalCR = colSum(10);
+
+                // ⭐ NEW
+                let totalRealised = colSum(13);
+                let totalUnrealised = colSum(14);
 
                 // =============================
                 // FOOTER UPDATE
                 // =============================
                 $('#total-base-debit').html(totalBaseDR.toFixed(2));
+
                 $('#total-base-credit').html(totalBaseCR.toFixed(2));
+
                 $('#total-local-debit').html(totalLocalDR.toFixed(2));
+
                 $('#total-local-credit').html(totalLocalCR.toFixed(2));
+
+                //////////////////////////////////////////
+                // REALISED TOTAL
+                //////////////////////////////////////////
+                let realisedColor = totalRealised >= 0 ?
+                    'success' :
+                    'danger';
+
+                let realisedSign = totalRealised >= 0 ?
+                    '+' :
+                    '-';
+
+                $('#total-realised').html(`
+        <span class="badge badge-${realisedColor}">
+            ${realisedSign}${Math.abs(totalRealised).toFixed(2)}
+        </span>
+    `);
+
+                //////////////////////////////////////////
+                // UNREALISED TOTAL
+                //////////////////////////////////////////
+                let unrealisedColor = totalUnrealised >= 0 ?
+                    'info' :
+                    'warning';
+
+                let unrealisedSign = totalUnrealised >= 0 ?
+                    '+' :
+                    '-';
+
+                $('#total-unrealised').html(`
+        <span class="badge badge-${unrealisedColor}">
+            ${unrealisedSign}${Math.abs(totalUnrealised).toFixed(2)}
+        </span>
+    `);
+
+                //////////////////////////////////////////
+                // FINAL GAIN LOSS
+                //////////////////////////////////////////
+                let finalGainLoss = totalRealised + totalUnrealised;
+
+                let finalColor = finalGainLoss >= 0 ?
+                    'success' :
+                    'danger';
+
+                let finalSign = finalGainLoss >= 0 ?
+                    '+' :
+                    '-';
+
+                $('#final-gain-loss').html(`
+        <strong class="text-${finalColor}">
+            ${finalSign}${Math.abs(finalGainLoss).toFixed(2)}
+        </strong>
+    `);
 
                 // =============================
                 // NET BASE CALCULATION
                 // =============================
                 let netBase = totalBaseCR - totalBaseDR;
-                let baseSign = netBase >= 0 ? "Cr" : "Dr";
-                let baseColor = netBase >= 0 ? "success" : "danger";
+
+                let baseSign = netBase >= 0 ?
+                    "Cr" :
+                    "Dr";
+
+                let baseColor = netBase >= 0 ?
+                    "success" :
+                    "danger";
 
                 // =============================
-                // GLOBAL JSON (SAFE ACCESS)
+                // GLOBAL JSON
                 // =============================
                 let g = json.global || {
                     local_net: 0,
@@ -556,48 +641,77 @@
                 // BASE BREAKUP HTML
                 // =============================
                 let baseBreakupHTML = `
-                        ${Math.abs(netBase).toFixed(2)} USD 
-                        <strong class="text-${baseColor}">(${baseSign})</strong>
+        ${Math.abs(netBase).toFixed(2)} USD
 
-                        <div style="font-size: 13px; margin-top: 4px;">
-                            <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
-                            &nbsp; | &nbsp;
-                            <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
-                            &nbsp; | &nbsp;
-                            <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
-                        </div>
-                    `;
+        <strong class="text-${baseColor}">
+            (${baseSign})
+        </strong>
+
+        <div style="font-size: 13px; margin-top: 4px;">
+
+            <span class="text-danger">
+                <strong>DR:</strong>
+                ${totalBaseDR.toFixed(2)}
+            </span>
+
+            &nbsp; | &nbsp;
+
+            <span class="text-success">
+                <strong>CR:</strong>
+                ${totalBaseCR.toFixed(2)}
+            </span>
+
+            &nbsp; | &nbsp;
+
+            <strong>Net:</strong>
+            ${g.local_net.toFixed(2)} ${g.sign}
+
+        </div>
+    `;
 
                 $('#party-net-balance').html(baseBreakupHTML);
 
                 // =============================
-                // TOP SUMMARY UPDATE (IF EXISTS)
+                // TOP SUMMARY UPDATE
                 // =============================
                 if ($('#sum-base-dr').length) {
 
                     $('#sum-base-dr').html(totalBaseDR.toFixed(2));
+
                     $('#sum-base-cr').html(totalBaseCR.toFixed(2));
+
                     $('#sum-local-dr').html(totalLocalDR.toFixed(2));
+
                     $('#sum-local-cr').html(totalLocalCR.toFixed(2));
 
                     $('#sum-net-balance').html(`
-                    Net Balance:
-                    <strong class="text-${baseColor}">
-                        ${Math.abs(netBase).toFixed(2)} USD (${baseSign})
-                    </strong>
-                            `);
+                        Net Balance:
+
+                        <strong class="text-${baseColor}">
+                            ${Math.abs(netBase).toFixed(2)} USD (${baseSign})
+                        </strong>
+                    `);
 
                     $('#sum-net-breakup').html(`
-                        <span class="text-danger"><strong>DR:</strong> ${totalBaseDR.toFixed(2)}</span>
+                        <span class="text-danger">
+                            <strong>DR:</strong>
+                            ${totalBaseDR.toFixed(2)}
+                        </span>
+
                         &nbsp; | &nbsp;
-                        <span class="text-success"><strong>CR:</strong> ${totalBaseCR.toFixed(2)}</span>
+
+                        <span class="text-success">
+                            <strong>CR:</strong>
+                            ${totalBaseCR.toFixed(2)}
+                        </span>
+
                         &nbsp; | &nbsp;
-                        <strong>Net:</strong> ${g.local_net.toFixed(2)} ${g.sign}
+
+                        <strong>Net:</strong>
+                        ${g.local_net.toFixed(2)} ${g.sign}
                     `);
                 }
-
             }
-
 
         });
 
