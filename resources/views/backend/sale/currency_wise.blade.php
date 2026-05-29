@@ -94,24 +94,30 @@
 
                 <div class="row text-center mb-3">
 
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <h6 class="text-muted">Base DR</h6>
                         <h5 id="sum-base-dr" class="text-danger">0.00</h5>
                     </div>
 
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <h6 class="text-muted">Base CR</h6>
                         <h5 id="sum-base-cr" class="text-success">0.00</h5>
                     </div>
 
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <h6 class="text-muted">Local DR</h6>
                         <h5 id="sum-local-dr" class="text-danger">0.00</h5>
                     </div>
 
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <h6 class="text-muted">Local CR</h6>
                         <h5 id="sum-local-cr" class="text-success">0.00</h5>
+                    </div>
+
+
+                    <div class="col-md-2">
+                        <h6 class="text-muted">Local Diff</h6>
+                        <h5 id="sum-local-diff" class="text-primary">0.00</h5>
                     </div>
 
                 </div>
@@ -223,15 +229,11 @@
         // DATE INPUT UX PATCH (DMY + 2000–2100 STRICT)
         /////////////////////////////////////////////////
 
-        // 1️⃣ While typing: only numbers, auto hyphen, max 8 digits
         $(document).on('input', 'input[name="starting_date"], input[name="ending_date"]', function() {
 
             let val = $(this).val();
 
-            // allow digits only
             val = val.replace(/\D/g, '');
-
-            // max ddmmyyyy (8 digits)
             val = val.substring(0, 8);
 
             let d = val.substring(0, 2);
@@ -239,6 +241,7 @@
             let y = val.substring(4, 8);
 
             let out = '';
+
             if (d) out = d;
             if (m) out += '-' + m;
             if (y) out += '-' + y;
@@ -246,14 +249,18 @@
             $(this).val(out);
         });
 
+        /////////////////////////////////////////////////
+        // DATE VALIDATION
+        /////////////////////////////////////////////////
 
-        // 2️⃣ On blur: validate + normalize year
         $(document).on('blur', 'input[name="starting_date"], input[name="ending_date"]', function() {
 
             let val = $(this).val();
+
             if (!val) return;
 
             let p = val.split('-');
+
             if (p.length !== 3) {
                 $(this).val('');
                 return;
@@ -263,25 +270,22 @@
             let m = parseInt(p[1], 10);
             let y = p[2];
 
-            // expand 1–2 digit year → 2000+
             if (y.length <= 2) {
                 y = (2000 + parseInt(y, 10)).toString();
             }
 
             y = parseInt(y, 10);
 
-            // hard validation
             if (
                 d < 1 || d > 31 ||
                 m < 1 || m > 12 ||
                 y < 2000 || y > 2100
             ) {
-                alert('Invalid date. Use dd-mm-yyyy (2000–2100)');
+                alert('Invalid date. Use dd-mm-yyyy');
                 $(this).val('');
                 return;
             }
 
-            // normalize format
             $(this).val(
                 String(d).padStart(2, '0') + '-' +
                 String(m).padStart(2, '0') + '-' +
@@ -290,8 +294,9 @@
         });
 
         //////////////////////////////////////////
-        //   FORMAT BREAKUP CHILD ROW
+        // BREAKUP FORMAT
         //////////////////////////////////////////
+
         function formatBreakup(row) {
 
             if (!row.realised_breakup || row.realised_breakup.length === 0) {
@@ -299,73 +304,91 @@
             }
 
             let html = `
-                <table class="table table-sm table-bordered mt-2 mb-2">
-                    <thead class="thead-light">
-                        <tr>
-                            <th>Against Vch</th>
-                               <th>Settlement Date</th> 
-                            <th>Matched Base</th>
-                            <th>Invoice Rate</th>
-                            <th>Settlement Rate</th>
-                            <th>Realised</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                `;
+            <table class="table table-sm table-bordered mt-2 mb-2">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Against Vch</th>
+                        <th>Settlement Date</th>
+                        <th>Matched Base</th>
+                        <th>Invoice Rate</th>
+                        <th>Settlement Rate</th>
+                        <th>Realised</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
 
             row.realised_breakup.forEach(b => {
+
                 let color = b.realised >= 0 ? 'text-success' : 'text-danger';
+
                 let sign = b.realised >= 0 ? '+' : '-';
 
                 html += `
-                        <tr>
-                            <td>${b.match_voucher}</td>
-                            <td>${b.settlement_date ?? '-'}</td>
-                            <td>${Number(b.matched_base).toFixed(2)}</td>
-                            <td>${Number(b.inv_rate).toFixed(4)}</td>
-                            <td>${Number(b.settl_rate).toFixed(4)}</td>
-                            <td class="${color}">${sign}${Math.abs(b.realised).toFixed(2)}</td>
-                        </tr>
-                    `;
+                <tr>
+                    <td>${b.match_voucher}</td>
+                    <td>${b.settlement_date ?? '-'}</td>
+                    <td>${Number(b.matched_base).toFixed(2)}</td>
+                    <td>${Number(b.inv_rate).toFixed(4)}</td>
+                    <td>${Number(b.settl_rate).toFixed(4)}</td>
+                    <td class="${color}">
+                        ${sign}${Math.abs(b.realised).toFixed(2)}
+                    </td>
+                </tr>
+            `;
             });
 
             html += `
-                            <tr class="bg-light font-weight-bold">
-                                <td colspan="4" class="text-right">Total Realised</td>
-                                <td>${Number(row.realised).toFixed(2)}</td>
-                            </tr>
-                        </tbody>
-                        </table>`;
+            <tr class="bg-light font-weight-bold">
+                <td colspan="5" class="text-right">
+                    Total Realised
+                </td>
+
+                <td>
+                    ${Number(row.realised).toFixed(2)}
+                </td>
+            </tr>
+            </tbody>
+            </table>
+        `;
 
             return html;
         }
 
+        //////////////////////////////////////////
+        // DATATABLE
+        //////////////////////////////////////////
 
-        //////////////////////////////////////////
-        //   DATATABLE INITIALIZATION
-        //////////////////////////////////////////
         var forexTable = $('#forex-table').DataTable({
+
             processing: true,
             serverSide: true,
             deferLoading: 0,
 
             ajax: {
-                url: "{{ route('report.currency.data') }}",
+
+                url: "{{ route('report.party.data') }}",
+
                 type: "POST",
+
                 data: function(d) {
 
                     d.starting_date = $('input[name=starting_date]').val();
+
                     d.ending_date = $('input[name=ending_date]').val();
+
                     d.party_id = $('select[name=party_id]').val();
-                    d.base_currency_id = $('select[name=base_currency_id]').val();
-                    d.local_currency_id = $('select[name=local_currency_id]').val();
+
+                    d.txn_group = $('select[name=txn_group]').val();
+
                     d._token = "{{ csrf_token() }}";
                 }
             },
 
             //////////////////////////////////////////
-            //   COLUMNS (FIRST COL = EXPAND BUTTON)
+            // COLUMNS
             //////////////////////////////////////////
+
             columns: [
 
                 {
@@ -379,28 +402,32 @@
                     data: 'sn',
                     className: 'text-center'
                 },
+
                 {
-
-
                     data: 'date',
                     render: function(val) {
+
                         if (!val) return "";
 
-                        // Convert Y-m-d → d-m-Y
                         let parts = val.split("-");
+
                         return parts[2] + "-" + parts[1] + "-" + parts[0];
                     }
                 },
+
                 {
                     data: 'particulars'
                 },
+
                 {
                     data: 'vch_type'
                 },
+
                 {
                     data: 'vch_no',
                     className: 'text-center'
                 },
+
                 {
                     data: 'exch_rate',
                     className: 'text-center'
@@ -410,26 +437,27 @@
                     data: 'base_debit',
                     className: 'text-right'
                 },
+
                 {
                     data: 'base_credit',
                     className: 'text-right'
                 },
+
                 {
                     data: 'local_debit',
                     className: 'text-right'
                 },
+
                 {
                     data: 'local_credit',
                     className: 'text-right'
                 },
 
-                // ❌ AVG RATE REMOVED
-                // { data: 'avg_rate', className: 'text-center' },
-
                 {
                     data: 'closing_rate',
                     className: 'text-center'
                 },
+
                 {
                     data: 'diff',
                     className: 'text-center'
@@ -438,42 +466,71 @@
                 {
                     data: 'realised',
                     className: 'text-center',
+
                     render: function(val) {
-                        if (!val || val == 0) return '<span class="badge badge-secondary">-</span>';
+
+                        if (!val || val == 0) {
+                            return '<span class="badge badge-secondary">-</span>';
+                        }
+
                         let num = parseFloat(val);
+
                         let color = num > 0 ? 'success' : 'danger';
+
                         let sign = num > 0 ? '+' : '-';
-                        return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
+
+                        return `
+                        <span class="badge badge-${color}">
+                            ${sign}${Math.abs(num).toFixed(2)}
+                        </span>
+                    `;
                     }
                 },
 
                 {
                     data: 'unrealised',
                     className: 'text-center',
+
                     render: function(val) {
-                        if (!val || val == 0) return '<span class="badge badge-secondary">-</span>';
+
+                        if (!val || val == 0) {
+                            return '<span class="badge badge-secondary">-</span>';
+                        }
+
                         let num = parseFloat(val);
+
                         let color = num > 0 ? 'info' : 'warning';
+
                         let sign = num > 0 ? '+' : '-';
-                        return `<span class="badge badge-${color}">${sign}${Math.abs(num).toFixed(2)}</span>`;
+
+                        return `
+                        <span class="badge badge-${color}">
+                            ${sign}${Math.abs(num).toFixed(2)}
+                        </span>
+                    `;
                     }
                 },
 
                 {
                     data: 'remarks'
                 },
+
                 {
                     data: 'manual_remark',
+
                     orderable: false,
+
                     render: function(data, type, row) {
+
                         let val = data ? data : '';
+
                         return `
-                                <input type="text"
-                                    class="form-control form-control-sm manual-remark-input"
-                                    data-id="${row.id}"
-                                    value="${val}"
-                                    placeholder="Enter remark..." />
-                            `;
+                        <input type="text"
+                            class="form-control form-control-sm manual-remark-input"
+                            data-id="${row.id}"
+                            value="${val}"
+                            placeholder="Enter remark..." />
+                    `;
                     }
                 },
 
@@ -481,35 +538,46 @@
                     data: null,
                     className: "text-center",
                     orderable: false,
+
                     render: function(row) {
+
                         return `
-                                <a href="${row.edit_url}" class="btn btn-sm btn-primary">Edit</a>
-                                <button class="btn btn-sm btn-danger delete-forex" data-url="${row.delete_url}">
-                                    Delete
-                                </button>
-                            `;
+                        <a href="${row.edit_url}"
+                            class="btn btn-sm btn-primary">
+                            Edit
+                        </a>
+
+                        <button class="btn btn-sm btn-danger delete-forex"
+                            data-url="${row.delete_url}">
+                            Delete
+                        </button>
+                    `;
                     }
                 }
             ],
 
-
             dom: '<"row mb-3"lfB>rtip',
 
-            buttons: [{
+            buttons: [
+
+                {
                     extend: 'excel',
                     footer: true,
                     title: 'Forex Remittance Ledger'
                 },
+
                 {
                     extend: 'csv',
                     footer: true,
                     title: 'Forex Remittance Ledger'
                 },
+
                 {
                     extend: 'print',
                     footer: true,
                     title: 'Forex Remittance Ledger'
                 },
+
                 {
                     extend: 'colvis',
                     footer: false
@@ -517,21 +585,21 @@
             ],
 
             //////////////////////////////////////////
-            //   FOOTER TOTALS + TOP SUMMARY
+            // DRAW CALLBACK
             //////////////////////////////////////////
-            //////////////////////////////////////////
-            // FOOTER TOTALS + TOP SUMMARY
-            //////////////////////////////////////////
+
             drawCallback: function(settings) {
 
                 var api = this.api();
+
                 var json = api.ajax.json();
 
                 if (!json) return;
 
                 //////////////////////////////////////////
-                // SAFE COLUMN SUM
+                // COLUMN SUM
                 //////////////////////////////////////////
+
                 function colSum(index) {
 
                     return api.column(index, {
@@ -540,7 +608,6 @@
                         .data()
                         .reduce(function(a, b) {
 
-                            // badge/html remove
                             let text = $('<div>').html(b).text();
 
                             let val = parseFloat(
@@ -554,33 +621,74 @@
                         }, 0);
                 }
 
-                // =============================
-                // COLUMN TOTALS
-                // =============================
+                //////////////////////////////////////////
+                // TOTALS
+                //////////////////////////////////////////
+
                 let totalBaseDR = colSum(7);
+
                 let totalBaseCR = colSum(8);
 
                 let totalLocalDR = colSum(9);
+
                 let totalLocalCR = colSum(10);
 
-                // ⭐ NEW
                 let totalRealised = colSum(13);
+
                 let totalUnrealised = colSum(14);
 
-                // =============================
-                // FOOTER UPDATE
-                // =============================
-                $('#total-base-debit').html(totalBaseDR.toFixed(2));
+                //////////////////////////////////////////
+                // DIFFERENCE CALCULATION
+                //////////////////////////////////////////
+
+                let baseDifference = totalBaseCR - totalBaseDR;
+
+                let baseDiffSign = baseDifference >= 0 ? 'Cr' : 'Dr';
+
+                let baseDiffColor = baseDifference >= 0 ? 'success' : 'danger';
+
+                let localDifference = totalLocalCR - totalLocalDR;
+
+                let localDiffSign = localDifference >= 0 ? 'Cr' : 'Dr';
+
+                let localDiffColor = localDifference >= 0 ? 'success' : 'danger';
+
+                //////////////////////////////////////////
+                // FOOTER TOTALS
+                //////////////////////////////////////////
+
+                $('#total-base-debit').html(`
+                ${totalBaseDR.toFixed(2)}
+
+                <br>
+
+                <small class="text-${baseDiffColor}">
+                    Diff:
+                    ${Math.abs(baseDifference).toFixed(2)}
+                    (${baseDiffSign})
+                </small>
+            `);
 
                 $('#total-base-credit').html(totalBaseCR.toFixed(2));
 
-                $('#total-local-debit').html(totalLocalDR.toFixed(2));
+                $('#total-local-debit').html(`
+                ${totalLocalDR.toFixed(2)}
+
+                <br>
+
+                <small class="text-${localDiffColor}">
+                    Diff:
+                    ${Math.abs(localDifference).toFixed(2)}
+                    (${localDiffSign})
+                </small>
+            `);
 
                 $('#total-local-credit').html(totalLocalCR.toFixed(2));
 
                 //////////////////////////////////////////
-                // REALISED TOTAL
+                // REALISED
                 //////////////////////////////////////////
+
                 let realisedColor = totalRealised >= 0 ?
                     'success' :
                     'danger';
@@ -590,14 +698,15 @@
                     '-';
 
                 $('#total-realised').html(`
-        <span class="badge badge-${realisedColor}">
-            ${realisedSign}${Math.abs(totalRealised).toFixed(2)}
-        </span>
-    `);
+                <span class="badge badge-${realisedColor}">
+                    ${realisedSign}${Math.abs(totalRealised).toFixed(2)}
+                </span>
+            `);
 
                 //////////////////////////////////////////
-                // UNREALISED TOTAL
+                // UNREALISED
                 //////////////////////////////////////////
+
                 let unrealisedColor = totalUnrealised >= 0 ?
                     'info' :
                     'warning';
@@ -607,14 +716,15 @@
                     '-';
 
                 $('#total-unrealised').html(`
-        <span class="badge badge-${unrealisedColor}">
-            ${unrealisedSign}${Math.abs(totalUnrealised).toFixed(2)}
-        </span>
-    `);
+                <span class="badge badge-${unrealisedColor}">
+                    ${unrealisedSign}${Math.abs(totalUnrealised).toFixed(2)}
+                </span>
+            `);
 
                 //////////////////////////////////////////
                 // FINAL GAIN LOSS
                 //////////////////////////////////////////
+
                 let finalGainLoss = totalRealised + totalUnrealised;
 
                 let finalColor = finalGainLoss >= 0 ?
@@ -626,69 +736,111 @@
                     '-';
 
                 $('#final-gain-loss').html(`
-        <strong class="text-${finalColor}">
-            ${finalSign}${Math.abs(finalGainLoss).toFixed(2)}
-        </strong>
-    `);
+                <strong class="text-${finalColor}">
+                    ${finalSign}${Math.abs(finalGainLoss).toFixed(2)}
+                </strong>
+            `);
 
-                // =============================
-                // NET BASE CALCULATION
-                // =============================
+                //////////////////////////////////////////
+                // NET BASE
+                //////////////////////////////////////////
+
                 let netBase = totalBaseCR - totalBaseDR;
 
-                let baseSign = netBase >= 0 ?
-                    "Cr" :
-                    "Dr";
+                let baseSign = netBase >= 0 ? "Cr" : "Dr";
 
-                let baseColor = netBase >= 0 ?
-                    "success" :
-                    "danger";
+                let baseColor = netBase >= 0 ? "success" : "danger";
 
-                // =============================
+                //////////////////////////////////////////
                 // GLOBAL JSON
-                // =============================
+                //////////////////////////////////////////
+
                 let g = json.global || {
                     local_net: 0,
                     sign: "Nil"
                 };
 
-                // =============================
-                // BASE BREAKUP HTML
-                // =============================
+                //////////////////////////////////////////
+                // PARTY NET BALANCE
+                //////////////////////////////////////////
+
                 let baseBreakupHTML = `
-        ${Math.abs(netBase).toFixed(2)} USD
 
-        <strong class="text-${baseColor}">
-            (${baseSign})
-        </strong>
+                ${Math.abs(netBase).toFixed(2)} USD
 
-        <div style="font-size: 13px; margin-top: 4px;">
+                <strong class="text-${baseColor}">
+                    (${baseSign})
+                </strong>
 
-            <span class="text-danger">
-                <strong>DR:</strong>
-                ${totalBaseDR.toFixed(2)}
-            </span>
+                <div style="font-size: 13px; margin-top: 4px;">
 
-            &nbsp; | &nbsp;
+                    <span class="text-danger">
+                        <strong>DR:</strong>
+                        ${totalBaseDR.toFixed(2)}
+                    </span>
 
-            <span class="text-success">
-                <strong>CR:</strong>
-                ${totalBaseCR.toFixed(2)}
-            </span>
+                    &nbsp; | &nbsp;
 
-            &nbsp; | &nbsp;
+                    <span class="text-success">
+                        <strong>CR:</strong>
+                        ${totalBaseCR.toFixed(2)}
+                    </span>
 
-            <strong>Net:</strong>
-            ${g.local_net.toFixed(2)} ${g.sign}
+                    &nbsp; | &nbsp;
 
-        </div>
-    `;
+                    <strong>Base Diff:</strong>
+
+                    <span class="text-${baseDiffColor}">
+                        ${Math.abs(baseDifference).toFixed(2)}
+                        ${baseDiffSign}
+                    </span>
+
+                    &nbsp; | &nbsp;
+
+                    <strong>Local Diff:</strong>
+
+                    <span class="text-${localDiffColor}">
+                        ${Math.abs(localDifference).toFixed(2)}
+                        ${localDiffSign}
+                    </span>
+
+                </div>
+            `;
 
                 $('#party-net-balance').html(baseBreakupHTML);
 
-                // =============================
-                // TOP SUMMARY UPDATE
-                // =============================
+                //////////////////////////////////////////
+                // LOCAL NET BALANCE
+                //////////////////////////////////////////
+
+                $('#local-net-balance').html(`
+
+                <span class="text-danger">
+                    <strong>Local DR:</strong>
+                    ${totalLocalDR.toFixed(2)}
+                </span>
+
+                &nbsp; | &nbsp;
+
+                <span class="text-success">
+                    <strong>Local CR:</strong>
+                    ${totalLocalCR.toFixed(2)}
+                </span>
+
+                &nbsp; | &nbsp;
+
+                <strong>Difference:</strong>
+
+                <span class="text-${localDiffColor}">
+                    ${Math.abs(localDifference).toFixed(2)}
+                    (${localDiffSign})
+                </span>
+            `);
+
+                //////////////////////////////////////////
+                // TOP SUMMARY
+                //////////////////////////////////////////
+
                 if ($('#sum-base-dr').length) {
 
                     $('#sum-base-dr').html(totalBaseDR.toFixed(2));
@@ -699,40 +851,79 @@
 
                     $('#sum-local-cr').html(totalLocalCR.toFixed(2));
 
-                    $('#sum-net-balance').html(`
-            Net Balance:
+                    //////////////////////////////////////////
+                    // BASE DIFFERENCE SUMMARY
+                    //////////////////////////////////////////
 
-            <strong class="text-${baseColor}">
-                ${Math.abs(netBase).toFixed(2)} USD (${baseSign})
-            </strong>
-        `);
+                    $('#sum-base-diff').html(`
+                        <span class="text-${baseDiffColor}">
+                            ${Math.abs(baseDifference).toFixed(2)}
+                            (${baseDiffSign})
+                        </span>
+                    `);
+
+                    //////////////////////////////////////////
+                    // LOCAL DIFFERENCE SUMMARY
+                    //////////////////////////////////////////
+
+                    $('#sum-local-diff').html(`
+                        <span class="text-${localDiffColor}">
+                            ${Math.abs(localDifference).toFixed(2)}
+                            (${localDiffSign})
+                        </span>
+                    `);
+                    $('#sum-net-balance').html(`
+                    Net Balance:
+
+                    <strong class="text-${baseColor}">
+                        ${Math.abs(netBase).toFixed(2)}
+                        USD
+                        (${baseSign})
+                    </strong>
+                `);
 
                     $('#sum-net-breakup').html(`
-            <span class="text-danger">
-                <strong>DR:</strong>
-                ${totalBaseDR.toFixed(2)}
-            </span>
 
-            &nbsp; | &nbsp;
+                    <span class="text-danger">
+                        <strong>DR:</strong>
+                        ${totalBaseDR.toFixed(2)}
+                    </span>
 
-            <span class="text-success">
-                <strong>CR:</strong>
-                ${totalBaseCR.toFixed(2)}
-            </span>
+                    &nbsp; | &nbsp;
 
-            &nbsp; | &nbsp;
+                    <span class="text-success">
+                        <strong>CR:</strong>
+                        ${totalBaseCR.toFixed(2)}
+                    </span>
 
-            <strong>Net:</strong>
-            ${g.local_net.toFixed(2)} ${g.sign}
-        `);
+                    &nbsp; | &nbsp;
+
+                    <strong>Base Diff:</strong>
+
+                    <span class="text-${baseDiffColor}">
+                        ${Math.abs(baseDifference).toFixed(2)}
+                        ${baseDiffSign}
+                    </span>
+
+                    &nbsp; | &nbsp;
+
+                    <strong>Local Diff:</strong>
+
+                    <span class="text-${localDiffColor}">
+                        ${Math.abs(localDifference).toFixed(2)}
+                        ${localDiffSign}
+                    </span>
+                `);
                 }
             }
-
-
-
         });
 
+        //////////////////////////////////////////
+        // TOOLTIP
+        //////////////////////////////////////////
+
         $(document).ready(function() {
+
             $('body').tooltip({
                 selector: '.net-balance-info',
                 html: true,
@@ -741,71 +932,111 @@
         });
 
         //////////////////////////////////////////
-        //   EXPANDABLE CHILD ROW CLICK EVENT
+        // EXPAND ROW
         //////////////////////////////////////////
+
         $('#forex-table tbody').on('click', 'td.details-control', function() {
 
             var tr = $(this).closest('tr');
+
             var row = forexTable.row(tr);
 
             if (row.child.isShown()) {
+
                 row.child.hide();
+
                 tr.removeClass('shown');
+
             } else {
+
                 row.child(formatBreakup(row.data())).show();
+
                 tr.addClass('shown');
             }
         });
 
+        //////////////////////////////////////////
+        // FILTER
+        //////////////////////////////////////////
 
-        //////////////////////////////////////////
-        //   FILTER BUTTON
-        //////////////////////////////////////////
         $('#filter-btn').on('click', function(e) {
+
             e.preventDefault();
+
             forexTable.ajax.reload();
         });
 
+        //////////////////////////////////////////
+        // DELETE
+        //////////////////////////////////////////
 
-        //////////////////////////////////////////
-        //   DELETE FOREX
-        //////////////////////////////////////////
         $(document).on("click", ".delete-forex", function() {
+
             let url = $(this).data("url");
 
-            if (!confirm("Are you sure you want to delete this remittance?")) return;
+            if (!confirm("Are you sure you want to delete this remittance?")) {
+                return;
+            }
 
             $.post(url, {
+
                 _token: "{{ csrf_token() }}",
+
                 _method: "DELETE"
+
             }, function(res) {
+
                 forexTable.ajax.reload();
+
             }).fail(function() {
+
                 alert("Delete failed");
             });
         });
 
+        //////////////////////////////////////////
+        // MANUAL REMARK
+        //////////////////////////////////////////
+
         $(document).on('blur', '.manual-remark-input', function() {
 
             let input = $(this);
+
             let id = input.data('id');
+
             let remark = input.val();
 
             $.ajax({
+
                 url: "{{ route('transactions.update.manual.remark') }}",
+
                 type: "POST",
+
                 data: {
+
                     _token: "{{ csrf_token() }}",
+
                     id: id,
+
                     manual_remark: remark
                 },
+
                 success: function() {
+
                     input.addClass('border-success');
-                    setTimeout(() => input.removeClass('border-success'), 1500);
+
+                    setTimeout(() => {
+                        input.removeClass('border-success');
+                    }, 1500);
                 },
+
                 error: function() {
+
                     input.addClass('border-danger');
-                    setTimeout(() => input.removeClass('border-danger'), 2000);
+
+                    setTimeout(() => {
+                        input.removeClass('border-danger');
+                    }, 2000);
                 }
             });
         });
