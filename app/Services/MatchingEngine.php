@@ -624,4 +624,96 @@ class MatchingEngine
             $tx->save();
         }
     }
+
+
+    protected function rebuildBucketWithManual(
+        int $partyId,
+        ?int $currentTxId = null,
+        array $manualMatches = []
+    ): void {
+
+        /*
+    |--------------------------------------------------------------------------
+    | DELETE ALL MATCHES FOR PARTY
+    |--------------------------------------------------------------------------
+    */
+
+        ForexMatch::where(function ($q) use ($partyId) {
+
+            $q->whereHas('invoice', function ($sub) use ($partyId) {
+
+                $sub->where('party_id', $partyId);
+            })->orWhereHas('settlement', function ($sub) use ($partyId) {
+
+                $sub->where('party_id', $partyId);
+            });
+        })->delete();
+
+        /*
+    |--------------------------------------------------------------------------
+    | RESET ADVANCES
+    |--------------------------------------------------------------------------
+    */
+
+        Transaction::where('party_id', $partyId)
+
+            ->whereIn('voucher_type', [
+                'receipt',
+                'payment'
+            ])
+
+            ->update([
+                'advance_remaining' => null
+            ]);
+
+        /*
+    |--------------------------------------------------------------------------
+    | GET ORDERED TRANSACTIONS
+    |--------------------------------------------------------------------------
+    */
+
+        $txs = Transaction::where('party_id', $partyId)
+
+            ->orderByRaw("
+            transaction_date ASC,
+
+            CASE
+                WHEN voucher_type IN ('sale','purchase')
+                THEN 0
+                ELSE 1
+            END ASC,
+
+            id ASC
+        ")
+
+            ->get();
+
+        /*
+    |--------------------------------------------------------------------------
+    | APPLY MANUAL MATCHES FIRST
+    |--------------------------------------------------------------------------
+    */
+
+        if ($currentTxId && !empty($manualMatches)) {
+
+            $currentTx = $txs->firstWhere('id', $currentTxId);
+
+            if ($currentTx) {
+
+                $this->processManualMatches(
+                    $currentTx,
+                    $manualMatches
+                );
+            }
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | REBUILD FIFO
+    |--------------------------------------------------------------------------
+    */
+
+        $this->matchingEngine
+            ->rebuildForParty($txs);
+    }
 }

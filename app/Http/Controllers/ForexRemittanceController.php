@@ -36,18 +36,18 @@ class ForexRemittanceController extends Controller
         ]);
 
         /*
-        |--------------------------------------------------------------------------
-        | Validate Request
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | Validate Request
+    |--------------------------------------------------------------------------
+    */
 
         $data = $this->validateRequest($request);
 
         /*
-        |--------------------------------------------------------------------------
-        | Clean Manual Matches
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | Clean Manual Matches
+    |--------------------------------------------------------------------------
+    */
 
         if (!empty($data['manual_matches'])) {
 
@@ -68,10 +68,10 @@ class ForexRemittanceController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Attachment Upload
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | Attachment Upload
+    |--------------------------------------------------------------------------
+    */
 
         if ($request->hasFile('attachment')) {
 
@@ -94,10 +94,10 @@ class ForexRemittanceController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Auto Calculate Local Amount
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | Auto Calculate Local Amount
+    |--------------------------------------------------------------------------
+    */
 
         if (
             empty($data['local_amount'])
@@ -158,8 +158,6 @@ class ForexRemittanceController extends Controller
 
 
 
-
-
     /**
      * Show edit form
      */
@@ -175,40 +173,56 @@ class ForexRemittanceController extends Controller
 
 
 
-    /**
-     * Update transaction
-     */
     public function update(
         Request $request,
         Transaction $transaction
     ) {
 
+
+        \Log::info("==================================================");
+        \Log::info("FOREX UPDATE START");
+        \Log::info("==================================================");
+
         \Log::info(
-            'Forex transaction update data:',
+            'STEP 1: Incoming Request',
             [
                 'transaction_id' => $transaction->id,
-                'request_data' => $request->all()
+                'request_data'   => $request->all()
             ]
         );
 
         /*
-        |--------------------------------------------------------------------------
-        | Validate Request
-        |--------------------------------------------------------------------------
-        */
+|--------------------------------------------------------------------------
+| Validate Request
+|--------------------------------------------------------------------------
+*/
 
         $data = $this->validateRequest(
             $request,
             $transaction->id
         );
 
+        \Log::info(
+            'STEP 2: Validated Data',
+            [
+                'validated_data' => $data
+            ]
+        );
+
         /*
-        |--------------------------------------------------------------------------
-        | Clean Manual Matches
-        |--------------------------------------------------------------------------
-        */
+|--------------------------------------------------------------------------
+| Clean Manual Matches
+|--------------------------------------------------------------------------
+*/
 
         if (!empty($data['manual_matches'])) {
+
+            \Log::info(
+                'STEP 3A: Raw Manual Matches',
+                [
+                    'manual_matches_before_clean' => $data['manual_matches']
+                ]
+            );
 
             $data['manual_matches'] = collect(
                 $data['manual_matches']
@@ -224,21 +238,68 @@ class ForexRemittanceController extends Controller
                 })
                 ->values()
                 ->toArray();
+
+            \Log::info(
+                'STEP 3B: Cleaned Manual Matches',
+                [
+                    'manual_matches_after_clean' => $data['manual_matches']
+                ]
+            );
+        } else {
+
+            \Log::warning(
+                'STEP 3C: No Manual Matches Received'
+            );
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Attachment Upload
-        |--------------------------------------------------------------------------
-        */
+|--------------------------------------------------------------------------
+| EXISTING MATCHES BEFORE UPDATE
+|--------------------------------------------------------------------------
+*/
+
+        try {
+
+            $existingMatches = ForexMatch::where(function ($q) use ($transaction) {
+
+                $q->where('invoice_id', $transaction->id)
+                    ->orWhere('settlement_id', $transaction->id);
+            })->get();
+
+            \Log::info(
+                'STEP 4: Existing Forex Matches',
+                [
+                    'count' => $existingMatches->count(),
+                    'matches' => $existingMatches->toArray()
+                ]
+            );
+        } catch (\Throwable $e) {
+
+            \Log::error(
+                'STEP 4 ERROR: Unable To Load Existing Matches',
+                [
+                    'error' => $e->getMessage()
+                ]
+            );
+        }
+
+        /*
+|--------------------------------------------------------------------------
+| Attachment Upload
+|--------------------------------------------------------------------------
+*/
 
         if ($request->hasFile('attachment')) {
 
+            \Log::info(
+                'STEP 5A: Attachment Upload Started'
+            );
+
             /*
-        |--------------------------------------------------------------------------
-        | Delete old attachment
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | Delete old attachment
+    |--------------------------------------------------------------------------
+    */
 
             if (
                 $transaction->attachment
@@ -248,16 +309,23 @@ class ForexRemittanceController extends Controller
                 )
             ) {
 
+                \Log::info(
+                    'STEP 5B: Deleting Old Attachment',
+                    [
+                        'path' => $transaction->attachment
+                    ]
+                );
+
                 unlink(
                     public_path($transaction->attachment)
                 );
             }
 
             /*
-        |--------------------------------------------------------------------------
-        | Upload new attachment
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | Upload new attachment
+    |--------------------------------------------------------------------------
+    */
 
             $file = $request->file('attachment');
 
@@ -275,13 +343,20 @@ class ForexRemittanceController extends Controller
 
             $data['attachment'] =
                 'attachment/' . $name;
+
+            \Log::info(
+                'STEP 5C: New Attachment Uploaded',
+                [
+                    'attachment' => $data['attachment']
+                ]
+            );
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Auto Calculate Local Amount
-        |--------------------------------------------------------------------------
-        */
+|--------------------------------------------------------------------------
+| Auto Calculate Local Amount
+|--------------------------------------------------------------------------
+*/
 
         if (
             empty($data['local_amount'])
@@ -298,14 +373,145 @@ class ForexRemittanceController extends Controller
                     (float) $data['exchange_rate'],
                 4
             );
+
+            \Log::info(
+                'STEP 6: Auto Calculated Local Amount',
+                [
+                    'local_amount' => $data['local_amount']
+                ]
+            );
         }
 
+        /*
+|--------------------------------------------------------------------------
+| BEFORE UPDATE SNAPSHOT
+|--------------------------------------------------------------------------
+*/
+
+        \Log::info(
+            'STEP 7: Transaction Before Update',
+            [
+                'transaction' => $transaction->toArray()
+            ]
+        );
+
+        DB::beginTransaction();
+
         try {
+
+            \Log::info(
+                'STEP 8: DB Transaction Started'
+            );
+
+            /*
+    |--------------------------------------------------------------------------
+    | Update Transaction
+    |--------------------------------------------------------------------------
+    */
 
             $updated = $this->txService->update(
                 $transaction,
                 $data
             );
+
+            \Log::info(
+                'STEP 9: Transaction Updated',
+                [
+                    'updated_transaction' => $updated->fresh()->toArray()
+                ]
+            );
+
+            /*
+    |--------------------------------------------------------------------------
+    | MATCHES AFTER UPDATE
+    |--------------------------------------------------------------------------
+    */
+
+            $matchesAfter = ForexMatch::where(function ($q) use ($updated) {
+
+                $q->where('invoice_id', $updated->id)
+                    ->orWhere('settlement_id', $updated->id);
+            })->get();
+
+            \Log::info(
+                'STEP 10: Matches After Update',
+                [
+                    'count' => $matchesAfter->count(),
+                    'matches' => $matchesAfter->toArray()
+                ]
+            );
+
+            /*
+    |--------------------------------------------------------------------------
+    | PARTY FULL MATCH SNAPSHOT
+    |--------------------------------------------------------------------------
+    */
+
+            $partyMatches = ForexMatch::where(
+                'party_id',
+                $updated->party_id
+            )->get();
+
+            \Log::info(
+                'STEP 11: Party Full Match Snapshot',
+                [
+                    'party_id' => $updated->party_id,
+                    'total_matches' => $partyMatches->count(),
+                    'matches' => $partyMatches->toArray()
+                ]
+            );
+
+            /*
+    |--------------------------------------------------------------------------
+    | PARTY TRANSACTION ORDER
+    |--------------------------------------------------------------------------
+    */
+
+            $partyTxs = Transaction::where(
+                'party_id',
+                $updated->party_id
+            )
+                ->orderBy('transaction_date')
+                ->orderByRaw("
+            CASE
+                WHEN voucher_type IN ('sale','purchase')
+                THEN 0
+                ELSE 1
+            END
+        ")
+                ->orderBy('id')
+                ->get();
+
+            \Log::info(
+                'STEP 12: FIFO Ordered Transactions',
+                $partyTxs->map(function ($tx) {
+
+                    return [
+
+                        'id' => $tx->id,
+
+                        'voucher_no' => $tx->voucher_no,
+
+                        'voucher_type' => $tx->voucher_type,
+
+                        'date' => $tx->transaction_date,
+
+                        'base_amount' => $tx->base_amount,
+
+                        'exchange_rate' => $tx->exchange_rate,
+                    ];
+                })->toArray()
+            );
+
+            DB::commit();
+
+            \Log::info(
+                'STEP 13: DB Commit Successful'
+            );
+
+            \Log::info("==================================================");
+            \Log::info("FOREX UPDATE SUCCESS");
+            \Log::info("==================================================");
 
             return redirect()
                 ->route('sales.index')
@@ -315,15 +521,28 @@ class ForexRemittanceController extends Controller
                 );
         } catch (\Throwable $e) {
 
+            DB::rollBack();
+
             \Log::error(
-                'Forex transaction update error: '
-                    . $e->getMessage(),
+                'STEP ERROR: Forex transaction update failed',
                 [
                     'transaction_id' => $transaction->id,
+
                     'payload' => $data,
+
+                    'error_message' => $e->getMessage(),
+
+                    'error_file' => $e->getFile(),
+
+                    'error_line' => $e->getLine(),
+
                     'trace' => $e->getTraceAsString()
                 ]
             );
+
+            \Log::info("==================================================");
+            \Log::info("FOREX UPDATE FAILED");
+            \Log::info("==================================================");
 
             return back()
                 ->withInput()
@@ -333,10 +552,6 @@ class ForexRemittanceController extends Controller
                 ]);
         }
     }
-
-
-
-
 
     /**
      * Delete transaction
@@ -348,6 +563,12 @@ class ForexRemittanceController extends Controller
         DB::beginTransaction();
 
         try {
+
+            /*
+        |--------------------------------------------------------------------------
+        | Delete Transaction
+        |--------------------------------------------------------------------------
+        */
 
             $this->txService->delete(
                 $transaction
@@ -380,7 +601,6 @@ class ForexRemittanceController extends Controller
             ]);
         }
     }
-
 
 
     /**
@@ -428,34 +648,66 @@ class ForexRemittanceController extends Controller
     /**
      * Validates request for create/update.
      */
-    protected function validateRequest(Request $request, ?int $ignoreId = null): array
-    {
-        $rules = [
-            'party_type' => ['nullable', Rule::in(['customer', 'supplier'])],
-            'party_id' => ['required', 'integer', 'exists:parties,id'],
-            'transaction_date' => ['required', 'date'],
-            'base_currency_id' => ['required', 'integer', 'exists:currencies,id'],
-            'base_amount' => ['required', 'numeric', 'min:0.0001'],
-            'closing_rate' => ['nullable', 'numeric'],
-            'local_currency_id' => ['required', 'integer', 'exists:currencies,id'],
-            'exchange_rate' => ['required', 'numeric', 'min:0.0001'],
-            'local_amount' => ['nullable', 'numeric'],
-            'voucher_type' => ['required', Rule::in(['sale', 'purchase', 'receipt', 'payment'])],
-            'voucher_no' => ['required', 'string', 'max:255'],
-            'remarks' => ['nullable', 'string'],
-            'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+    public function validateRequest(
+        Request $request,
+        $id = null
+    ) {
 
-        ];
+        return $request->validate([
 
-        // ensure voucher_no uniqueness except for current record (on update)
-        if ($ignoreId) {
-            $rules['voucher_no'][] = Rule::unique('transactions', 'voucher_no')->ignore($ignoreId);
-        } else {
-            $rules['voucher_no'][] = Rule::unique('transactions', 'voucher_no');
-        }
+            'party_type' => 'nullable|string',
 
-        return $request->validate($rules);
+            'party_id' => 'required|exists:parties,id',
+
+            'transaction_date' => 'required|date',
+
+            'base_currency_id' => 'required|exists:currencies,id',
+
+            'base_amount' => 'required|numeric|min:0.0001',
+
+            'closing_rate' => 'nullable|numeric',
+
+            'local_currency_id' => 'required|exists:currencies,id',
+
+            'exchange_rate' => 'required|numeric|min:0',
+
+            'local_amount' => 'nullable|numeric|min:0',
+
+            'voucher_type' => 'required|in:receipt,payment,sale,purchase',
+
+            'voucher_no' => [
+                'required',
+                'string',
+                Rule::unique('transactions', 'voucher_no')
+                    ->ignore($id)
+            ],
+
+            'remarks' => 'nullable|string',
+
+            'attachment' => 'nullable|file',
+
+            /*
+    |--------------------------------------------------------------------------
+    | MANUAL MATCHES
+    |--------------------------------------------------------------------------
+    */
+
+            'manual_matches' => 'nullable|array',
+
+            'manual_matches.*.transaction_id' => [
+                'required',
+                'exists:transactions,id'
+            ],
+
+            'manual_matches.*.amount' => [
+                'required',
+                'numeric',
+                'min:0.0001'
+            ],
+
+        ]);
     }
+
 
     /**
      * Data endpoint for DataTable — uses LedgerBuilder service to compute rows & totals.

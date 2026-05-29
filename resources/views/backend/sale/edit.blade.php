@@ -396,10 +396,10 @@
 @push('scripts')
     <script>
         /*
-        |--------------------------------------------------------------------------
-        | INIT
-        |--------------------------------------------------------------------------
-        */
+                                                                                    |--------------------------------------------------------------------------
+                                                                                    | INIT
+                                                                                    |--------------------------------------------------------------------------
+                                                                                    */
 
         $(document).ready(function() {
 
@@ -608,10 +608,11 @@
                             <strong>
                                 ${item.voucher_no}
                             </strong>
-
                             <input
                                 type="hidden"
-                                name="manual_matches[${index}][transaction_id]"
+                                class="manual-transaction-id"
+                                data-name="manual_matches[${index}][transaction_id]"
+                                ${checked ? `name="manual_matches[${index}][transaction_id]"` : ''}
                                 value="${item.id}"
                             >
 
@@ -634,16 +635,16 @@
                         </td>
 
                         <td>
-
-                            <input
-                                type="number"
-                                step="0.0001"
-                                min="0"
-                                class="form-control form-control-sm settlement-amount"
-                                name="manual_matches[${index}][amount]"
-                                value="${amount}"
-                                ${checked ? '' : 'disabled'}
-                            >
+<input
+    type="number"
+    step="0.0001"
+    min="0"
+    class="form-control form-control-sm settlement-amount"
+    data-name="manual_matches[${index}][amount]"
+    ${checked ? `name="manual_matches[${index}][amount]"` : ''}
+    value="${amount}"
+    ${checked ? '' : 'readonly'}
+>
 
                         </td>
 
@@ -691,7 +692,6 @@
         | ENABLE DISABLE AMOUNT
         |--------------------------------------------------------------------------
         */
-
         $(document).on(
             'change',
             '.manual-match-checkbox',
@@ -700,22 +700,54 @@
                 const row =
                     $(this).closest('tr');
 
-                const input =
+                const amountInput =
                     row.find('.settlement-amount');
+
+                const hiddenInput =
+                    row.find('.manual-transaction-id');
 
                 if ($(this).is(':checked')) {
 
-                    input
+                    /*
+                    |--------------------------------------------------------------------------
+                    | ENABLE
+                    |--------------------------------------------------------------------------
+                    */
+
+                    amountInput
                         .prop('disabled', false)
-                        .focus();
+                        .prop('readonly', false)
+                        .attr(
+                            'name',
+                            amountInput.data('name')
+                        );
+
+                    hiddenInput.attr(
+                        'name',
+                        hiddenInput.data('name')
+                    );
+
+                    amountInput.focus();
 
                 } else {
 
-                    input
+                    /*
+                    |--------------------------------------------------------------------------
+                    | DISABLE
+                    |--------------------------------------------------------------------------
+                    */
+
+                    amountInput
                         .prop('disabled', true)
+                        .prop('readonly', true)
+                        .removeAttr('name')
                         .val('');
+
+                    hiddenInput.removeAttr('name');
                 }
             }
+
+
         );
 
 
