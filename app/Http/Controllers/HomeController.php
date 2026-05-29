@@ -303,16 +303,46 @@ class HomeController extends Controller
         return response()->json($best_selling_qty);
     }
 
+
+
     public function recentSale()
     {
-        if (Auth::user()->role_id > 2 && cache()->get('general_setting')->staff_access == 'own') {
-            $recent_sale = Sale::join('customers', 'customers.id', '=', 'sales.customer_id')->select('sales.id', 'sales.reference_no', 'sales.sale_status', 'sales.created_at', 'sales.grand_total', 'sales.user_id', 'customers.name')->orderBy('id', 'desc')->where('sales.user_id', Auth::id())->take(5)->get();
-            return response()->json($recent_sale);
-        } else {
-            $recent_sale = Sale::join('customers', 'customers.id', '=', 'sales.customer_id')->select('sales.id', 'sales.reference_no', 'sales.sale_status', 'sales.created_at', 'sales.grand_total', 'customers.name')->orderBy('id', 'desc')->take(5)->get();
-            return response()->json($recent_sale);
+        $query = \App\Models\Transaction::with('party');
+
+        // staff restriction
+        if (
+            Auth::user()->role_id > 2
+            && cache()->get('general_setting')->staff_access == 'own'
+        ) {
+            $query->where('user_id', Auth::id());
         }
+
+        $transactions = $query
+            ->latest('id')
+            ->take(10)
+            ->get();
+
+        $data = $transactions->map(function ($tx) {
+
+            return [
+                'date' => optional($tx->transaction_date)->format('d-m-Y'),
+
+                'voucher' => ucfirst($tx->voucher_type)
+                    . ' - '
+                    . $tx->voucher_no,
+
+                'party_name' => optional($tx->party)->name ?? 'N/A',
+
+                'amount' => number_format((float)$tx->base_amount, 4),
+
+                'type' => ucfirst($tx->voucher_type),
+            ];
+        });
+
+        return response()->json($data);
     }
+
+
 
     public function recentPurchase()
     {

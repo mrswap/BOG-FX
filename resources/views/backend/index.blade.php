@@ -205,53 +205,53 @@
 
             <!-- ================= Forex Data ================= -->
             <!--
-            <div class="row mb-4">
-                <div class="col-12">
-                    <h4 class="mb-3">Forex Data</h4>
-                </div>
+                                    <div class="row mb-4">
+                                        <div class="col-12">
+                                            <h4 class="mb-3">Forex Data</h4>
+                                        </div>
 
-                <div class="col-sm-4 mb-3">
-                    <div class="wrapper count-title">
-                        <div class="icon">
-                            <i class="dripicons-download" style="color:#20c997"></i>
-                        </div>
-                        <div>
-                            <div class="count-number">{{ number_format($inwards, 4, '.', ',') }}</div>
-                            <div class="name"><strong style="color:#20c997">Inwards</strong></div>
-                        </div>
-                    </div>
-                </div>
+                                        <div class="col-sm-4 mb-3">
+                                            <div class="wrapper count-title">
+                                                <div class="icon">
+                                                    <i class="dripicons-download" style="color:#20c997"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="count-number">{{ number_format($inwards, 4, '.', ',') }}</div>
+                                                    <div class="name"><strong style="color:#20c997">Inwards</strong></div>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                <div class="col-sm-4 mb-3">
-                    <div class="wrapper count-title">
-                        <div class="icon">
-                            <i class="dripicons-upload" style="color:#fd7e14"></i>
-                        </div>
-                        <div>
-                            <div class="count-number">{{ number_format($outwards, 4, '.', ',') }}</div>
-                            <div class="name"><strong style="color:#fd7e14">Outwards</strong></div>
-                        </div>
-                    </div>
-                </div>
+                                        <div class="col-sm-4 mb-3">
+                                            <div class="wrapper count-title">
+                                                <div class="icon">
+                                                    <i class="dripicons-upload" style="color:#fd7e14"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="count-number">{{ number_format($outwards, 4, '.', ',') }}</div>
+                                                    <div class="name"><strong style="color:#fd7e14">Outwards</strong></div>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                <div class="col-sm-4 mb-3">
-                    <div class="wrapper count-title">
-                        <div class="icon">
-                            <i class="dripicons-graph-line"
-                                style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}"></i>
-                        </div>
-                        <div>
-                            <div class="count-number">{{ number_format(abs($totalGainLoss), 4, '.', ',') }}</div>
-                            <div class="name">
-                                <strong style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}">
-                                    {{ $totalGainLoss >= 0 ? 'Total Gain' : 'Total Loss' }}
-                                </strong>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            -->
+                                        <div class="col-sm-4 mb-3">
+                                            <div class="wrapper count-title">
+                                                <div class="icon">
+                                                    <i class="dripicons-graph-line"
+                                                        style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="count-number">{{ number_format(abs($totalGainLoss), 4, '.', ',') }}</div>
+                                                    <div class="name">
+                                                        <strong style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}">
+                                                            {{ $totalGainLoss >= 0 ? 'Total Gain' : 'Total Loss' }}
+                                                        </strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    -->
             <!-- ================= Charts & Recent Transactions ================= -->
             <div class="row mt-4">
 
@@ -290,16 +290,18 @@
                         </ul>
 
                         <div class="tab-content p-3">
-                            <!-- Sales -->
+
+                            <!-- Latest Transactions -->
                             <div role="tabpanel" class="tab-pane fade show active" id="sale-latest">
                                 <div class="table-responsive">
                                     <table id="recent-sale" class="table table-sm">
                                         <thead>
                                             <tr>
-                                                <th>{{ trans('file.date') }}</th>
-                                                <th>{{ trans('file.reference') }}</th>
-                                                <th>{{ trans('file.status') }}</th>
+                                                <th>Date</th>
+                                                <th>Voucher</th>
+                                                <th>Party</th>
                                                 <th>Amount</th>
+                                                <th>Type</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -307,57 +309,7 @@
                                 </div>
                             </div>
 
-                            <!-- Purchase -->
-                            <div role="tabpanel" class="tab-pane fade" id="purchase-latest">
-                                <div class="table-responsive">
-                                    <table id="recent-purchase" class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>{{ trans('file.date') }}</th>
-                                                <th>{{ trans('file.reference') }}</th>
-                                                <th>{{ trans('file.status') }}</th>
-                                                <th>{{ trans('file.grand total') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
-                                </div>
-                            </div>
 
-                            <!-- Quotation -->
-                            <div role="tabpanel" class="tab-pane fade" id="quotation-latest">
-                                <div class="table-responsive">
-                                    <table id="recent-quotation" class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>{{ trans('file.date') }}</th>
-                                                <th>{{ trans('file.reference') }}</th>
-                                                <th>{{ trans('file.customer') }}</th>
-                                                <th>{{ trans('file.status') }}</th>
-                                                <th>{{ trans('file.grand total') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <!-- Payments -->
-                            <div role="tabpanel" class="tab-pane fade" id="payment-latest">
-                                <div class="table-responsive">
-                                    <table id="recent-payment" class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>{{ trans('file.date') }}</th>
-                                                <th>{{ trans('file.reference') }}</th>
-                                                <th>{{ trans('file.Amount') }}</th>
-                                                <th>{{ trans('file.Paid By') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
-                                </div>
-                            </div>
 
                         </div>
                     </div>
@@ -436,32 +388,40 @@
         });
 
         $(document).ready(function() {
+
             $.ajax({
                 url: '{{ url('/recent-sale') }}',
                 type: 'GET',
                 dataType: 'json',
+
                 success: function(data) {
+
+                    let tbody = '';
+
                     data.forEach(function(item) {
-                        var sale_date = dateFormat(item.created_at.split('T')[0],
-                            '{{ $general_setting->date_format }}')
-                        if (item.sale_status == 1) {
-                            var status =
-                                '<div class="badge badge-success">{{ trans('file.Completed') }}</div>';
-                        } else if (item.sale_status == 2) {
-                            var status =
-                                '<div class="badge badge-danger">{{ trans('file.Pending') }}</div>';
-                        } else {
-                            var status =
-                                '<div class="badge badge-warning">{{ trans('file.Draft') }}</div>';
-                        }
-                        $('#recent-sale').find('tbody').append('<tr><td>' + sale_date +
-                            '</td><td>' + item.reference_no + '</td><td>' + item.name +
-                            '</td><td>' + status + '</td><td>' + item.grand_total.toString()
-                            .replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</td></tr>');
-                    })
+
+                        tbody += `
+                    <tr>
+                        <td>${item.date}</td>
+                        <td>${item.voucher}</td>
+                        <td>${item.party_name}</td>
+                        <td>${item.amount}</td>
+                        <td>
+                            <span class="badge badge-info">
+                                ${item.type}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+                    });
+
+                    $('#recent-sale tbody').html(tbody);
                 }
             });
+
         });
+
+
 
         $(document).ready(function() {
             $.ajax({
