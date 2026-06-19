@@ -126,21 +126,36 @@ class SupplierController extends Controller
         ]);
 
         $data = $request->except('image');
+
         $data['is_active'] = 1;
 
-        // Handle image upload
+        // NEW
+        $data['user_id'] = auth()->id();
+
         if ($request->hasFile('image')) {
+
             $image = $request->file('image');
+
             $ext = $image->getClientOriginalExtension();
-            $imageName = preg_replace('/[^a-zA-Z0-9]/', '', $request->company_name) . '.' . $ext;
-            $image->move(public_path('images/party'), $imageName);
+
+            $imageName =
+                preg_replace('/[^a-zA-Z0-9]/', '', $request->company_name)
+                . '.'
+                . $ext;
+
+            $image->move(
+                public_path('images/party'),
+                $imageName
+            );
+
             $data['image'] = $imageName;
         }
 
-        // Save new Party
         $party = Party::create($data);
 
-        return redirect()->route('supplier.index')->with('message', 'Party created successfully!');
+        return redirect()
+            ->route('supplier.index')
+            ->with('message', 'Party created successfully!');
     }
 
     public function edit($id)

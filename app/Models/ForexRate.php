@@ -20,26 +20,44 @@ class ForexRate extends Model
     /**
      * Exact closing rate for date.
      */
-    public static function getClosingRate(int $baseId, int $localId, string $date)
-    {
-        return self::where('base_currency_id', $baseId)
+    public static function getClosingRate(
+        int $baseId,
+        int $localId,
+        string $date,
+        ?int $userId = null
+    ) {
+        $query = self::where('base_currency_id', $baseId)
             ->where('local_currency_id', $localId)
-            ->where('date', $date)
-            ->value('rate');
+            ->where('date', $date);
+
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->value('rate');
     }
 
     /**
      * Latest before given date.
      */
-    public static function getLatestBefore(int $baseId, int $localId, string $date)
-    {
-        return self::where('base_currency_id', $baseId)
+    public static function getLatestBefore(
+        int $baseId,
+        int $localId,
+        string $date,
+        ?int $userId = null
+    ) {
+        $query = self::where('base_currency_id', $baseId)
             ->where('local_currency_id', $localId)
-            ->where('date', '<=', $date)
+            ->where('date', '<=', $date);
+
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query
             ->orderBy('date', 'desc')
             ->value('rate');
     }
-
     /**
      * Latest available rate.
      */

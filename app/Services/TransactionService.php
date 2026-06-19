@@ -41,7 +41,7 @@ class TransactionService
         | Create transaction
         |--------------------------------------------------------------------------
         */
-
+        $data['user_id'] = auth()->id();
         $tx = Transaction::create($data);
 
         /*
@@ -445,249 +445,247 @@ class TransactionService
             'transaction_id' => $transaction->id
         ]);
 
-/*
+        /*
 |--------------------------------------------------------------------------
 | MANUAL MATCHES
 |--------------------------------------------------------------------------
 */
 
-if (
-    !empty($data['manual_matches'])
-    &&
-    count($data['manual_matches']) > 0
-) {
+        if (
+            !empty($data['manual_matches'])
+            &&
+            count($data['manual_matches']) > 0
+        ) {
 
-    \Log::info('MANUAL MATCHING STARTED', [
-        'matches' => $data['manual_matches']
-    ]);
+            \Log::info('MANUAL MATCHING STARTED', [
+                'matches' => $data['manual_matches']
+            ]);
 
-    foreach ($data['manual_matches'] as $row) {
+            foreach ($data['manual_matches'] as $row) {
 
-        $matchedTx = Transaction::find(
-            $row['transaction_id']
-        );
+                $matchedTx = Transaction::find(
+                    $row['transaction_id']
+                );
 
-        if (!$matchedTx) {
+                if (!$matchedTx) {
 
-            \Log::warning('MATCH TX NOT FOUND', $row);
+                    \Log::warning('MATCH TX NOT FOUND', $row);
 
-            continue;
-        }
+                    continue;
+                }
 
-        $amount = round(
-            (float) $row['amount'],
-            4
-        );
+                $amount = round(
+                    (float) $row['amount'],
+                    4
+                );
 
-        if ($amount <= 0) {
-            continue;
-        }
+                if ($amount <= 0) {
+                    continue;
+                }
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | SAME PARTY VALIDATION
         |--------------------------------------------------------------------------
         */
 
-        if (
-            (int) $matchedTx->party_id
-            !==
-            (int) $transaction->party_id
-        ) {
+                if (
+                    (int) $matchedTx->party_id
+                    !==
+                    (int) $transaction->party_id
+                ) {
 
-            \Log::warning('PARTY MISMATCH SKIPPED', [
-                'transaction_id' => $transaction->id,
-                'matched_tx_id' => $matchedTx->id
-            ]);
+                    \Log::warning('PARTY MISMATCH SKIPPED', [
+                        'transaction_id' => $transaction->id,
+                        'matched_tx_id' => $matchedTx->id
+                    ]);
 
-            continue;
-        }
+                    continue;
+                }
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | DETERMINE INVOICE / SETTLEMENT
         |--------------------------------------------------------------------------
         */
 
-        if (
-            in_array(
-                $transaction->voucher_type,
-                ['sale', 'purchase']
-            )
-        ) {
+                if (
+                    in_array(
+                        $transaction->voucher_type,
+                        ['sale', 'purchase']
+                    )
+                ) {
 
-            $invoiceId = $transaction->id;
+                    $invoiceId = $transaction->id;
 
-            $settlementId = $matchedTx->id;
+                    $settlementId = $matchedTx->id;
 
-            $invoiceRate =
-                (float) $transaction->exchange_rate;
+                    $invoiceRate =
+                        (float) $transaction->exchange_rate;
 
-            $settlementRate =
-                (float) $matchedTx->exchange_rate;
+                    $settlementRate =
+                        (float) $matchedTx->exchange_rate;
 
-            $voucherType =
-                $transaction->voucher_type;
+                    $voucherType =
+                        $transaction->voucher_type;
+                } else {
 
-        } else {
+                    $invoiceId = $matchedTx->id;
 
-            $invoiceId = $matchedTx->id;
+                    $settlementId = $transaction->id;
 
-            $settlementId = $transaction->id;
+                    $invoiceRate =
+                        (float) $matchedTx->exchange_rate;
 
-            $invoiceRate =
-                (float) $matchedTx->exchange_rate;
+                    $settlementRate =
+                        (float) $transaction->exchange_rate;
 
-            $settlementRate =
-                (float) $transaction->exchange_rate;
+                    $voucherType =
+                        $matchedTx->voucher_type;
+                }
 
-            $voucherType =
-                $matchedTx->voucher_type;
-        }
-
-        /*
+                /*
         |--------------------------------------------------------------------------
         | CHECK AVAILABLE OPEN BALANCE
         |--------------------------------------------------------------------------
         */
 
-        if (
-            in_array(
-                $matchedTx->voucher_type,
-                ['sale', 'purchase']
-            )
-        ) {
+                if (
+                    in_array(
+                        $matchedTx->voucher_type,
+                        ['sale', 'purchase']
+                    )
+                ) {
 
-            $alreadyMatched = (float)
-            ForexMatch::where(
-                'invoice_id',
-                $matchedTx->id
-            )->sum('matched_base');
+                    $alreadyMatched = (float)
+                    ForexMatch::where(
+                        'invoice_id',
+                        $matchedTx->id
+                    )->sum('matched_base');
+                } else {
 
-        } else {
+                    $alreadyMatched = (float)
+                    ForexMatch::where(
+                        'settlement_id',
+                        $matchedTx->id
+                    )->sum('matched_base');
+                }
 
-            $alreadyMatched = (float)
-            ForexMatch::where(
-                'settlement_id',
-                $matchedTx->id
-            )->sum('matched_base');
-        }
+                $availableBalance = round(
+                    (float) $matchedTx->base_amount
+                        - $alreadyMatched,
+                    4
+                );
 
-        $availableBalance = round(
-            (float) $matchedTx->base_amount
-                - $alreadyMatched,
-            4
-        );
+                \Log::info('MATCH BALANCE CHECK', [
 
-        \Log::info('MATCH BALANCE CHECK', [
+                    'matched_tx_id' => $matchedTx->id,
 
-            'matched_tx_id' => $matchedTx->id,
+                    'base_amount' => $matchedTx->base_amount,
 
-            'base_amount' => $matchedTx->base_amount,
+                    'already_matched' => $alreadyMatched,
 
-            'already_matched' => $alreadyMatched,
+                    'available_balance' => $availableBalance,
 
-            'available_balance' => $availableBalance,
+                    'requested_amount' => $amount
+                ]);
 
-            'requested_amount' => $amount
-        ]);
+                if ($availableBalance <= 0) {
 
-        if ($availableBalance <= 0) {
+                    \Log::warning('NO OPEN BALANCE', [
+                        'matched_tx_id' => $matchedTx->id
+                    ]);
 
-            \Log::warning('NO OPEN BALANCE', [
-                'matched_tx_id' => $matchedTx->id
-            ]);
+                    continue;
+                }
 
-            continue;
-        }
-
-        /*
+                /*
         |--------------------------------------------------------------------------
         | FINAL ALLOCATION
         |--------------------------------------------------------------------------
         */
 
-        $allocate = min(
-            $amount,
-            $availableBalance
-        );
+                $allocate = min(
+                    $amount,
+                    $availableBalance
+                );
 
-        if ($allocate <= 0) {
-            continue;
-        }
+                if ($allocate <= 0) {
+                    continue;
+                }
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | REALISED GAIN/LOSS
         |--------------------------------------------------------------------------
         */
 
-        $realised = app(
-            \App\Services\GainLossService::class
-        )->calcRealised(
+                $realised = app(
+                    \App\Services\GainLossService::class
+                )->calcRealised(
 
-            $allocate,
+                    $allocate,
 
-            $invoiceRate,
+                    $invoiceRate,
 
-            $settlementRate,
+                    $settlementRate,
 
-            $voucherType
-        );
+                    $voucherType
+                );
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | CREATE MATCH
         |--------------------------------------------------------------------------
         */
 
-        ForexMatch::create([
+                ForexMatch::create([
 
-            'party_id' => $transaction->party_id,
+                    'party_id' => $transaction->party_id,
 
-            'invoice_id' => $invoiceId,
+                    'invoice_id' => $invoiceId,
 
-            'settlement_id' => $settlementId,
+                    'settlement_id' => $settlementId,
 
-            'matched_base' => $allocate,
+                    'matched_base' => $allocate,
 
-            'matched_base_amount' => $allocate,
+                    'matched_base_amount' => $allocate,
 
-            'invoice_rate' => $invoiceRate,
+                    'invoice_rate' => $invoiceRate,
 
-            'settlement_rate' => $settlementRate,
+                    'settlement_rate' => $settlementRate,
 
-            'realised_amount' => $realised,
+                    'realised_amount' => $realised,
 
-            'is_manual' => 1,
-        ]);
+                    'is_manual' => 1,
+                ]);
 
-        \Log::info('MANUAL MATCH CREATED', [
+                \Log::info('MANUAL MATCH CREATED', [
 
-            'invoice_id' => $invoiceId,
+                    'invoice_id' => $invoiceId,
 
-            'settlement_id' => $settlementId,
+                    'settlement_id' => $settlementId,
 
-            'allocated' => $allocate,
+                    'allocated' => $allocate,
 
-            'realised' => $realised
-        ]);
-    }
+                    'realised' => $realised
+                ]);
+            }
 
-    \Log::info('MANUAL MATCHING COMPLETED');
+            \Log::info('MANUAL MATCHING COMPLETED');
 
-    /*
+            /*
     |--------------------------------------------------------------------------
     | RUN FIFO FOR REMAINING BALANCE
     |--------------------------------------------------------------------------
     */
 
-    $this->runRemainingFifo(
-        $transaction->fresh()
-    );
+            $this->runRemainingFifo(
+                $transaction->fresh()
+            );
 
-    return $transaction->fresh();
-}
+            return $transaction->fresh();
+        }
 
 
         /*
@@ -858,6 +856,7 @@ if (
             ForexRate::updateOrCreate([
                 'date' => $date,
                 'party_id' => $partyId,
+                'user_id' => $tx->user_id,
                 'base_currency_id' => $baseId,
                 'local_currency_id' => $localId
             ], [
