@@ -603,7 +603,9 @@ class SaleController extends Controller
         $numberOfInvoice = Sale::count();
         $custom_fields = CustomField::where('belongs_to', 'sale')->get();
         $lims_customer_group_all = CustomerGroup::where('is_active', true)->get();
-        $party = Party::where('is_active', true)->get();
+        $party = Party::where('is_active', true)
+            ->where('user_id', auth()->id())
+            ->get();
 
         // 🔹 Forex Remittance specific additions
         $forex_suppliers = Supplier::where('is_active', true)->get();
@@ -2482,7 +2484,7 @@ class SaleController extends Controller
             )
         );
     }
-    
+
     public function update(Request $request, $id)
     {
         $data = $request->except('document');
