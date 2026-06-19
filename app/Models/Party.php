@@ -18,17 +18,11 @@ class Party extends Model
         'state',
         'postal_code',
         'country',
-        'user_id',
         'is_active'
     ];
 
     public function forexRemittances()
     {
         return $this->hasMany(ForexRemittance::class, 'party_id');
-    }
-
-    public function user()
-    {
-        return $this->belongsTo(User::class);
     }
 }

@@ -9,21 +9,9 @@ class Transaction extends Model
     protected $table = 'transactions';
 
     protected $fillable = [
-        'party_id',
-        'party_type',
-        'transaction_date',
-        'base_currency_id',
-        'base_amount',
-        'closing_rate',
-        'local_currency_id',
-        'exchange_rate',
-        'local_amount',
-        'voucher_type',
-        'voucher_no',
-        'remarks',
-        'attachment',
-        'manual_remark',
-        'user_id',
+        'party_id','party_type','transaction_date','base_currency_id','base_amount',
+        'closing_rate','local_currency_id','exchange_rate','local_amount',
+        'voucher_type','voucher_no','remarks','attachment',  'manual_remark', 
     ];
 
     protected $casts = [
@@ -62,11 +50,11 @@ class Transaction extends Model
 
     public function isInvoice(): bool
     {
-        return in_array($this->voucher_type, ['sale', 'purchase']);
+        return in_array($this->voucher_type, ['sale','purchase']);
     }
 
     public function isSettlement(): bool
     {
-        return in_array($this->voucher_type, ['receipt', 'payment']);
+        return in_array($this->voucher_type, ['receipt','payment']);
     }
 }
