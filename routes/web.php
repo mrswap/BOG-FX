@@ -112,6 +112,9 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function () {
     Route::controller(ShippingBillController::class)->group(function () {
 
         Route::get('shipping-bill', 'index')->name('shipping.bill.index');
+
+        Route::get('shipping-bill/report/{type}/{status}', 'report')->name('shipping.bill.report');
+        
         Route::get('shipping-bill/create', 'create')->name('shipping.bill.create');
         Route::post('shipping-bill/store', 'store')->name('shipping.bill.store');
 
@@ -124,7 +127,6 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function () {
             ->name('shipping.bill.destroy');
     });
 });
-
 
 
 Route::group(['middleware' => ['common', 'auth', 'active']], function () {
@@ -312,11 +314,11 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function () {
         Route::get('addon-list', 'addonList');
         Route::get('my-transactions/{year}/{month}', 'myTransaction');
     });
-    
+
     Route::get('/switch-user/{user}', [HomeController::class, 'switchUser'])
         ->name('switch.user');
 
-        
+
     Route::controller(SaasInstallController::class)->group(function () {
         Route::prefix('saas')->group(function () {
             Route::get('install/step-1', 'saasInstallStep1')->name('saas-install-step-1');

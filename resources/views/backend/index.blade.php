@@ -203,55 +203,203 @@
                 </div>
             </div>
 
+
+
+            <!-- ================= Shipping Bill Reports ================= -->
+
+            <div class="row mb-4">
+
+
+                <div class="col-12">
+                    <h4 class="mb-3">Shipping Bill Reports</h4>
+                </div>
+
+                <div class="col-sm-2 mb-3">
+                    <a href="{{ route('shipping.bill.index') }}" class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-archive" style="color:#0d6efd"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">
+                                    Shipping Bills
+                                </div>
+                                <div class="name">
+                                    <strong style="color:#0d6efd">All Records</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-2 mb-3">
+                    <a href="{{ route('shipping.bill.report', ['type' => 'payment', 'status' => 'pending']) }}"
+                        class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-clock" style="color:#ffc107"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">
+                                    Payment
+                                </div>
+                                <div class="name">
+                                    <strong style="color:#ffc107">Pending</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-2 mb-3">
+                    <a href="{{ route('shipping.bill.report', ['type' => 'payment', 'status' => 'paid']) }}"
+                        class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-checkmark" style="color:#28a745"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">
+                                    Payment
+                                </div>
+                                <div class="name">
+                                    <strong style="color:#28a745">Paid</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-2 mb-3">
+                    <a href="{{ route('shipping.bill.report', ['type' => 'ddb', 'status' => 'pending']) }}"
+                        class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-wallet" style="color:#fd7e14"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">
+                                    DDB
+                                </div>
+                                <div class="name">
+                                    <strong style="color:#fd7e14">Pending</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-2 mb-3">
+                    <a href="{{ route('shipping.bill.report', ['type' => 'ddb', 'status' => 'received']) }}"
+                        class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-wallet" style="color:#20c997"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">
+                                    DDB
+                                </div>
+                                <div class="name">
+                                    <strong style="color:#20c997">Received</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-2 mb-3">
+                    <a href="{{ route('shipping.bill.report', ['type' => 'rodtep', 'status' => 'pending']) }}"
+                        class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-graph-line" style="color:#6f42c1"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">
+                                    RODTEP
+                                </div>
+                                <div class="name">
+                                    <strong style="color:#6f42c1">Pending</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-sm-2 mb-3">
+                    <a href="{{ route('shipping.bill.report', ['type' => 'rodtep', 'status' => 'received']) }}"
+                        class="text-decoration-none">
+                        <div class="wrapper count-title">
+                            <div class="icon">
+                                <i class="dripicons-graph-line" style="color:#198754"></i>
+                            </div>
+                            <div>
+                                <div class="count-number" style="font-size:16px;">
+                                    RODTEP
+                                </div>
+                                <div class="name">
+                                    <strong style="color:#198754">Received</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+
+            </div>
+
+
+
             <!-- ================= Forex Data ================= -->
             <!--
-                                                    <div class="row mb-4">
-                                                        <div class="col-12">
-                                                            <h4 class="mb-3">Forex Data</h4>
-                                                        </div>
+                                                            <div class="row mb-4">
+                                                                <div class="col-12">
+                                                                    <h4 class="mb-3">Forex Data</h4>
+                                                                </div>
 
-                                                        <div class="col-sm-4 mb-3">
-                                                            <div class="wrapper count-title">
-                                                                <div class="icon">
-                                                                    <i class="dripicons-download" style="color:#20c997"></i>
+                                                                <div class="col-sm-4 mb-3">
+                                                                    <div class="wrapper count-title">
+                                                                        <div class="icon">
+                                                                            <i class="dripicons-download" style="color:#20c997"></i>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div class="count-number">{{ number_format($inwards, 4, '.', ',') }}</div>
+                                                                            <div class="name"><strong style="color:#20c997">Inwards</strong></div>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <div>
-                                                                    <div class="count-number">{{ number_format($inwards, 4, '.', ',') }}</div>
-                                                                    <div class="name"><strong style="color:#20c997">Inwards</strong></div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
 
-                                                        <div class="col-sm-4 mb-3">
-                                                            <div class="wrapper count-title">
-                                                                <div class="icon">
-                                                                    <i class="dripicons-upload" style="color:#fd7e14"></i>
+                                                                <div class="col-sm-4 mb-3">
+                                                                    <div class="wrapper count-title">
+                                                                        <div class="icon">
+                                                                            <i class="dripicons-upload" style="color:#fd7e14"></i>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div class="count-number">{{ number_format($outwards, 4, '.', ',') }}</div>
+                                                                            <div class="name"><strong style="color:#fd7e14">Outwards</strong></div>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <div>
-                                                                    <div class="count-number">{{ number_format($outwards, 4, '.', ',') }}</div>
-                                                                    <div class="name"><strong style="color:#fd7e14">Outwards</strong></div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
 
-                                                        <div class="col-sm-4 mb-3">
-                                                            <div class="wrapper count-title">
-                                                                <div class="icon">
-                                                                    <i class="dripicons-graph-line"
-                                                                        style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}"></i>
-                                                                </div>
-                                                                <div>
-                                                                    <div class="count-number">{{ number_format(abs($totalGainLoss), 4, '.', ',') }}</div>
-                                                                    <div class="name">
-                                                                        <strong style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}">
-                                                                            {{ $totalGainLoss >= 0 ? 'Total Gain' : 'Total Loss' }}
-                                                                        </strong>
+                                                                <div class="col-sm-4 mb-3">
+                                                                    <div class="wrapper count-title">
+                                                                        <div class="icon">
+                                                                            <i class="dripicons-graph-line"
+                                                                                style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}"></i>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div class="count-number">{{ number_format(abs($totalGainLoss), 4, '.', ',') }}</div>
+                                                                            <div class="name">
+                                                                                <strong style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}">
+                                                                                    {{ $totalGainLoss >= 0 ? 'Total Gain' : 'Total Loss' }}
+                                                                                </strong>
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    </div>
-                                                    -->
+                                                            -->
             <!-- ================= Charts & Recent Transactions ================= -->
             <div class="row mt-4">
 

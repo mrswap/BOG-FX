@@ -221,25 +221,18 @@
                             data-toggle="dropdown" style="line-height:1.5 !important;">
                             User Management
                         </a>
-
                         <div class="dropdown-menu">
 
-                            @foreach ($allUsers as $user)
-                                <a class="dropdown-item
-                            {{ session('acting_user_id') == $user->id ? 'active' : '' }}"
+                            @foreach (\App\Models\User::where('is_active', 1)->orderBy('name')->get() as $user)
+                                <a class="dropdown-item {{ auth()->id() == $user->id ? 'active' : '' }}"
                                     href="{{ route('switch.user', $user->id) }}">
 
-                                    {{ $user->name }}
-                                    -
-                                    {{ $user->company_name }}
+                                    {{ $user->name }} - {{ $user->company_name }}
+
                                 </a>
                             @endforeach
 
                         </div>
-
-
-
-
 
                     </li>
 
@@ -282,6 +275,10 @@
 
 
                     </li>
+
+
+
+
                     <li class="nav-item dropdown mr-2">
                         <a class="btn btn-outline-success dropdown-toggle px-3 py-2" href="#"
                             data-toggle="dropdown" style="line-height:1.5 !important;">
@@ -313,10 +310,68 @@
                         </div>
                     </li>
 
-                    <a href="{{ route('supplier.create') }}" class="btn btn-primary px-4 py-2"
-                        style="line-height: 1.5 !important;">
-                        Create Party
-                    </a>
+
+
+                    <li class="nav-item dropdown mr-2">
+
+                        <a class="btn btn-outline-success dropdown-toggle px-3 py-2" href="#"
+                            data-toggle="dropdown">
+
+                            Shipping Bill Reports
+
+                        </a>
+
+                        <div class="dropdown-menu">
+
+                            <h6 class="dropdown-header">
+                                Payment Status
+                            </h6>
+
+                            <a class="dropdown-item"
+                                href="{{ route('shipping.bill.report', ['type' => 'payment', 'status' => 'pending']) }}">
+                                Pending Payments
+                            </a>
+
+                            <a class="dropdown-item"
+                                href="{{ route('shipping.bill.report', ['type' => 'payment', 'status' => 'paid']) }}">
+                                Paid Payments
+                            </a>
+
+                            <div class="dropdown-divider"></div>
+
+                            <h6 class="dropdown-header">
+                                DDB Status
+                            </h6>
+
+                            <a class="dropdown-item"
+                                href="{{ route('shipping.bill.report', ['type' => 'ddb', 'status' => 'pending']) }}">
+                                DDB Pending
+                            </a>
+
+                            <a class="dropdown-item"
+                                href="{{ route('shipping.bill.report', ['type' => 'ddb', 'status' => 'received']) }}">
+                                DDB Received
+                            </a>
+
+                            <div class="dropdown-divider"></div>
+
+                            <h6 class="dropdown-header">
+                                RODTEP Status
+                            </h6>
+
+                            <a class="dropdown-item"
+                                href="{{ route('shipping.bill.report', ['type' => 'rodtep', 'status' => 'pending']) }}">
+                                RODTEP Pending
+                            </a>
+
+                            <a class="dropdown-item"
+                                href="{{ route('shipping.bill.report', ['type' => 'rodtep', 'status' => 'received']) }}">
+                                RODTEP Received
+                            </a>
+
+                        </div>
+
+                    </li>
 
                     <a href="{{ route('sales.create') }}" class="btn btn-primary px-4 py-2"
                         style="line-height: 1.5 !important;">

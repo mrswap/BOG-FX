@@ -9,13 +9,46 @@ use Auth;
 
 class ShippingBillController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $bills = ShippingBill::with('transaction')->whereHas('transaction', function ($q) {
+        $query = ShippingBill::with('transaction')
+            ->whereHas('transaction', function ($q) {
+                $q->where('user_id', auth()->id());
+            });
+
+        // Filter
+        if ($request->filled('export_invoice_no')) {
+            $query->where('export_invoice_no', $request->export_invoice_no);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('ddb_status')) {
+            $query->where('ddb_status', $request->ddb_status);
+        }
+
+        if ($request->filled('rodtep_status')) {
+            $query->where('rodtep_status', $request->rodtep_status);
+        }
+
+        $bills = $query->latest()->get();
+
+        $invoiceNos = ShippingBill::whereHas('transaction', function ($q) {
             $q->where('user_id', auth()->id());
-        })->latest()->get();
-        return view('backend.shipping_bill.index', compact('bills'));
+        })
+            ->select('export_invoice_no')
+            ->distinct()
+            ->orderBy('export_invoice_no')
+            ->pluck('export_invoice_no');
+
+        return view(
+            'backend.shipping_bill.index',
+            compact('bills', 'invoiceNos')
+        );
     }
+
 
     public function create()
     {
@@ -200,5 +233,59 @@ class ShippingBillController extends Controller
         return redirect()
             ->route('shipping.bill.index')
             ->with('success', 'Shipping Bill Deleted Successfully');
+    }
+
+
+    public function report($type, $status)
+    {
+        $query = ShippingBill::with('transaction');
+
+        switch ($type) {
+
+            case 'payment':
+
+                if (!in_array($status, ['pending', 'paid'])) {
+                    abort(404);
+                }
+
+                $query->where('status', $status);
+
+                break;
+
+            case 'ddb':
+
+                if (!in_array($status, ['pending', 'received'])) {
+                    abort(404);
+                }
+
+                $query->where('ddb_status', $status);
+
+                break;
+
+            case 'rodtep':
+
+                if (!in_array($status, ['pending', 'received'])) {
+                    abort(404);
+                }
+
+                $query->where('rodtep_status', $status);
+
+                break;
+
+            default:
+                abort(404);
+        }
+
+        // User Restriction
+        $query->whereHas('transaction', function ($q) {
+            $q->where('user_id', auth()->id());
+        });
+
+        $bills = $query->latest()->get();
+
+        return view(
+            'backend.shipping_bill.report',
+            compact('bills', 'type', 'status')
+        );
     }
 }

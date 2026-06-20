@@ -1,6 +1,26 @@
 @extends('backend.layout.main')
 
 @section('content')
+    @php
+
+        $title = match ($type) {
+            'payment' => ucfirst($status) . ' Payment Bills',
+
+            'ddb' => 'DDB ' . ucfirst($status),
+
+            'rodtep' => 'RODTEP ' . ucfirst($status),
+
+            default => 'Shipping Bills',
+        };
+
+    @endphp
+
+    <div class="container-fluid mb-3">
+
+        <h4>{{ $title }}</h4>
+
+    </div>
+
     @if (session()->has('success'))
         <div class="alert alert-success alert-dismissible text-center">
             <button type="button" class="close" data-dismiss="alert">&times;</button>
@@ -14,122 +34,6 @@
                 <i class="dripicons-plus"></i> Add Shipping Bill
             </a>
         </div>
-
-
-        <div class="card mb-3">
-            <div class="card-body">
-
-
-                <form method="GET" action="{{ route('shipping.bill.index') }}">
-
-                    <div class="row">
-
-                        {{-- Export Invoice No --}}
-                        <div class="col-md-3">
-                            <label>Export Invoice No</label>
-                            <select name="export_invoice_no" class="form-control">
-                                <option value="">
-                                    All Invoices
-                                </option>
-                                @foreach ($invoiceNos as $invoice)
-                                    <option value="{{ $invoice }}"
-                                        {{ request('export_invoice_no') == $invoice ? 'selected' : '' }}>
-                                        {{ $invoice }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        {{-- Payment Status --}}
-                        <div class="col-md-2">
-                            <label>
-                                Payment Status
-                            </label>
-
-                            <select name="status" class="form-control">
-                                <option value="">
-                                    All
-                                </option>
-
-                                <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>
-                                    Pending
-                                </option>
-
-                                <option value="paid" {{ request('status') == 'paid' ? 'selected' : '' }}>
-                                    Paid
-                                </option>
-                            </select>
-                        </div>
-
-                        {{-- DDB Status --}}
-                        <div class="col-md-2">
-                            <label>
-                                DDB Status
-                            </label>
-
-                            <select name="ddb_status" class="form-control">
-                                <option value="">
-                                    All
-                                </option>
-
-                                <option value="pending" {{ request('ddb_status') == 'pending' ? 'selected' : '' }}>
-                                    Pending
-                                </option>
-
-                                <option value="received" {{ request('ddb_status') == 'received' ? 'selected' : '' }}>
-                                    Received
-                                </option>
-                            </select>
-                        </div>
-
-                        {{-- RODTEP Status --}}
-                        <div class="col-md-2">
-                            <label>
-                                RODTEP Status
-                            </label>
-
-                            <select name="rodtep_status" class="form-control">
-                                <option value="">
-                                    All
-                                </option>
-
-                                <option value="pending" {{ request('rodtep_status') == 'pending' ? 'selected' : '' }}>
-                                    Pending
-                                </option>
-
-                                <option value="received" {{ request('rodtep_status') == 'received' ? 'selected' : '' }}>
-                                    Received
-                                </option>
-                            </select>
-                        </div>
-
-                        {{-- Buttons --}}
-                        <div class="col-md-3">
-                            <label>&nbsp;</label>
-
-                            <div>
-
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fa fa-search"></i>
-                                    Filter
-                                </button>
-
-                                <a href="{{ route('shipping.bill.index') }}" class="btn btn-secondary">
-                                    <i class="fa fa-refresh"></i>
-                                    Reset
-                                </a>
-
-                            </div>
-                        </div>
-
-                    </div>
-
-                </form>
-
-            </div>
-
-
-        </div>
-
 
         <div class="table-responsive">
             <table id="shipping-bill-table" class="table table-bordered table-striped">
