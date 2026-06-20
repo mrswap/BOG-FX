@@ -219,6 +219,37 @@
                     <li class="nav-item dropdown mr-2">
                         <a class="btn btn-outline-primary dropdown-toggle px-3 py-2" href="#"
                             data-toggle="dropdown" style="line-height:1.5 !important;">
+                            User Management
+                        </a>
+
+                        <div class="dropdown-menu">
+
+                            @foreach ($allUsers as $user)
+                                <a class="dropdown-item
+                            {{ session('acting_user_id') == $user->id ? 'active' : '' }}"
+                                    href="{{ route('switch.user', $user->id) }}">
+
+                                    {{ $user->name }}
+                                    -
+                                    {{ $user->company_name }}
+                                </a>
+                            @endforeach
+
+                        </div>
+
+
+
+
+
+                    </li>
+
+
+
+
+
+                    <li class="nav-item dropdown mr-2">
+                        <a class="btn btn-outline-primary dropdown-toggle px-3 py-2" href="#"
+                            data-toggle="dropdown" style="line-height:1.5 !important;">
                             Fx Inward-Outward
                         </a>
 
@@ -244,8 +275,12 @@
                             <a class="dropdown-item" href="{{ route('shipping.bill.index') }}">
                                 Shipping Bills
                             </a>
-
                         </div>
+
+
+
+
+
                     </li>
                     <li class="nav-item dropdown mr-2">
                         <a class="btn btn-outline-success dropdown-toggle px-3 py-2" href="#"

@@ -11,15 +11,15 @@ class ShippingBillController extends Controller
 {
     public function index()
     {
-        $bills = ShippingBill::with('transaction')->latest()->get();
+        $bills = ShippingBill::with('transaction')->whereHas('transaction', function ($q) {
+            $q->where('user_id', auth()->id());
+        })->latest()->get();
         return view('backend.shipping_bill.index', compact('bills'));
     }
 
     public function create()
     {
-        $invoices = Transaction::whereIn('voucher_type', ['sale', 'purchase'])
-            ->orderBy('transaction_date', 'desc')
-            ->get();
+        $invoices = Transaction::where('user_id', auth()->id())->whereIn('voucher_type', ['sale', 'purchase'])->orderBy('transaction_date', 'desc')->get();
 
         return view('backend.shipping_bill.create', compact('invoices'));
     }

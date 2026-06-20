@@ -36,7 +36,10 @@ class SupplierController extends Controller
             if (empty($all_permission))
                 $all_permission[] = 'dummy text';
             $lims_supplier_all = Supplier::where('is_active', true)->get();
-            $parties = Party::all();
+            $parties = Party::where('user_id', auth()->id())
+                ->orderBy('id')
+                ->get();
+
             return view('backend.supplier.index', compact('lims_supplier_all', 'all_permission', 'parties'));
         } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');

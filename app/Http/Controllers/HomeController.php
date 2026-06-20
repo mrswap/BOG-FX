@@ -28,6 +28,7 @@ use Rawilk\Printing\Contracts\Printer;
 use Spatie\Permission\Models\Role;
 use App\Models\Transaction;
 use App\Services\LedgerBuilder;
+use App\Models\User;
 /*use vendor\autoload;
 use Mike42\Escpos\PrintConnectors\NetworkPrintConnector;
 use Mike42\Escpos\Printer;*/
@@ -201,17 +202,18 @@ class HomeController extends Controller
         // -----------------------------
         // INWARDS (Receipt + Sale = paisa aaya)
         // -----------------------------
-        $inwards = Transaction::where('base_currency_id', $baseCurrencyId)
+        $inwards = Transaction::where('user_id', auth()->id())
+            ->where('base_currency_id', $baseCurrencyId)
             ->whereIn('voucher_type', ['receipt', 'sale'])
             ->sum('base_amount');
 
         // -----------------------------
         // OUTWARDS (Purchase + Payment = paisa gaya)
         // -----------------------------
-        $outwards = Transaction::where('base_currency_id', $baseCurrencyId)
+        $outwards = Transaction::where('user_id', auth()->id())
+            ->where('base_currency_id', $baseCurrencyId)
             ->whereIn('voucher_type', ['purchase', 'payment'])
             ->sum('base_amount');
-
         // -----------------------------
         // REAL FOREX GAIN / LOSS
         // -----------------------------
@@ -247,7 +249,19 @@ class HomeController extends Controller
         $totalGainLoss =
             ($realisedGain - $realisedLoss) +
             ($unrealisedGain - $unrealisedLoss);
-        return view('backend.index', compact('revenue', 'purchase', 'expense', 'return', 'purchase_return', 'profit', 'payment_recieved', 'payment_sent', 'month', 'yearly_sale_amount', 'yearly_purchase_amount', 'alertBugEnable', 'alertVersionUpgradeEnable', 'inwards', 'outwards', 'totalGainLoss'));
+        $allUsers = User::where('is_active', 1)
+            ->orderBy('name')
+            ->get();
+        return view('backend.index', compact('revenue', 'purchase', 'expense', 'return', 'purchase_return', 'profit', 'payment_recieved', 'payment_sent', 'month', 'yearly_sale_amount', 'yearly_purchase_amount', 'alertBugEnable', 'alertVersionUpgradeEnable', 'inwards', 'outwards', 'totalGainLoss', 'allUsers'));
+    }
+
+    public function switchUser(User $user)
+    {
+        Auth::login($user);
+
+        session()->regenerate();
+
+        return redirect('/dashboard');
     }
 
     public function yearlyBestSellingPrice()
@@ -307,7 +321,8 @@ class HomeController extends Controller
 
     public function recentSale()
     {
-        $query = \App\Models\Transaction::with('party');
+        $query = \App\Models\Transaction::with('party')
+            ->where('user_id', Auth::id());
 
         // staff restriction
         if (

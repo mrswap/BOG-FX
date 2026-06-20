@@ -205,53 +205,53 @@
 
             <!-- ================= Forex Data ================= -->
             <!--
-                                    <div class="row mb-4">
-                                        <div class="col-12">
-                                            <h4 class="mb-3">Forex Data</h4>
-                                        </div>
+                                                    <div class="row mb-4">
+                                                        <div class="col-12">
+                                                            <h4 class="mb-3">Forex Data</h4>
+                                                        </div>
 
-                                        <div class="col-sm-4 mb-3">
-                                            <div class="wrapper count-title">
-                                                <div class="icon">
-                                                    <i class="dripicons-download" style="color:#20c997"></i>
-                                                </div>
-                                                <div>
-                                                    <div class="count-number">{{ number_format($inwards, 4, '.', ',') }}</div>
-                                                    <div class="name"><strong style="color:#20c997">Inwards</strong></div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                                        <div class="col-sm-4 mb-3">
+                                                            <div class="wrapper count-title">
+                                                                <div class="icon">
+                                                                    <i class="dripicons-download" style="color:#20c997"></i>
+                                                                </div>
+                                                                <div>
+                                                                    <div class="count-number">{{ number_format($inwards, 4, '.', ',') }}</div>
+                                                                    <div class="name"><strong style="color:#20c997">Inwards</strong></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
 
-                                        <div class="col-sm-4 mb-3">
-                                            <div class="wrapper count-title">
-                                                <div class="icon">
-                                                    <i class="dripicons-upload" style="color:#fd7e14"></i>
-                                                </div>
-                                                <div>
-                                                    <div class="count-number">{{ number_format($outwards, 4, '.', ',') }}</div>
-                                                    <div class="name"><strong style="color:#fd7e14">Outwards</strong></div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                                        <div class="col-sm-4 mb-3">
+                                                            <div class="wrapper count-title">
+                                                                <div class="icon">
+                                                                    <i class="dripicons-upload" style="color:#fd7e14"></i>
+                                                                </div>
+                                                                <div>
+                                                                    <div class="count-number">{{ number_format($outwards, 4, '.', ',') }}</div>
+                                                                    <div class="name"><strong style="color:#fd7e14">Outwards</strong></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
 
-                                        <div class="col-sm-4 mb-3">
-                                            <div class="wrapper count-title">
-                                                <div class="icon">
-                                                    <i class="dripicons-graph-line"
-                                                        style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}"></i>
-                                                </div>
-                                                <div>
-                                                    <div class="count-number">{{ number_format(abs($totalGainLoss), 4, '.', ',') }}</div>
-                                                    <div class="name">
-                                                        <strong style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}">
-                                                            {{ $totalGainLoss >= 0 ? 'Total Gain' : 'Total Loss' }}
-                                                        </strong>
+                                                        <div class="col-sm-4 mb-3">
+                                                            <div class="wrapper count-title">
+                                                                <div class="icon">
+                                                                    <i class="dripicons-graph-line"
+                                                                        style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}"></i>
+                                                                </div>
+                                                                <div>
+                                                                    <div class="count-number">{{ number_format(abs($totalGainLoss), 4, '.', ',') }}</div>
+                                                                    <div class="name">
+                                                                        <strong style="color: {{ $totalGainLoss >= 0 ? '#198754' : '#dc3545' }}">
+                                                                            {{ $totalGainLoss >= 0 ? 'Total Gain' : 'Total Loss' }}
+                                                                        </strong>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    -->
+                                                    -->
             <!-- ================= Charts & Recent Transactions ================= -->
             <div class="row mt-4">
 

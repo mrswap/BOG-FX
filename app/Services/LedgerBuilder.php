@@ -25,7 +25,7 @@ class LedgerBuilder
      */
     public function buildForDataTable(array $opts = []): array
     {
-        $q = Transaction::with(['party', 'baseCurrency', 'localCurrency']);
+        $q = Transaction::with(['party', 'baseCurrency', 'localCurrency'])->where('user_id', auth()->id());
 
         // ===========================
         // DATATABLE SERVER-SIDE SORT

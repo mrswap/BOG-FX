@@ -77,7 +77,8 @@ use App\Http\Controllers\ForexRemittanceController;
 
 
 
-Route::post('/transactions/update-manual-remark', 
+Route::post(
+    '/transactions/update-manual-remark',
     [ForexRemittanceController::class, 'updateManualRemark']
 )->name('transactions.update.manual.remark');
 
@@ -311,7 +312,11 @@ Route::group(['middleware' => ['common', 'auth', 'active']], function () {
         Route::get('addon-list', 'addonList');
         Route::get('my-transactions/{year}/{month}', 'myTransaction');
     });
+    
+    Route::get('/switch-user/{user}', [HomeController::class, 'switchUser'])
+        ->name('switch.user');
 
+        
     Route::controller(SaasInstallController::class)->group(function () {
         Route::prefix('saas')->group(function () {
             Route::get('install/step-1', 'saasInstallStep1')->name('saas-install-step-1');

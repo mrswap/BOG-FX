@@ -2,21 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Currency;
+use App\Models\ForexMatch;
+use App\Models\Ledger;
+use App\Models\Party;
+use App\Models\Transaction;
+use App\Services\LedgerBuilder;
+use App\Services\TransactionService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Models\Transaction;
-use App\Models\Party;
-use App\Models\Currency;
-use App\Services\TransactionService;
-use App\Services\LedgerBuilder;
-use Illuminate\Validation\Rule;
-use App\Models\ForexMatch;
-use App\Models\ForexRate;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
-use App\Models\Ledger;
-
-
+use Illuminate\Validation\Rule;
 
 class ForexRemittanceController extends Controller
 {
@@ -25,7 +22,7 @@ class ForexRemittanceController extends Controller
 
     public function __construct(TransactionService $txService, LedgerBuilder $ledgerBuilder)
     {
-        $this->txService = $txService;
+        $this->txService     = $txService;
         $this->ledgerBuilder = $ledgerBuilder;
     }
 
@@ -39,7 +36,7 @@ class ForexRemittanceController extends Controller
         \Log::info('==================================================');
 
         \Log::info('STEP 1: Incoming Request', [
-            'request_data' => $request->all()
+            'request_data' => $request->all(),
         ]);
 
         /*
@@ -51,7 +48,7 @@ class ForexRemittanceController extends Controller
         $data = $this->validateRequest($request);
 
         \Log::info('STEP 2: Validated Data', [
-            'validated_data' => $data
+            'validated_data' => $data,
         ]);
 
         /*
@@ -60,11 +57,11 @@ class ForexRemittanceController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        if (!empty($data['manual_matches'])) {
+        if (! empty($data['manual_matches'])) {
 
             \Log::info('STEP 3A: Raw Manual Matches', [
                 'manual_matches_before_clean' =>
-                $data['manual_matches']
+                $data['manual_matches'],
             ]);
 
             $data['manual_matches'] = collect(
@@ -72,10 +69,10 @@ class ForexRemittanceController extends Controller
             )
                 ->filter(function ($row) {
 
-                    return
-                        !empty($row['transaction_id'])
+                    return;
+                    ! empty($row['transaction_id'])
                         &&
-                        !empty($row['amount'])
+                        ! empty($row['amount'])
                         &&
                         (float) $row['amount'] > 0;
                 })
@@ -84,7 +81,7 @@ class ForexRemittanceController extends Controller
 
             \Log::info('STEP 3B: Cleaned Manual Matches', [
                 'manual_matches_after_clean' =>
-                $data['manual_matches']
+                $data['manual_matches'],
             ]);
         } else {
 
@@ -119,7 +116,7 @@ class ForexRemittanceController extends Controller
                 'attachment/' . $name;
 
             \Log::info('STEP 5: Attachment Uploaded', [
-                'attachment' => $data['attachment']
+                'attachment' => $data['attachment'],
             ]);
         }
 
@@ -146,7 +143,7 @@ class ForexRemittanceController extends Controller
             );
 
             \Log::info('STEP 6: Local Amount Auto Calculated', [
-                'local_amount' => $data['local_amount']
+                'local_amount' => $data['local_amount'],
             ]);
         }
 
@@ -162,10 +159,12 @@ class ForexRemittanceController extends Controller
         |--------------------------------------------------------------------------
         */
 
+            $data['user_id'] = auth()->id();
+
             $tx = $this->txService->create($data);
 
             \Log::info('STEP 8: Transaction Created', [
-                'transaction' => $tx->toArray()
+                'transaction' => $tx->toArray(),
             ]);
 
             /*
@@ -185,8 +184,8 @@ class ForexRemittanceController extends Controller
                 ->get();
 
             \Log::info('STEP 9: Matches After Create', [
-                'count' => $matches->count(),
-                'matches' => $matches->toArray()
+                'count'   => $matches->count(),
+                'matches' => $matches->toArray(),
             ]);
 
             DB::commit();
@@ -209,7 +208,7 @@ class ForexRemittanceController extends Controller
                 'FOREX STORE ERROR: ' . $e->getMessage(),
                 [
                     'payload' => $data,
-                    'trace' => $e->getTraceAsString()
+                    'trace'   => $e->getTraceAsString(),
                 ]
             );
 
@@ -221,34 +220,27 @@ class ForexRemittanceController extends Controller
                 ->withInput()
                 ->withErrors([
                     'error' =>
-                    'Unable to save transaction. See logs.'
+                    'Unable to save transaction. See logs.',
                 ]);
         }
     }
-
-
-
 
     /**
      * Show edit form
      */
     public function edit(Transaction $transaction)
     {
-        $parties = Party::orderBy('name')->get();
+        if ($transaction->user_id != auth()->id()) {
+            abort(403);
+        }
+        $parties    = Party::orderBy('name')->get();
         $currencies = Currency::orderBy('code')->get();
 
         return view('forex.transactions.edit', compact('transaction', 'parties', 'currencies'));
     }
 
-
-
-
-
-    public function update(
-        Request $request,
-        Transaction $transaction
-    ) {
-
+    public function update(Request $request, Transaction $transaction)
+    {
 
         \Log::info("==================================================");
         \Log::info("FOREX UPDATE START");
@@ -258,9 +250,13 @@ class ForexRemittanceController extends Controller
             'STEP 1: Incoming Request',
             [
                 'transaction_id' => $transaction->id,
-                'request_data'   => $request->all()
+                'request_data'   => $request->all(),
             ]
         );
+
+        if ($transaction->user_id != auth()->id()) {
+            abort(403);
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -276,7 +272,7 @@ class ForexRemittanceController extends Controller
         \Log::info(
             'STEP 2: Validated Data',
             [
-                'validated_data' => $data
+                'validated_data' => $data,
             ]
         );
 
@@ -286,12 +282,12 @@ class ForexRemittanceController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        if (!empty($data['manual_matches'])) {
+        if (! empty($data['manual_matches'])) {
 
             \Log::info(
                 'STEP 3A: Raw Manual Matches',
                 [
-                    'manual_matches_before_clean' => $data['manual_matches']
+                    'manual_matches_before_clean' => $data['manual_matches'],
                 ]
             );
 
@@ -300,10 +296,10 @@ class ForexRemittanceController extends Controller
             )
                 ->filter(function ($row) {
 
-                    return
-                        !empty($row['transaction_id'])
+                    return;
+                    ! empty($row['transaction_id'])
                         &&
-                        !empty($row['amount'])
+                        ! empty($row['amount'])
                         &&
                         (float) $row['amount'] > 0;
                 })
@@ -313,7 +309,7 @@ class ForexRemittanceController extends Controller
             \Log::info(
                 'STEP 3B: Cleaned Manual Matches',
                 [
-                    'manual_matches_after_clean' => $data['manual_matches']
+                    'manual_matches_after_clean' => $data['manual_matches'],
                 ]
             );
         } else {
@@ -340,8 +336,8 @@ class ForexRemittanceController extends Controller
             \Log::info(
                 'STEP 4: Existing Forex Matches',
                 [
-                    'count' => $existingMatches->count(),
-                    'matches' => $existingMatches->toArray()
+                    'count'   => $existingMatches->count(),
+                    'matches' => $existingMatches->toArray(),
                 ]
             );
         } catch (\Throwable $e) {
@@ -349,7 +345,7 @@ class ForexRemittanceController extends Controller
             \Log::error(
                 'STEP 4 ERROR: Unable To Load Existing Matches',
                 [
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]
             );
         }
@@ -383,7 +379,7 @@ class ForexRemittanceController extends Controller
                 \Log::info(
                     'STEP 5B: Deleting Old Attachment',
                     [
-                        'path' => $transaction->attachment
+                        'path' => $transaction->attachment,
                     ]
                 );
 
@@ -418,7 +414,7 @@ class ForexRemittanceController extends Controller
             \Log::info(
                 'STEP 5C: New Attachment Uploaded',
                 [
-                    'attachment' => $data['attachment']
+                    'attachment' => $data['attachment'],
                 ]
             );
         }
@@ -448,7 +444,7 @@ class ForexRemittanceController extends Controller
             \Log::info(
                 'STEP 6: Auto Calculated Local Amount',
                 [
-                    'local_amount' => $data['local_amount']
+                    'local_amount' => $data['local_amount'],
                 ]
             );
         }
@@ -462,7 +458,7 @@ class ForexRemittanceController extends Controller
         \Log::info(
             'STEP 7: Transaction Before Update',
             [
-                'transaction' => $transaction->toArray()
+                'transaction' => $transaction->toArray(),
             ]
         );
 
@@ -488,7 +484,7 @@ class ForexRemittanceController extends Controller
             \Log::info(
                 'STEP 9: Transaction Updated',
                 [
-                    'updated_transaction' => $updated->fresh()->toArray()
+                    'updated_transaction' => $updated->fresh()->toArray(),
                 ]
             );
 
@@ -507,8 +503,8 @@ class ForexRemittanceController extends Controller
             \Log::info(
                 'STEP 10: Matches After Update',
                 [
-                    'count' => $matchesAfter->count(),
-                    'matches' => $matchesAfter->toArray()
+                    'count'   => $matchesAfter->count(),
+                    'matches' => $matchesAfter->toArray(),
                 ]
             );
 
@@ -526,9 +522,9 @@ class ForexRemittanceController extends Controller
             \Log::info(
                 'STEP 11: Party Full Match Snapshot',
                 [
-                    'party_id' => $updated->party_id,
+                    'party_id'      => $updated->party_id,
                     'total_matches' => $partyMatches->count(),
-                    'matches' => $partyMatches->toArray()
+                    'matches'       => $partyMatches->toArray(),
                 ]
             );
 
@@ -559,15 +555,15 @@ class ForexRemittanceController extends Controller
 
                     return [
 
-                        'id' => $tx->id,
+                        'id'            => $tx->id,
 
-                        'voucher_no' => $tx->voucher_no,
+                        'voucher_no'    => $tx->voucher_no,
 
-                        'voucher_type' => $tx->voucher_type,
+                        'voucher_type'  => $tx->voucher_type,
 
-                        'date' => $tx->transaction_date,
+                        'date'          => $tx->transaction_date,
 
-                        'base_amount' => $tx->base_amount,
+                        'base_amount'   => $tx->base_amount,
 
                         'exchange_rate' => $tx->exchange_rate,
                     ];
@@ -599,15 +595,15 @@ class ForexRemittanceController extends Controller
                 [
                     'transaction_id' => $transaction->id,
 
-                    'payload' => $data,
+                    'payload'        => $data,
 
-                    'error_message' => $e->getMessage(),
+                    'error_message'  => $e->getMessage(),
 
-                    'error_file' => $e->getFile(),
+                    'error_file'     => $e->getFile(),
 
-                    'error_line' => $e->getLine(),
+                    'error_line'     => $e->getLine(),
 
-                    'trace' => $e->getTraceAsString()
+                    'trace'          => $e->getTraceAsString(),
                 ]
             );
 
@@ -619,21 +615,19 @@ class ForexRemittanceController extends Controller
                 ->withInput()
                 ->withErrors([
                     'error' =>
-                    'Unable to update transaction. See logs.'
+                    'Unable to update transaction. See logs.',
                 ]);
         }
     }
-
-
-
-
-
 
     /**
      * Delete transaction
      */
     public function destroy(Transaction $transaction)
     {
+        if ($transaction->user_id != auth()->id()) {
+            abort(403);
+        }
         DB::beginTransaction();
 
         try {
@@ -660,7 +654,7 @@ class ForexRemittanceController extends Controller
             DB::commit();
 
             \Log::info('FOREX DELETE SUCCESS', [
-                'transaction_id' => $transaction->id
+                'transaction_id' => $transaction->id,
             ]);
 
             return redirect()
@@ -677,24 +671,19 @@ class ForexRemittanceController extends Controller
                 'FOREX DELETE ERROR',
                 [
                     'transaction_id' => $transaction->id,
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'trace' => $e->getTraceAsString()
+                    'message'        => $e->getMessage(),
+                    'file'           => $e->getFile(),
+                    'line'           => $e->getLine(),
+                    'trace'          => $e->getTraceAsString(),
                 ]
             );
 
             return back()->withErrors([
                 'error' =>
-                'Unable to delete transaction. See logs.'
+                'Unable to delete transaction. See logs.',
             ]);
         }
     }
-
-
-
-
-
 
     /**
      * Party ledger view (uses LedgerBuilder)
@@ -704,18 +693,21 @@ class ForexRemittanceController extends Controller
     public function ledger(Request $request, int $partyId)
     {
         $from = $request->query('from');
-        $to = $request->query('to');
+        $to   = $request->query('to');
 
         $party = Party::findOrFail($partyId);
-        $rows = $this->ledgerBuilder->build($partyId, $from, $to);
+        $rows  = $this->ledgerBuilder->build($partyId, $from, $to);
+
+        $party = Party::where('user_id', auth()->id())
+            ->findOrFail($partyId);
 
         // compute totals
         $totals = [
-            'base_dr' => array_sum(array_column($rows, 'base_dr')),
-            'base_cr' => array_sum(array_column($rows, 'base_cr')),
-            'local_dr' => array_sum(array_column($rows, 'local_dr')),
-            'local_cr' => array_sum(array_column($rows, 'local_cr')),
-            'realised' => array_sum(array_column($rows, 'realised')),
+            'base_dr'    => array_sum(array_column($rows, 'base_dr')),
+            'base_cr'    => array_sum(array_column($rows, 'base_cr')),
+            'local_dr'   => array_sum(array_column($rows, 'local_dr')),
+            'local_cr'   => array_sum(array_column($rows, 'local_cr')),
+            'realised'   => array_sum(array_column($rows, 'realised')),
             'unrealised' => array_sum(array_column($rows, 'unrealised')),
         ];
 
@@ -729,7 +721,7 @@ class ForexRemittanceController extends Controller
     public function convertLocalAmount(Request $request)
     {
         $data = $request->validate([
-            'base_amount' => 'required|numeric|min:0',
+            'base_amount'   => 'required|numeric|min:0',
             'exchange_rate' => 'required|numeric|min:0.00001',
         ]);
 
@@ -748,36 +740,36 @@ class ForexRemittanceController extends Controller
 
         return $request->validate([
 
-            'party_type' => 'nullable|string',
+            'party_type'                      => 'nullable|string',
 
-            'party_id' => 'required|exists:parties,id',
+            'party_id'                        => 'required|exists:parties,id',
 
-            'transaction_date' => 'required|date',
+            'transaction_date'                => 'required|date',
 
-            'base_currency_id' => 'required|exists:currencies,id',
+            'base_currency_id'                => 'required|exists:currencies,id',
 
-            'base_amount' => 'required|numeric|min:0.0001',
+            'base_amount'                     => 'required|numeric|min:0.0001',
 
-            'closing_rate' => 'nullable|numeric',
+            'closing_rate'                    => 'nullable|numeric',
 
-            'local_currency_id' => 'required|exists:currencies,id',
+            'local_currency_id'               => 'required|exists:currencies,id',
 
-            'exchange_rate' => 'required|numeric|min:0',
+            'exchange_rate'                   => 'required|numeric|min:0',
 
-            'local_amount' => 'nullable|numeric|min:0',
+            'local_amount'                    => 'nullable|numeric|min:0',
 
-            'voucher_type' => 'required|in:receipt,payment,sale,purchase',
+            'voucher_type'                    => 'required|in:receipt,payment,sale,purchase',
 
-            'voucher_no' => [
+            'voucher_no'                      => [
                 'required',
                 'string',
                 Rule::unique('transactions', 'voucher_no')
-                    ->ignore($id)
+                    ->ignore($id),
             ],
 
-            'remarks' => 'nullable|string',
+            'remarks'                         => 'nullable|string',
 
-            'attachment' => 'nullable|file',
+            'attachment'                      => 'nullable|file',
 
             /*
             |--------------------------------------------------------------------------
@@ -785,8 +777,7 @@ class ForexRemittanceController extends Controller
             |--------------------------------------------------------------------------
             */
 
-            'manual_matches' => 'nullable|array',
-
+            'manual_matches'                  => 'nullable|array',
 
             /*
             |--------------------------------------------------------------------------
@@ -800,19 +791,17 @@ class ForexRemittanceController extends Controller
 
             'manual_matches.*.transaction_id' => [
                 'nullable',
-                'exists:transactions,id'
+                'exists:transactions,id',
             ],
 
-            'manual_matches.*.amount' => [
+            'manual_matches.*.amount'         => [
                 'nullable',
                 'numeric',
-                'min:0.0001'
+                'min:0.0001',
             ],
-
 
         ]);
     }
-
 
     /**
      * Data endpoint for DataTable — uses LedgerBuilder service to compute rows & totals.
@@ -833,15 +822,14 @@ class ForexRemittanceController extends Controller
 
         // build filter options
         $opts = [
-            'party_type' => $request->input('party_type') ?: null,
-            'currency_id' => $request->input('currency_id') ? intval($request->input('currency_id')) : null,
+            'party_type'    => $request->input('party_type') ?: null,
+            'currency_id'   => $request->input('currency_id') ? intval($request->input('currency_id')) : null,
             'starting_date' => $startingDate, // ✅ Y-m-d
             'ending_date'   => $endingDate,   // ✅ Y-m-d
         ];
 
-
-        $orderColumnIndex = request('order.0.column');
-        $orderDirection   = request('order.0.dir', 'asc');
+        $orderColumnIndex     = request('order.0.column');
+        $orderDirection       = request('order.0.dir', 'asc');
         $opts['order_column'] = $orderColumnIndex;
         $opts['order_dir']    = $orderDirection;
 
@@ -852,14 +840,14 @@ class ForexRemittanceController extends Controller
 
         // compute totals using the same logic as earlier (but from service rows)
         $totals = [
-            'base_debit' => 0.0,
-            'base_credit' => 0.0,
-            'local_debit' => 0.0,
-            'local_credit' => 0.0,
-            'realised_gain' => 0.0,
-            'realised_loss' => 0.0,
-            'unrealised_gain' => 0.0,
-            'unrealised_loss' => 0.0,
+            'base_debit'            => 0.0,
+            'base_credit'           => 0.0,
+            'local_debit'           => 0.0,
+            'local_credit'          => 0.0,
+            'realised_gain'         => 0.0,
+            'realised_loss'         => 0.0,
+            'unrealised_gain'       => 0.0,
+            'unrealised_loss'       => 0.0,
             'remaining_local_total' => 0.0,
 
         ];
@@ -871,19 +859,27 @@ class ForexRemittanceController extends Controller
             $ld = is_numeric(str_replace(',', '', $r['local_debit'])) ? floatval(str_replace(',', '', $r['local_debit'])) : 0.0;
             $lc = is_numeric(str_replace(',', '', $r['local_credit'])) ? floatval(str_replace(',', '', $r['local_credit'])) : 0.0;
 
-            $totals['base_debit'] += $bd;
-            $totals['base_credit'] += $bc;
-            $totals['local_debit'] += $ld;
+            $totals['base_debit']   += $bd;
+            $totals['base_credit']  += $bc;
+            $totals['local_debit']  += $ld;
             $totals['local_credit'] += $lc;
 
             // realised & unrealised are numeric already
-            $real = floatval($r['realised']);
+            $real   = floatval($r['realised']);
             $unreal = floatval($r['unrealised']);
 
-            if ($real >= 0) $totals['realised_gain'] += $real;
-            else $totals['realised_loss'] += abs($real);
-            if ($unreal >= 0) $totals['unrealised_gain'] += $unreal;
-            else $totals['unrealised_loss'] += abs($unreal);
+            if ($real >= 0) {
+                $totals['realised_gain'] += $real;
+            } else {
+                $totals['realised_loss'] += abs($real);
+            }
+
+            if ($unreal >= 0) {
+                $totals['unrealised_gain'] += $unreal;
+            } else {
+                $totals['unrealised_loss'] += abs($unreal);
+            }
+
             // ⭐ ADD THIS EXACT BLOCK — REQUIRED FOR TOTAL REMAINING LOCAL
             $rlv_raw = $r['remaining_local_value'] ?? 0;
 
@@ -898,22 +894,22 @@ class ForexRemittanceController extends Controller
         $finalGainLoss = ($totals['realised_gain'] - $totals['realised_loss']) + ($totals['unrealised_gain'] - $totals['unrealised_loss']);
 
         $totals_payload = [
-            'realised_gain' => round($totals['realised_gain'], 4),
-            'realised_loss' => round($totals['realised_loss'], 4),
-            'unrealised_gain' => round($totals['unrealised_gain'], 4),
-            'unrealised_loss' => round($totals['unrealised_loss'], 4),
-            'final_gain_loss' => round($finalGainLoss, 4),
+            'realised_gain'         => round($totals['realised_gain'], 4),
+            'realised_loss'         => round($totals['realised_loss'], 4),
+            'unrealised_gain'       => round($totals['unrealised_gain'], 4),
+            'unrealised_loss'       => round($totals['unrealised_loss'], 4),
+            'final_gain_loss'       => round($finalGainLoss, 4),
             'remaining_local_total' => round($totals['remaining_local_total'], 4),
 
         ];
 
-        $response = [
-            'draw' => intval($request->input('draw', 1)),
-            'recordsTotal' => count($rows),
+        $response  = [
+            'draw'            => intval($request->input('draw', 1)),
+            'recordsTotal'    => count($rows),
             'recordsFiltered' => count($rows),
-            'data' => $rows,
-            'totals' => $totals_payload,
-            'global' => $global
+            'data'            => $rows,
+            'totals'          => $totals_payload,
+            'global'          => $global,
         ];
 
         Log::info('[forexRemittanceData] returning rows=' . count($rows));
@@ -941,11 +937,10 @@ class ForexRemittanceController extends Controller
             'txn_group'     => $request->input('txn_group'),
         ];
 
-        $orderColumnIndex = request('order.0.column');
-        $orderDirection   = request('order.0.dir', 'asc');
+        $orderColumnIndex     = request('order.0.column');
+        $orderDirection       = request('order.0.dir', 'asc');
         $opts['order_column'] = $orderColumnIndex;
         $opts['order_dir']    = $orderDirection;
-
 
         // -----------------------------
         // 2) Get allowed transaction IDs
@@ -960,18 +955,18 @@ class ForexRemittanceController extends Controller
 
         $built = $this->ledgerBuilder->buildForDataTable($opts);
 
-        $rows = $built['rows'];                 // ⭐ SAFE rows
-        $global = $built['global_summary'];     // ⭐ USE THIS
+        $rows   = $built['rows'];           // ⭐ SAFE rows
+        $global = $built['global_summary']; // ⭐ USE THIS
         // -----------------------------
         // 4) Compute totals
         // -----------------------------
         $totals = [
-            'base_debit' => 0.0,
-            'base_credit' => 0.0,
-            'local_debit' => 0.0,
-            'local_credit' => 0.0,
-            'realised_gain' => 0.0,
-            'realised_loss' => 0.0,
+            'base_debit'      => 0.0,
+            'base_credit'     => 0.0,
+            'local_debit'     => 0.0,
+            'local_credit'    => 0.0,
+            'realised_gain'   => 0.0,
+            'realised_loss'   => 0.0,
             'unrealised_gain' => 0.0,
             'unrealised_loss' => 0.0,
         ];
@@ -985,33 +980,39 @@ class ForexRemittanceController extends Controller
             $lc = is_numeric(str_replace(',', '', $r['local_credit'])) ? floatval(str_replace(',', '', $r['local_credit'])) : 0.0;
 
             // Accumulate base & local totals
-            $totals['base_debit'] += $bd;
-            $totals['base_credit'] += $bc;
-            $totals['local_debit'] += $ld;
+            $totals['base_debit']   += $bd;
+            $totals['base_credit']  += $bc;
+            $totals['local_debit']  += $ld;
             $totals['local_credit'] += $lc;
 
             // Realised & unrealised
-            $real = floatval($r['realised']);
+            $real   = floatval($r['realised']);
             $unreal = floatval($r['unrealised']);
 
-            if ($real >= 0) $totals['realised_gain'] += $real;
-            else $totals['realised_loss'] += abs($real);
+            if ($real >= 0) {
+                $totals['realised_gain'] += $real;
+            } else {
+                $totals['realised_loss'] += abs($real);
+            }
 
-            if ($unreal >= 0) $totals['unrealised_gain'] += $unreal;
-            else $totals['unrealised_loss'] += abs($unreal);
+            if ($unreal >= 0) {
+                $totals['unrealised_gain'] += $unreal;
+            } else {
+                $totals['unrealised_loss'] += abs($unreal);
+            }
         }
 
         // FINAL GAIN LOSS
-        $finalGainLoss =
+        $finalGainLoss  =
             ($totals['realised_gain'] - $totals['realised_loss']) +
             ($totals['unrealised_gain'] - $totals['unrealised_loss']);
 
         $totals_payload = [
-            'realised_gain'     => round($totals['realised_gain'], 4),
-            'realised_loss'     => round($totals['realised_loss'], 4),
-            'unrealised_gain'   => round($totals['unrealised_gain'], 4),
-            'unrealised_loss'   => round($totals['unrealised_loss'], 4),
-            'final_gain_loss'   => round($finalGainLoss, 4),
+            'realised_gain'   => round($totals['realised_gain'], 4),
+            'realised_loss'   => round($totals['realised_loss'], 4),
+            'unrealised_gain' => round($totals['unrealised_gain'], 4),
+            'unrealised_loss' => round($totals['unrealised_loss'], 4),
+            'final_gain_loss' => round($finalGainLoss, 4),
         ];
 
         // -----------------------------
@@ -1024,14 +1025,13 @@ class ForexRemittanceController extends Controller
             'recordsFiltered' => count($rows),
             'data'            => $rows,
             'totals'          => $totals_payload,
-            'global'          => $global   // ⭐ HERE
+            'global'          => $global, // ⭐ HERE
         ]);
     }
 
     public function getInvoiceWiseReport(Request $request)
     {
         try {
-
 
             $start = $request->starting_date
                 ? Carbon::createFromFormat('d-m-Y', trim($request->starting_date))
@@ -1045,7 +1045,6 @@ class ForexRemittanceController extends Controller
 
             $invoiceId = $request->invoice_id;
 
-
             // -------------------------------------
             // CASE 1: ALL invoices → use normal LB
             // -------------------------------------
@@ -1056,30 +1055,31 @@ class ForexRemittanceController extends Controller
                     'ending_date'   => $end,
                     // no filter → all transactions
                 ];
-                $orderColumnIndex = request('order.0.column');
-                $orderDirection   = request('order.0.dir', 'asc');
+                $orderColumnIndex     = request('order.0.column');
+                $orderDirection       = request('order.0.dir', 'asc');
                 $opts['order_column'] = $orderColumnIndex;
                 $opts['order_dir']    = $orderDirection;
 
                 $built = $this->ledgerBuilder->buildForDataTable($opts);
 
-                $rows   = $built['rows'];              // ✅ FIX
-                $global = $built['global_summary'];    // ✅ FIX
+                $rows   = $built['rows'];           // ✅ FIX
+                $global = $built['global_summary']; // ✅ FIX
 
             } else {
 
                 // -------------------------------------
                 // CASE 2: Specific Invoice Selected
                 // -------------------------------------
-                $invoice = Transaction::find($invoiceId);
+                $invoice = Transaction::where('user_id', auth()->id())
+                    ->find($invoiceId);
 
-                if (!$invoice) {
+                if (! $invoice) {
                     return response()->json([
-                        'draw' => intval($request->draw),
-                        'recordsTotal' => 0,
+                        'draw'            => intval($request->draw),
+                        'recordsTotal'    => 0,
                         'recordsFiltered' => 0,
-                        'data' => [],
-                        'totals' => []
+                        'data'            => [],
+                        'totals'          => [],
                     ]);
                 }
 
@@ -1097,32 +1097,31 @@ class ForexRemittanceController extends Controller
                 // Call LedgerBuilder with transaction_id filter
                 // -------------------------------------
                 $opts = [
-                    'starting_date' => $start,
-                    'ending_date'   => $end,
-                    'allowed_tx_ids' => $allowedIds,   // ⭐ important
+                    'starting_date'  => $start,
+                    'ending_date'    => $end,
+                    'allowed_tx_ids' => $allowedIds, // ⭐ important
                 ];
-                $orderColumnIndex = request('order.0.column');
-                $orderDirection   = request('order.0.dir', 'asc');
+                $orderColumnIndex     = request('order.0.column');
+                $orderDirection       = request('order.0.dir', 'asc');
                 $opts['order_column'] = $orderColumnIndex;
                 $opts['order_dir']    = $orderDirection;
 
                 $built = $this->ledgerBuilder->buildForDataTable($opts);
 
-                $rows = $built['rows'];                 // ⭐ SAFE rows
-                $global = $built['global_summary'];     // ⭐ USE THIS
+                $rows   = $built['rows'];           // ⭐ SAFE rows
+                $global = $built['global_summary']; // ⭐ USE THIS
             }
-
 
             // -------------------------------------
             // FOOTER TOTALS (same as forexRemittanceData)
             // -------------------------------------
             $totals = [
-                'base_debit' => 0.0,
-                'base_credit' => 0.0,
-                'local_debit' => 0.0,
-                'local_credit' => 0.0,
-                'realised_gain' => 0.0,
-                'realised_loss' => 0.0,
+                'base_debit'      => 0.0,
+                'base_credit'     => 0.0,
+                'local_debit'     => 0.0,
+                'local_credit'    => 0.0,
+                'realised_gain'   => 0.0,
+                'realised_loss'   => 0.0,
                 'unrealised_gain' => 0.0,
                 'unrealised_loss' => 0.0,
             ];
@@ -1134,41 +1133,48 @@ class ForexRemittanceController extends Controller
                 $ld = floatval(str_replace(',', '', $r['local_debit'] ?? 0));
                 $lc = floatval(str_replace(',', '', $r['local_credit'] ?? 0));
 
-                $totals['base_debit']  += $bd;
-                $totals['base_credit'] += $bc;
-                $totals['local_debit'] += $ld;
+                $totals['base_debit']   += $bd;
+                $totals['base_credit']  += $bc;
+                $totals['local_debit']  += $ld;
                 $totals['local_credit'] += $lc;
 
-                $real = floatval($r['realised']);
+                $real   = floatval($r['realised']);
                 $unreal = floatval($r['unrealised']);
 
-                if ($real >= 0) $totals['realised_gain'] += $real;
-                else $totals['realised_loss'] += abs($real);
-                if ($unreal >= 0) $totals['unrealised_gain'] += $unreal;
-                else $totals['unrealised_loss'] += abs($unreal);
+                if ($real >= 0) {
+                    $totals['realised_gain'] += $real;
+                } else {
+                    $totals['realised_loss'] += abs($real);
+                }
+
+                if ($unreal >= 0) {
+                    $totals['unrealised_gain'] += $unreal;
+                } else {
+                    $totals['unrealised_loss'] += abs($unreal);
+                }
             }
 
             return response()->json([
-                'draw' => intval($request->draw),
-                'recordsTotal' => count($rows),
+                'draw'            => intval($request->draw),
+                'recordsTotal'    => count($rows),
                 'recordsFiltered' => count($rows),
-                'data' => $rows,
-                'totals' => [
-                    'realised_gain' => $totals['realised_gain'],
-                    'realised_loss' => $totals['realised_loss'],
+                'data'            => $rows,
+                'totals'          => [
+                    'realised_gain'   => $totals['realised_gain'],
+                    'realised_loss'   => $totals['realised_loss'],
                     'unrealised_gain' => $totals['unrealised_gain'],
                     'unrealised_loss' => $totals['unrealised_loss'],
                 ],
-                'global' => $global
+                'global'          => $global,
             ]);
         } catch (\Throwable $e) {
 
             \Log::error("Invoice-wise report error: " . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
-                'error' => 'Server error'
+                'error' => 'Server error',
             ], 500);
         }
     }
@@ -1249,26 +1255,25 @@ class ForexRemittanceController extends Controller
                 'recordsTotal'    => count($rows),
                 'recordsFiltered' => count($rows),
                 'data'            => $rows,
-                'totals' => [
+                'totals'          => [
                     'realised_gain'   => round($totals['realised_gain'], 4),
                     'realised_loss'   => round($totals['realised_loss'], 4),
                     'unrealised_gain' => round($totals['unrealised_gain'], 4),
                     'unrealised_loss' => round($totals['unrealised_loss'], 4),
                 ],
-                'global' => $global
+                'global'          => $global,
             ]);
         } catch (\Throwable $e) {
 
             \Log::error("Currency wise report error: " . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
-                'error' => 'Server Error'
+                'error' => 'Server Error',
             ], 500);
         }
     }
-
 
     public function exchChangeRatesReportData(Request $request)
     {
@@ -1286,18 +1291,18 @@ class ForexRemittanceController extends Controller
                 ? Carbon::createFromFormat('d-m-Y', $request->ending_date)->endOfDay()
                 : null;
 
-            $q = Transaction::whereNotNull('exchange_rate');
+            $q = Transaction::where('user_id', auth()->id())
+                ->whereNotNull('exchange_rate');
 
             if ($start && $end) {
                 $q->whereBetween('transaction_date', [$start, $end]);
             }
 
-
-            if (!empty($request->base_currency_id)) {
+            if (! empty($request->base_currency_id)) {
                 $q->where('base_currency_id', $request->base_currency_id);
             }
 
-            if (!empty($request->local_currency_id)) {
+            if (! empty($request->local_currency_id)) {
                 $q->where('local_currency_id', $request->local_currency_id);
             }
 
@@ -1317,7 +1322,7 @@ class ForexRemittanceController extends Controller
                 $grouped[$date][] = [
                     'voucher_type' => ucfirst($tx->voucher_type),
                     'voucher_no'   => $tx->voucher_no,
-                    'rate'         => (float)$tx->exchange_rate
+                    'rate'         => (float) $tx->exchange_rate,
                 ];
             }
 
@@ -1325,7 +1330,7 @@ class ForexRemittanceController extends Controller
             // 4️⃣ BUILD ROWS
             // ===============================
             $rows = [];
-            $sn = 1;
+            $sn   = 1;
 
             foreach ($grouped as $date => $items) {
 
@@ -1333,16 +1338,16 @@ class ForexRemittanceController extends Controller
                 $avg   = count($rates) ? array_sum($rates) / count($rates) : 0;
 
                 $rows[] = [
-                    'sn'      => $sn++,
-                    'date'    => Carbon::parse($date)->format('d-m-Y'),
-                    'entries' => array_map(function ($i) {
+                    'sn'       => $sn++,
+                    'date'     => Carbon::parse($date)->format('d-m-Y'),
+                    'entries'  => array_map(function ($i) {
                         return [
                             'voucher_type' => $i['voucher_type'],
                             'voucher_no'   => $i['voucher_no'],
-                            'rate'         => number_format($i['rate'], 6, '.', '')
+                            'rate'         => number_format($i['rate'], 6, '.', ''),
                         ];
                     }, $items),
-                    'avg_rate' => number_format($avg, 6, '.', '')
+                    'avg_rate' => number_format($avg, 6, '.', ''),
                 ];
             }
 
@@ -1353,19 +1358,19 @@ class ForexRemittanceController extends Controller
                 'draw'            => intval($request->draw),
                 'recordsTotal'    => count($rows),
                 'recordsFiltered' => count($rows),
-                'data'            => $rows
+                'data'            => $rows,
             ]);
         } catch (\Throwable $e) {
 
             \Log::error('[ExchangeRateReport]', [
-                'msg' => $e->getMessage()
+                'msg' => $e->getMessage(),
             ]);
 
             return response()->json([
-                'draw' => intval($request->draw),
-                'recordsTotal' => 0,
+                'draw'            => intval($request->draw),
+                'recordsTotal'    => 0,
                 'recordsFiltered' => 0,
-                'data' => []
+                'data'            => [],
             ], 500);
         }
     }
@@ -1374,7 +1379,7 @@ class ForexRemittanceController extends Controller
     {
         try {
 
-            $tx = Transaction::findOrFail($request->id);
+
 
             $tx->manual_remark = $request->manual_remark;
             $tx->save();
@@ -1390,10 +1395,10 @@ class ForexRemittanceController extends Controller
 
     public function getOpenVouchers(Request $request)
     {
-        $partyId = $request->party_id;
+        $partyId     = $request->party_id;
         $voucherType = $request->voucher_type;
 
-        if (!$partyId || !$voucherType) {
+        if (! $partyId || ! $voucherType) {
             return response()->json([]);
         }
 
@@ -1435,8 +1440,9 @@ class ForexRemittanceController extends Controller
 
         $transactions = \App\Models\Transaction::with([
             'matchesAsInvoice',
-            'matchesAsSettlement'
+            'matchesAsSettlement',
         ])
+            ->where('user_id', auth()->id())
             ->where('party_id', $partyId)
             ->whereIn('voucher_type', $targetVoucherTypes)
             ->orderBy('transaction_date', 'asc')
@@ -1501,27 +1507,27 @@ class ForexRemittanceController extends Controller
 
             $result[] = [
 
-                'id' => $txn->id,
+                'id'               => $txn->id,
 
-                'voucher_no' => $txn->voucher_no,
+                'voucher_no'       => $txn->voucher_no,
 
-                'voucher_type' => ucfirst($txn->voucher_type),
+                'voucher_type'     => ucfirst($txn->voucher_type),
 
                 'transaction_date' => optional(
                     $txn->transaction_date
                 )->format('d-m-Y'),
 
-                'exchange_rate' => round(
+                'exchange_rate'    => round(
                     (float) $txn->exchange_rate,
                     4
                 ),
 
-                'base_amount' => round(
+                'base_amount'      => round(
                     (float) $txn->base_amount,
                     4
                 ),
 
-                'matched_amount' => round(
+                'matched_amount'   => round(
                     $matched,
                     4
                 ),
@@ -1535,7 +1541,7 @@ class ForexRemittanceController extends Controller
                     4
                 ),
 
-                'status' => $status,
+                'status'           => $status,
 
                 /*
             |--------------------------------------------------------------------------
@@ -1545,14 +1551,14 @@ class ForexRemittanceController extends Controller
 
                 'is_fully_settled' => $remaining <= 0,
 
-                'is_partial' => (
+                'is_partial'       => (
                     $matched > 0
                     &&
                     $remaining > 0
                 ),
 
                 //'can_allocate' => $remaining > 0,
-                'can_allocate' => true,
+                'can_allocate'     => true,
             ];
         }
 
@@ -1570,7 +1576,7 @@ class ForexRemittanceController extends Controller
         usort($result, function ($a, $b) {
 
             $priority = [
-                'Open' => 1,
+                'Open'    => 1,
                 'Partial' => 2,
                 'Settled' => 3,
             ];

@@ -604,7 +604,7 @@ class SaleController extends Controller
         $custom_fields = CustomField::where('belongs_to', 'sale')->get();
         $lims_customer_group_all = CustomerGroup::where('is_active', true)->get();
         $party = Party::where('is_active', true)
-            ->where('user_id', auth()->id())
+            ->where('user_id', Auth::id())
             ->get();
 
         // 🔹 Forex Remittance specific additions
@@ -1043,7 +1043,9 @@ class SaleController extends Controller
         // 🔹 Forex Remittance specific additions
         $forex_suppliers = Supplier::where('is_active', true)->get();
 
-        $party_list = Party::orderBy('name')->get();
+        $party_list = Party::where('user_id', auth()->id())
+            ->orderBy('name')
+            ->get();
 
 
         // 🔹 Pass all to view
@@ -1106,8 +1108,10 @@ class SaleController extends Controller
         // 🔹 Forex Remittance specific additions
         $forex_suppliers = Supplier::where('is_active', true)->get();
 
-        $parties = Party::orderBy('name')->get();
 
+        $parties = Party::where('user_id', auth()->id())
+            ->orderBy('name')
+            ->get();
 
         // 🔹 Pass all to view
         return view('backend.sale.currency_wise', compact(
@@ -1133,7 +1137,9 @@ class SaleController extends Controller
     public function invoiceReport(Request $req)
     {
         $currencies = Currency::orderBy('code')->get();
-        $transaction = Transaction::orderBy('id')->get();
+        $transaction = Transaction::where('user_id', auth()->id())
+            ->orderBy('id')
+            ->get();
 
 
         $role = Role::find(Auth::user()->role_id);
@@ -1167,13 +1173,16 @@ class SaleController extends Controller
         $numberOfInvoice = Sale::count();
         $custom_fields = CustomField::where('belongs_to', 'sale')->get();
         $lims_customer_group_all = CustomerGroup::where('is_active', true)->get();
-        $party = Party::where('is_active', true)->get();
-
+        $party = Party::where('user_id', auth()->id())
+            ->orderBy('name')
+            ->get();
         // 🔹 Forex Remittance specific additions
         $forex_suppliers = Supplier::where('is_active', true)->get();
 
-        $parties = Party::orderBy('name')->get();
 
+        $parties = Party::where('user_id', auth()->id())
+            ->orderBy('name')
+            ->get();
 
         // 🔹 Pass all to view
         return view('backend.sale.invoice-wise', compact(
@@ -2447,10 +2456,9 @@ class SaleController extends Controller
             true
         )->get();
 
-        $party = Party::where(
-            'is_active',
-            true
-        )->get();
+        $party = Party::where('user_id', auth()->id())
+            ->orderBy('name')
+            ->get();
 
         $forex_suppliers = Supplier::where(
             'is_active',
