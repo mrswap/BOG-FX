@@ -30,7 +30,7 @@
         <div class="container-fluid">
 
             <div class="card mt-3">
-                <h3 class="text-center mt-3">Currency Wise Forex Report</h3>
+                <h3 class="text-center mt-3">Invoice  Wise Forex Report</h3>
                 <div class="card-body">
                     {!! Form::open(['route' => 'forex.txn.report.invoice', 'method' => 'post']) !!}
                     <div class="row mt-2">

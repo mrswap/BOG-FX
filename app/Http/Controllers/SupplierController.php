@@ -21,13 +21,12 @@ use App\Mail\SupplierCreate;
 use App\Mail\CustomerCreate;
 use Mail;
 use Twilio\TwiML\Voice\Pay;
+use Illuminate\Support\Facades\Log;
 
-class SupplierController extends Controller
-{
+class SupplierController extends Controller {
     use \App\Traits\MailInfo;
 
-    public function index()
-    {
+    public function index() {
         $role = Role::find(Auth::user()->role_id);
         if ($role->hasPermissionTo('suppliers-index')) {
             $permissions = Role::findByName($role->name)->permissions;
@@ -45,8 +44,7 @@ class SupplierController extends Controller
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
-    public function clearDue(Request $request)
-    {
+    public function clearDue(Request $request) {
         $lims_due_purchase_data = Purchase::select('id', 'warehouse_id', 'grand_total', 'paid_amount', 'payment_status')
             ->where([
                 ['payment_status', 1],
@@ -94,8 +92,7 @@ class SupplierController extends Controller
         return redirect()->back()->with('message', 'Due cleared successfully');
     }
 
-    public function create()
-    {
+    public function create() {
         $role = Role::find(Auth::user()->role_id);
         if ($role->hasPermissionTo('suppliers-add')) {
             $lims_customer_group_all = CustomerGroup::where('is_active', true)->get();
@@ -104,65 +101,88 @@ class SupplierController extends Controller
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
 
-    public function store(Request $request)
-    {
-        $this->validate($request, [
-            'type' => 'required|in:customer,supplier,both',
-            'name' => 'required|max:255',
-            'company_name' => [
-                'required',
-                'max:255',
-                Rule::unique('parties')->where(function ($query) {
-                    return $query->where('is_active', 1);
-                }),
-            ],
-            'email' => [
-                'required',
-                'email',
-                'max:255',
-                Rule::unique('parties')->where(function ($query) {
-                    return $query->where('is_active', 1);
-                }),
-            ],
-            'phone' => 'required|max:50',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:10000',
-        ]);
+    public function store(Request $request) {
+            $request->validate([
+                'type' => 'required|in:customer,supplier,both',
+                'name' => 'required|max:255',
+                'company_name' => [
+                    'required',
+                    'max:255',
+                ],
+                'email' => [
+                    'required',
+                    'email',
+                    'max:255',
+                ],
+                'phone' => 'required|max:50',
+                'image' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:10000',
+            ]);
 
-        $data = $request->except('image');
+        DB::beginTransaction();
 
-        $data['is_active'] = 1;
+        try {
 
-        // NEW
-        $data['user_id'] = auth()->id();
+            Log::info('Party Store Request', [
+                'user_id' => auth()->id(),
+                'data'    => $request->except(['image']),
+            ]);
 
-        if ($request->hasFile('image')) {
+            $data = $request->except('image');
 
-            $image = $request->file('image');
+            $data['is_active'] = 1;
+            $data['user_id']   = auth()->id();
 
-            $ext = $image->getClientOriginalExtension();
+            // Upload Image
+            if ($request->hasFile('image')) {
 
-            $imageName =
-                preg_replace('/[^a-zA-Z0-9]/', '', $request->company_name)
-                . '.'
-                . $ext;
+                $image = $request->file('image');
 
-            $image->move(
-                public_path('images/party'),
-                $imageName
-            );
+                $imageName = time() . '_' .
+                    preg_replace('/[^a-zA-Z0-9]/', '', $request->company_name) .
+                    '.' .
+                    $image->getClientOriginalExtension();
 
-            $data['image'] = $imageName;
+                $image->move(public_path('images/party'), $imageName);
+
+                $data['image'] = $imageName;
+            }
+
+            $party = Party::create($data);
+
+            if (!$party || !$party->exists) {
+                throw new \Exception('Party record could not be created.');
+            }
+
+            DB::commit();
+
+            Log::info('Party Created Successfully', [
+                'party_id' => $party->id,
+                'user_id'  => $party->user_id,
+            ]);
+
+            return redirect()
+                ->route('supplier.index')
+                ->with('message', 'Party created successfully!');
+        } catch (\Throwable $e) {
+
+            DB::rollBack();
+
+            Log::error('Party Creation Failed', [
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'trace'   => $e->getTraceAsString(),
+                'request' => $request->except(['image']),
+            ]);
+
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('error', 'Failed to create party. Please check logs.');
         }
-
-        $party = Party::create($data);
-
-        return redirect()
-            ->route('supplier.index')
-            ->with('message', 'Party created successfully!');
     }
 
-    public function edit($id)
-    {
+    public function edit($id) {
         $role = Role::find(Auth::user()->role_id);
         if ($role->hasPermissionTo('suppliers-edit')) {
             $lims_supplier_data = Supplier::where('id', $id)->first();
@@ -171,8 +191,7 @@ class SupplierController extends Controller
         } else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
     }
-    public function update(Request $request, $id)
-    {
+    public function update(Request $request, $id) {
         $this->validate($request, [
             'type' => 'required|in:customer,supplier,both',
             'name' => 'required|max:255',
@@ -217,8 +236,7 @@ class SupplierController extends Controller
     }
 
 
-    public function deleteBySelection(Request $request)
-    {
+    public function deleteBySelection(Request $request) {
         $supplier_id = $request['supplierIdArray'];
         foreach ($supplier_id as $id) {
             $lims_supplier_data = Supplier::findOrFail($id);
@@ -229,8 +247,7 @@ class SupplierController extends Controller
         return 'Supplier deleted successfully!';
     }
 
-    public function destroy($id)
-    {
+    public function destroy($id) {
         $lims_supplier_data = Party::findOrFail($id);
         $lims_supplier_data->delete();
         //$this->fileDelete(public_path('images/supplier/'), $lims_supplier_data->image);
@@ -238,8 +255,7 @@ class SupplierController extends Controller
             ->with('success', 'Supplier deleted successfully');
     }
 
-    public function importSupplier(Request $request)
-    {
+    public function importSupplier(Request $request) {
         $upload = $request->file('file');
         $ext = pathinfo($upload->getClientOriginalName(), PATHINFO_EXTENSION);
         if ($ext != 'csv')
@@ -294,8 +310,7 @@ class SupplierController extends Controller
         return redirect('supplier')->with('message', $message);
     }
 
-    public function suppliersAll()
-    {
+    public function suppliersAll() {
         $lims_supplier_list = DB::table('suppliers')->where('is_active', true)->get();
 
         $html = '';

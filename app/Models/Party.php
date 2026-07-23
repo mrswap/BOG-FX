@@ -19,7 +19,8 @@ class Party extends Model
         'postal_code',
         'country',
         'user_id',
-        'is_active'
+        'is_active',
+        'image'
     ];
 
     public function forexRemittances()
