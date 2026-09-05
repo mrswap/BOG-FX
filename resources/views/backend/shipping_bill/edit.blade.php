@@ -165,7 +165,7 @@
                 {{-- Status --}}
                 <div class="row mt-3">
                     <div class="col-md-3">
-                        <label>Status</label>
+                        <label>IGST Status</label>
                         <select name="status" class="form-control">
                             <option value="pending" {{ old('status', $bill->status) == 'pending' ? 'selected' : '' }}>
                                 Pending

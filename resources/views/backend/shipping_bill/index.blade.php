@@ -155,7 +155,7 @@
                         <th>DDB</th>
                         <th>RODTEP</th>
 
-                        <th>Status</th>
+                        <th>IGST Status</th>
                         <th class="not-exported">Action</th>
                     </tr>
                 </thead>
