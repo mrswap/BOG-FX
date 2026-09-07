@@ -32,6 +32,7 @@ class ForexMatch extends Model
         'invoice_rate',
         'settlement_rate',
         'realised_amount',
+        'is_manual',
     ];
 
 
@@ -41,6 +42,7 @@ class ForexMatch extends Model
         'invoice_rate' => 'float',
         'settlement_rate' => 'float',
         'realised_amount' => 'float',
+        'is_manual' => 'boolean',
     ];
 
 

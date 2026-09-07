@@ -11,20 +11,17 @@ use Carbon\Carbon;
 use DB;
 
 
-class TransactionService
-{
+class TransactionService {
     protected $matchingEngine;
     protected $rateResolver;
 
 
-    public function __construct(MatchingEngine $matchingEngine, RateResolver $rateResolver)
-    {
+    public function __construct(MatchingEngine $matchingEngine, RateResolver $rateResolver) {
         $this->matchingEngine = $matchingEngine;
         $this->rateResolver = $rateResolver;
     }
 
-    public function create(array $data)
-    {
+    public function create(array $data) {
         /*
         |--------------------------------------------------------------------------
         | Extract manual matches
@@ -680,11 +677,16 @@ class TransactionService
     |--------------------------------------------------------------------------
     */
 
-            $this->runRemainingFifo(
-                $transaction->fresh()
+            $this->rebuildBucketWithManual(
+                $transaction->party_id,
+                $transaction->id,
+                $data['manual_matches']
             );
 
-            return $transaction->fresh();
+            return $transaction->fresh([
+                'matchesAsInvoice',
+                'matchesAsSettlement'
+            ]);
         }
 
 
@@ -697,7 +699,7 @@ class TransactionService
         \Log::info('AUTO FIFO MATCHING STARTED');
 
         app(MatchingEngine::class)
-            ->runForParty($transaction->party_id);
+            ->rebuildBucket($transaction->party_id);
 
         return $transaction->fresh();
     }
@@ -788,8 +790,7 @@ class TransactionService
     /**
      * FULL FIFO REBUILD for one party
      */
-    protected function rebuildBucket(int $partyId): void
-    {
+    protected function rebuildBucket(int $partyId): void {
         // delete all matches
         ForexMatch::whereHas('invoice', function ($q) use ($partyId) {
 
@@ -824,8 +825,7 @@ class TransactionService
     /**
      * Save daily weighted avg rate into forex_rates (party-wise)
      */
-    protected function updatePartyDailyRate(Transaction $tx): void
-    {
+    protected function updatePartyDailyRate(Transaction $tx): void {
         try {
             $baseId  = $tx->base_currency_id;
             $localId = $tx->local_currency_id;
